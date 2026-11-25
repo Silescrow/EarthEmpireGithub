@@ -970,11 +970,10 @@ function hideTile(t){
 function cullFar(){
   const s=G.camS, R=G.scene.fog.far+8, R2=R*R, cx=s.x, cz=s.z;
   const vis=(x,z,r)=>{ const dx=x-cx, dz=z-cz, rr=R+(r||0); return dx*dx+dz*dz < rr*rr; };
-  if(G.trees) for(const k in G.trees){ const t=G.trees[k]; t.im.visible = vis(t.cx,t.cz,TILE*.75); }
+  batchesUpdate();
   if(G.coarse) for(const c of G.coarse) c.m.visible = vis(c.cx,c.cz,c.r);
-  if(G.decor && !G.farView) for(const d of G.decor){ const c=d.userData.c; if(c) d.visible = vis(c[0],c[1],TILE*.75) && Math.hypot(c[0]-cx,c[1]-cz) < R*.75; }
   for(const t of G.tileMeshes) if(t.mesh){ const v=vis(t.x0+TILE/2, t.z0+TILE/2, TILE*.75); if(t.mesh.visible!==v){ t.mesh.visible=v; G.covData[t.id]=v?255:0; G.covTex.needsUpdate=true; } }
-  for(const r of G.res) if(r.alive && r.mesh && !r.mesh.inst) r.mesh.visible = !G.farView && vis(r.x,r.z,3);
+  const R7=R*.7; for(const r of G.res) if(r.alive && r.mesh && !r.mesh.inst){ const dx=r.x-cx, dz=r.z-cz; r.mesh.visible = !G.farView && dx*dx+dz*dz < R7*R7; }
   for(const d of G.deer) if(d.alive && d.mesh) d.mesh.visible = vis(d.x,d.z,2);
   for(const u of G.units) u.mesh.visible = !G.farView && vis(u.x,u.z,2);
   for(const b of G.builds) b.mesh.visible = vis(b.x,b.z,b.size+4);
@@ -1117,11 +1116,18 @@ function makeTree(R){
   const s = .85+R()*.5; g.scale.set(s,s,s); g.rotation.y = R()*6.28;
   return g;
 }
+// Viele kleine Teile (Beeren, Goldnuggets) zu EINER Geometrie verschmelzen = 1 Zeichenaufruf statt 15
+function mergeParts(parts){ const P=[], N=[];
+  for(const [geo,m] of parts){ const g=geo.index?geo.toNonIndexed():geo.clone(); g.applyMatrix4(m); P.push(...g.attributes.position.array); N.push(...g.attributes.normal.array); g.dispose(); }
+  const out=new T.BufferGeometry(); out.setAttribute('position',new T.Float32BufferAttribute(P,3)); out.setAttribute('normal',new T.Float32BufferAttribute(N,3)); out.computeBoundingSphere(); return out; }
+const PART_CACHE={};
+function partsVariant(key, n, make){ const a=PART_CACHE[key]||(PART_CACHE[key]=[]); if(a.length<n){ a.push(make(a.length)); } return a[(Math.random()*n)|0] || a[0]; }
 function makeBush(R){
   const F=flora(), g=new T.Group();
   const m=new T.Mesh(F.geo.bush[(R()*2)|0], F.mat); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=F.depth;
   const sc=.62+R()*.16; m.scale.set(sc,sc*(.9+R()*.2),sc); g.add(m);
-  for(let i=0;i<14;i++){ const a=R()*6.28, y=(.45+R()*.6)*sc, r=(.45+R()*.3)*sc; const b=new T.Mesh(F.berryGeo, F.berryMat); b.position.set(Math.cos(a)*r, y, Math.sin(a)*r); g.add(b); }
+  const bg = partsVariant('berries', 6, ()=>{ const parts=[]; for(let i=0;i<14;i++){ const a=Math.random()*6.28, y=(.45+Math.random()*.6)*.7, r=(.45+Math.random()*.3)*.7; parts.push([F.berryGeo, new T.Matrix4().makeTranslation(Math.cos(a)*r, y, Math.sin(a)*r)]); } return mergeParts(parts); });
+  g.add(new T.Mesh(bg, F.berryMat));
   g.rotation.y = R()*6.28; return g;
 }
 function makeRock(R, kind){
@@ -1137,7 +1143,7 @@ function makeRock(R, kind){
     const m = modelMesh('ore', 1.5+R()*.3);
     if(gold){ m.material = MODELS.ore.goldMat || (MODELS.ore.goldMat = (()=>{ const x=MODELS.ore.mat.clone(); x.color.setRGB(1.5,1.15,.35); x.emissive=new T.Color(0x2a1a00); return x; })()); }
     g.add(m);
-    if(gold) for(let i=0;i<5;i++){ const a=R()*6.28; g.add(mesh(GEO.nug, mat(0xffd24a,{emissive:0x553300}), Math.cos(a)*.6, .35+R()*.35, Math.sin(a)*.55)); }
+    if(gold){ const ng=partsVariant('nug', 5, ()=>{ const parts=[]; for(let i=0;i<5;i++){ const a=Math.random()*6.28; parts.push([GEO.nug, new T.Matrix4().makeTranslation(Math.cos(a)*.6, .35+Math.random()*.35, Math.sin(a)*.55)]); } return mergeParts(parts); }); g.add(new T.Mesh(ng, mat(0xffd24a,{emissive:0x553300}))); }
     g.rotation.y = R()*6.28; return g;
   }
   const r = mesh(GEO.rock, mat(gold?0x8a7a55:kind==='metal'?0x7a5a4a:0x9aa1a8), 0,.35,0); r.scale.set(1.1,.7,1); r.rotation.set(R(),R(),R()); g.add(r);
@@ -1571,27 +1577,27 @@ function gbGeo(g){
   geo.setIndex(g.i); geo.computeBoundingBox(); geo.computeBoundingSphere(); return geo;
 }
 const UV_BARK=[0,0,.25,1], UV_PALMT=[.25,0,.5,1], UV_LEAF=[.5,0,.75,.5], UV_LEAF2=[.5,.5,.75,1], UV_FIR=[.75,0,1,.5], UV_FROND=[.75,.5,1,1];
-function makeBroadleaf(R, small){
+function makeBroadleaf(R, small, lod){
   const g=GB(), H=small?2.4:3.4;
   const tr=[[0,0,0],[.05,H*.35,.03],[-.04,H*.7,.06],[.08,H,0]];
-  gbCyl(g, tr, [.34,.26,.2,.15], 8, 0,.25, 1, .9);
+  gbCyl(g, lod?[[0,0,0],[0,H,0]]:tr, lod?[.3,.15]:[.34,.26,.2,.15], lod?5:8, 0,.25, 1, .9);
   const crowns=[[0,H+1.6,0,1.9]];
   for(let b=0;b<4;b++){ const a=b/4*6.283+R()*.8, y=H*.75+R()*H*.25, L=1.3+R()*.5, ex=Math.cos(a)*L, ez=Math.sin(a)*L, ey=y+.9+R()*.6;
-    gbCyl(g, [[0,y,0],[ex*.5,y+.45,ez*.5],[ex,ey,ez]], [.13,.09,.05], 5, 0,.25, 1, .85);
+    if(!lod) gbCyl(g, [[0,y,0],[ex*.5,y+.45,ez*.5],[ex,ey,ez]], [.13,.09,.05], 5, 0,.25, 1, .85);
     crowns.push([ex*1.05, ey+.5, ez*1.05, 1.35+R()*.4]); }
   const C=[0,H+1.2,0];
   const LQ=G.gfx===0;
-  for(const [cx,cy,cz,r] of crowns){ const n=LQ?7:small?10:14;
+  for(const [cx,cy,cz,r] of crowns){ const n=lod?3:LQ?7:small?10:14;
     for(let k=0;k<n;k++){ const [au,av]=randAxes(R); const a=R()*6.283, e=(R()-.3)*1.4, d=r*(.35+R()*.45);
       const o=[cx+Math.cos(a)*Math.cos(e)*d, cy+Math.sin(e)*d*.8, cz+Math.sin(a)*Math.cos(e)*d];
       gbCard(g, o, au, av, r*(.9+R()*.4), R()<.7?UV_LEAF:UV_LEAF2, C, .9+R()*.2); }
-    gbBlob(g, [cx,cy,cz], r*.78, C, LQ?0:1); }
+    gbBlob(g, [cx,cy,cz], r*.78, C, (LQ||lod)?0:1); }
   return gbGeo(g);
 }
-function makeFir(R){
+function makeFir(R, lod){
   const g=GB(), H=8.8;
   gbCyl(g, [[0,0,0],[0,H*.5,0],[0,H,0]], [.3,.18,.04], 7, 0,.25, 1, .85);
-  const tiers=G.gfx===0?5:7, seg=G.gfx===0?8:10, [u0,v0,u1,v1]=UV_FIR;
+  const tiers=lod?4:G.gfx===0?5:7, seg=lod?6:G.gfx===0?8:10, [u0,v0,u1,v1]=UV_FIR;
   for(let t=0;t<tiers;t++){
     const f=t/(tiers-1), yb=1.4+f*(H-2.6), r=2.6*(1-f)+.6, th=2.3-f*.9, yt=yb+th;
     const base=g.p.length/3, rings=[[.06,yt,0],[.55,yt-th*.5,.45],[1,yb,1]];
@@ -1604,13 +1610,13 @@ function makeFir(R){
   }
   return gbGeo(g);
 }
-function makePalm(R){
+function makePalm(R, lod){
   const g=GB(), H=6.4, lean=.9+R()*.8, pts=[], rads=[];
   for(let s=0;s<=7;s++){ const t=s/7; pts.push([lean*t*t, H*t, 0]); rads.push(.24-.08*t); }
   gbCyl(g, pts, rads, 7, .25,.5, 1, .95);
   const top=pts[7], C=[top[0],top[1],top[2]];
-  const fr=9;
-  for(let f=0;f<fr;f++){ const a=f/fr*6.283+R()*.3, ca=Math.cos(a), sa=Math.sin(a), L=3+R()*.7, seg=6, ups=.5+R()*.5;
+  const fr=lod?6:9;
+  for(let f=0;f<fr;f++){ const a=f/fr*6.283+R()*.3, ca=Math.cos(a), sa=Math.sin(a), L=3+R()*.7, seg=lod?2:6, ups=.5+R()*.5;
     const base=g.p.length/3;
     for(let s=0;s<=seg;s++){ const t=s/seg, d=L*t, y=top[1]+ups*Math.sin(t*2.2)*1.0 - t*t*1.9, w=.75*(1-t*.6)+.1;
       const cx=top[0]+ca*d, cz=top[2]+sa*d, sx=-sa*w, sz=ca*w;
@@ -1654,6 +1660,7 @@ function flora(){
   const depth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking, map:tex, alphaTest:.45, side:T.DoubleSide});
   FLORA={tex, mat, depth,
     geo:{ oak:[makeBroadleaf(R),makeBroadleaf(R),makeBroadleaf(R,true)], fir:[makeFir(R),makeFir(R)], palm:[makePalm(R),makePalm(R)], bush:[makeBushGeo(R),makeBushGeo(R)] },
+    lod:{ oak:makeBroadleaf(R,false,true), fir:makeFir(R,true), palm:makePalm(R,true) },
     gfx:G.gfx, berryGeo:new T.IcosahedronGeometry(.075,0), berryMat:new T.MeshLambertMaterial({color:0xd4202e, emissive:0x3a0000})};
   return FLORA;
 }
@@ -1665,22 +1672,68 @@ function treeKind(x,z,h,R){
   if(al>44) return R()<.45?'fir':'oak';
   return R()<.12?'fir':'oak';
 }
+/* ---------- Sammel-Zeichnen: alle Bäume / alles Gras einer Sorte in EINEM Zeichenaufruf ----------
+   Jede Sorte hat Daten pro Weltstück; gezeichnet wird nur, was nahe der Kamera liegt. */
+function makeBatch(geo, mat, opt){ return {geo, mat, opt:opt||{}, chunks:new Map(), im:null, cap:0, dirty:true}; }
+function batchAdd(B, ck, matrix, color){
+  let c=B.chunks.get(ck); if(!c){ c={m:new Float32Array(16*32), c:new Float32Array(3*32), n:0, cx:0, cz:0}; const [i,j]=ck.split(',').map(Number); c.cx=(i+.5)*TILE-G.NX/2; c.cz=(j+.5)*TILE-G.NZ/2; B.chunks.set(ck,c); }
+  if(c.n*16>=c.m.length){ const m2=new Float32Array(c.m.length*2); m2.set(c.m); c.m=m2; const c2=new Float32Array(c.c.length*2); c2.set(c.c); c.c=c2; }
+  matrix.toArray(c.m, c.n*16); if(color) color.toArray(c.c, c.n*3); else c.c.fill(1, c.n*3, c.n*3+3);
+  B.dirty=true; return {B, c, i:c.n++};
+}
+function batchHide(ref){ ref.c.m.fill(0, ref.i*16, ref.i*16+16); ref.B.dirty=true; }
+const _fr=new T.Frustum(), _fm=new T.Matrix4(), _sp=new T.Sphere();
+function batchFill(im, list){ const M=im.instanceMatrix.array, C=im.instanceColor.array; let o=0;
+  for(const c of list){ M.set(c.m.subarray(0,c.n*16), o*16); C.set(c.c.subarray(0,c.n*3), o*3); o+=c.n; }
+  im.count=o; im.instanceMatrix.needsUpdate=true; im.instanceColor.needsUpdate=true; }
+function batchRefill(B, cx, cz, R){
+  let n=0, nl=0; const list=[], far=[], shl=[]; let sn=0; const LR=[45,65,95][G.gfx];
+  G.cam.updateMatrixWorld(); _fm.multiplyMatrices(G.cam.projectionMatrix, G.cam.matrixWorldInverse); _fr.setFromProjectionMatrix(_fm);
+  for(const c of B.chunks.values()){ const dx=c.cx-cx, dz=c.cz-cz, rr=R+TILE*.75, d2=dx*dx+dz*dz; if(d2>=rr*rr) continue;
+    _sp.center.set(c.cx, getH(c.cx,c.cz)+4, c.cz); _sp.radius=TILE*.75+8;
+    if(_fr.intersectsSphere(_sp)){ if(B.opt.lod && d2 > LR*LR){ far.push(c); nl+=c.n; } else { list.push(c); n+=c.n; } }
+    if(B.opt.shadow && G.gfx>=1 && d2 < (56+TILE*.75)**2){ shl.push(c); sn+=c.n; } }
+  // eigene, unsichtbare Schattenwerfer nur nahe der Kamera (Schatten reichen ohnehin nur ~40 Einheiten)
+  if(B.opt.shadow && G.gfx>=1){
+    if(!B.sh || sn>B.shCap){ if(B.sh){ G.scene.remove(B.sh); B.sh.dispose(); } B.shCap=Math.max(128,Math.ceil(sn*1.5));
+      B.sh=new T.InstancedMesh(B.geo, B.shMat||(B.shMat=new T.MeshBasicMaterial({colorWrite:false, depthWrite:false})), B.shCap);
+      B.sh.instanceColor=new T.InstancedBufferAttribute(new Float32Array(B.shCap*3),3); B.sh.frustumCulled=false; B.sh.castShadow=true; B.sh.customDepthMaterial=B.opt.depth; B.sh.layers.set(1); G.sun.shadow.camera.layers.enable(1); G.scene.add(B.sh); }
+    batchFill(B.sh, shl);
+  }
+  if(!B.im || n>B.cap){
+    if(B.im){ G.scene.remove(B.im); B.im.dispose(); }
+    B.cap=Math.max(256, Math.ceil(n*1.5)); const im=new T.InstancedMesh(B.geo, B.mat, B.cap);
+    im.instanceColor=new T.InstancedBufferAttribute(new Float32Array(B.cap*3),3); im.frustumCulled=false;
+    im.castShadow=false; im.receiveShadow=true;
+    G.scene.add(im); B.im=im;
+  }
+  batchFill(B.im, list); B.dirty=false;
+  if(B.opt.lod){
+    if(!B.imL || nl>B.capL){ if(B.imL){ G.scene.remove(B.imL); B.imL.dispose(); } B.capL=Math.max(256,Math.ceil(nl*1.5));
+      B.imL=new T.InstancedMesh(B.opt.lod, B.mat, B.capL); B.imL.instanceColor=new T.InstancedBufferAttribute(new Float32Array(B.capL*3),3); B.imL.frustumCulled=false; B.imL.receiveShadow=true; G.scene.add(B.imL); }
+    batchFill(B.imL, far);
+  }
+}
+function batchesUpdate(force){
+  if(!G.batches) return;
+  const s=G.camS, ci=Math.floor((s.x+G.NX/2)/TILE), cj=Math.floor((s.z+G.NZ/2)/TILE);
+  const fogR=G.scene.fog.far+8, key=ci+','+cj+','+Math.round(fogR/32)+','+Math.round(s.yaw*6)+','+(G.farView?1:0);
+  const moved = key!==G.batchKey; G.batchKey=key;
+  for(const k in G.batches){ const B=G.batches[k]; if(!(moved||B.dirty||force)) continue;
+    const R = B.opt.decor ? Math.min(fogR*.6, TILE*[1.6,2.6,3.2][G.gfx]) : Math.min(fogR, TILE*6);
+    batchRefill(B, s.x, s.z, R);
+    if(B.im) B.im.visible = !(G.farView && B.opt.decor); }
+}
+function batch(key, geo, mat, opt){ if(!G.batches) G.batches={}; return G.batches[key] || (G.batches[key]=makeBatch(geo, mat, opt)); }
+const chunkKeyOf = (x,z) => Math.floor((x+G.NX/2)/TILE)+','+Math.floor((z+G.NZ/2)/TILE);
 function treeInstance(x,z,force){
   const R=G.rand, h=getH(x,z), F=flora();
   const kind=force||treeKind(x,z,h,R), variants=F.geo[kind], vi=(R()*variants.length)|0;
-  const key = kind+vi+':'+Math.floor((x+G.NX/2)/TILE)+','+Math.floor((z+G.NZ/2)/TILE);
-  if(!G.trees) G.trees={};
-  let t = G.trees[key];
-  if(!t){ const im=new T.InstancedMesh(variants[vi], F.mat, 400); im.count=0; im.castShadow=true; im.receiveShadow=true; im.customDepthMaterial=F.depth;
-    im.instanceColor=new T.InstancedBufferAttribute(new Float32Array(400*3),3); G.scene.add(im);
-    t=G.trees[key]={im, cx:(Math.floor((x+G.NX/2)/TILE)+.5)*TILE-G.NX/2, cz:(Math.floor((z+G.NZ/2)/TILE)+.5)*TILE-G.NZ/2}; }
-  const i=t.im.count; if(i>=400) return makeTree(R);
+  const B = batch('tree:'+kind+vi, variants[vi], F.mat, {shadow:true, depth:F.depth, lod:F.lod[kind]});
   const sc=(kind==='fir'?.72:kind==='palm'?.85:.8)+R()*.35;
   const o=new T.Object3D(); o.position.set(x,h-.1,z); o.rotation.y=R()*6.28; o.scale.setScalar(sc); o.updateMatrix();
-  t.im.setMatrixAt(i,o.matrix);
-  const c=new T.Color(), v=.85+R()*.25; c.setRGB(v*(.95+R()*.12), v, v*(.9+R()*.1)); t.im.setColorAt(i,c);
-  t.im.count++; t.im.instanceMatrix.needsUpdate=true; t.im.instanceColor.needsUpdate=true; t.im.computeBoundingSphere();
-  const d=new T.Object3D(); d.inst={im:t.im,i}; return d;
+  const c=new T.Color(), v=.85+R()*.25; c.setRGB(v*(.95+R()*.12), v, v*(.9+R()*.1));
+  const d=new T.Object3D(); d.inst=batchAdd(B, chunkKeyOf(x,z), o.matrix, c); return d;
 }
 const civTexCache = {};
 function civFlagTex(civ, color){
@@ -1847,29 +1900,26 @@ function decorAssets(){
 }
 function addDecorChunk(x0,z0,CH,R){
   decorAssets();
-  const nT=[350,900,1500][G.gfx], nS=[8,22,34][G.gfx], nP=[15,40,60][G.gfx];
-  const tuft=new T.InstancedMesh(TUFT_GEO, TUFT_MAT, nT), fl=new T.InstancedMesh(FLOWER_GEO, FLOWER_MAT, Math.floor(nT/6)), pb=new T.InstancedMesh(PEBBLE_GEO, PEBBLE_MAT, nP);
-  const F=flora(), sh=new T.InstancedMesh(F.geo.bush[0], F.mat, nS); sh.customDepthMaterial=F.depth; sh.castShadow=G.gfx>=1;
+  const nT=[300,800,1300][G.gfx], nS=[8,22,34][G.gfx], nP=[15,40,60][G.gfx];
+  const F=flora();
+  const BT=batch('d:tuft',TUFT_GEO,TUFT_MAT,{decor:true}), BF=batch('d:fl',FLOWER_GEO,FLOWER_MAT,{decor:true}), BS=batch('d:shrub',F.geo.bush[0],F.mat,{decor:true,shadow:true,depth:F.depth}), BP=batch('d:peb',PEBBLE_GEO,PEBBLE_MAT,{decor:true});
+  const ck=chunkKeyOf(x0+CH/2, z0+CH/2);
   const m4=new T.Matrix4(), q=new T.Quaternion(), sv=new T.Vector3(), p=new T.Vector3(), e=new T.Euler(), c=new T.Color();
-  const fcols=[0xfff1a8,0xff9fc4,0xb9a3ff,0xffffff,0xffd36b]; let gi=0, fi=0, si=0, pi=0;
-  const snowAt = (x,z)=> WATER_Y + 13;
+  const fcols=[0xfff1a8,0xff9fc4,0xb9a3ff,0xffffff,0xffd36b]; let gi=0, si=0, pi=0;
   for(let k=0;k<nT*2 && gi<nT;k++){
     const x=x0+R()*CH, z=z0+R()*CH, h=getH(x,z);
-    if(h<WATER_Y+.35 || h>snowAt(x,z)) continue;
+    if(h<WATER_Y+.35 || h>WATER_Y+13) continue;
     const lon=toLon(x), lat=toLat(z), ds=desertAt(lon,lat), cold=coldAt(lat); if(cold>.75) continue;
     if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<6)) continue;
     if(ds>.5 && R()<.75) continue;
     e.set(0,R()*6.28,0); q.setFromEuler(e); const sc=.8+R()*.9; sv.set(sc,sc*(.8+R()*.5),sc); p.set(x,h-.02,z);
-    m4.compose(p,q,sv); tuft.setMatrixAt(gi, m4);
+    m4.compose(p,q,sv);
     const v=.8+R()*.35; if(ds>.3) c.setRGB(1.3*v,1.1*v,.55*v); else if(h>WATER_Y+6) c.setRGB(.85*v,.95*v,.7*v); else c.setRGB(v*(.9+R()*.15), v, v*.85);
-    tuft.setColorAt(gi, c); gi++;
-    if(fi<fl.count && ds<.3 && h<WATER_Y+8 && R()<.18){ p.set(x+.1,h+.25,z+.08); sv.set(1,1,1); m4.compose(p,q,sv); fl.setMatrixAt(fi, m4); fl.setColorAt(fi, c.setHex(fcols[(R()*5)|0])); fi++; }
-    if(si<nS && ds<.4 && R()<.03){ e.set(0,R()*6.28,0); q.setFromEuler(e); const s2=.45+R()*.35; sv.set(s2,s2*(.8+R()*.4),s2); p.set(x,h-.05,z); m4.compose(p,q,sv); sh.setMatrixAt(si++, m4); }
-    if(pi<nP && R()<.05){ e.set(R(),R()*6.28,R()); q.setFromEuler(e); const s3=.4+R()*1.1; sv.set(s3,s3,s3); p.set(x,h,z); m4.compose(p,q,sv); pb.setMatrixAt(pi++, m4); }
+    batchAdd(BT, ck, m4, c); gi++;
+    if(ds<.3 && h<WATER_Y+8 && R()<.15){ p.set(x+.1,h+.25,z+.08); sv.set(1,1,1); m4.compose(p,q,sv); batchAdd(BF, ck, m4, c.setHex(fcols[(R()*5)|0])); }
+    if(si<nS && ds<.4 && R()<.03){ e.set(0,R()*6.28,0); q.setFromEuler(e); const s2=.45+R()*.35; sv.set(s2,s2*(.8+R()*.4),s2); p.set(x,h-.05,z); m4.compose(p,q,sv); batchAdd(BS, ck, m4, c.setRGB(1,1,1)); si++; }
+    if(pi<nP && R()<.05){ e.set(R(),R()*6.28,R()); q.setFromEuler(e); const s3=.4+R()*1.1; sv.set(s3,s3,s3); p.set(x,h,z); m4.compose(p,q,sv); batchAdd(BP, ck, m4, c.setRGB(1,1,1)); pi++; }
   }
-  if(!gi) return;
-  const cx=x0+CH/2, cz=z0+CH/2;
-  for(const [im,n] of [[tuft,gi],[fl,fi],[sh,si],[pb,pi]]){ if(!n) continue; im.count=n; if(im.instanceColor) im.instanceColor.needsUpdate=true; im.computeBoundingSphere(); im.receiveShadow=true; im.userData.c=[cx,cz]; G.scene.add(im); (G.decor||(G.decor=[])).push(im); if(G.farView) im.visible=false; }
 }
 
 /* ============================================================
@@ -2087,7 +2137,7 @@ function autoJob(u){
 }
 function removeRes(r){
   r.alive=false; G.scene.remove(r.mesh);
-  if(r.mesh.inst){ const {im,i}=r.mesh.inst; im.setMatrixAt(i, new T.Matrix4().makeScale(0,0,0)); im.instanceMatrix.needsUpdate=true; }
+  if(r.mesh.inst) batchHide(r.mesh.inst);
   if(!r.deer){ const k=cellIdx(r.x,r.z); if(k>=0) G.grid[k]=0; }
 }
 function finishBuilding(b){
@@ -2264,7 +2314,7 @@ function buildOverview(){
 }
 function updateOverview(){
   const far = G.farView;
-  if(G.lastFar!==far){ G.lastFar=far; for(const r of G.res) if(r.mesh && !r.mesh.inst) r.mesh.visible=!far; for(const u of G.units) u.mesh.visible=!far; if(G.decor) G.decor.forEach(d=>d.visible=!far); }
+  if(G.lastFar!==far){ G.lastFar=far; for(const r of G.res) if(r.mesh && !r.mesh.inst) r.mesh.visible=!far; for(const u of G.units) u.mesh.visible=!far; batchesUpdate(true); }
   for(const {sp,p} of G.banners){
     sp.visible = far && p.tc;
     if(sp.visible){ const sc=G.camS.dist*.035; sp.scale.set(sc*3.55,sc,1); sp.center.set(.5,0); sp.position.set(p.tc.x, p.tc.mesh.position.y+4, p.tc.z); }
