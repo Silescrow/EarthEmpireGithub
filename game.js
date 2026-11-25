@@ -27,7 +27,7 @@ const COLNAMES = ['Blau','Rot','Gelb','Grün','Lila','Orange','Türkis','Pink','
 const RES = ['food','wood','stone','gold'];
 const RES_DE = {food:'Nahrung',wood:'Holz',stone:'Stein',gold:'Gold',metal:'Metall',oil:'Öl'};
 const BUILD = {
-  tc:    {name:'Stadtzentrum', size:6, cost:{}, time:60, hp:1200, drop:['food','wood','stone','gold'], pop:5},
+  tc:    {name:'Stadtzentrum', size:6, cost:{wood:250, stone:100, food:100}, time:60, hp:1200, drop:['food','wood','stone','gold'], pop:5},
   house: {name:'Hütte', size:3, cost:{wood:30}, time:14, hp:300, pop:5},
   wall:  {name:'Palisade', size:1, cost:{wood:4}, time:3, hp:250},
   gate:  {name:'Tor', size:1, cost:{wood:15}, time:8, hp:500},
@@ -74,6 +74,8 @@ async function start(){
   initRenderer();
   genWorld();
   buildOverview();
+  for(const b of G.builds) if(b.kind==='tc' && b.built>=1) claimRegion(b);
+  buildBorders();
   setTimeout(()=>{ if(G) drawMinimap(); }, 50);
   initInput();
   updateHUD(); drawPanel();
@@ -222,6 +224,7 @@ function drawPanel(){
     if(ws.length>MAXP) h += `<span class="more">+${ws.length-MAXP}</span>`;
     h += `</div>${ws.length===1?`<small>${job}${carry}</small>`:''}</div>`;
     if(ws[0].owner===0 && ws.every(u=>u.kind==='worker')){
+      h += `<button class="ab" data-a="b-tc"><span class="ai">${hutSVG()}</span>Stadtzentrum<span class="ac">${costText(BUILD.tc.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-house"><span class="ai">${hutSVG()}</span>Hütte<span class="ac">${costText(BUILD.house.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-store"><span class="ai">${storeSVG()}</span>Lager<span class="ac">${costText(BUILD.store.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-wall"><span class="ai">${wallSVG()}</span>Palisade<span class="ac">${costText(BUILD.wall.cost)}/Stück</span></button>`;
@@ -313,6 +316,7 @@ function updateArrows(dt){
   }
 }
 function damage(t, dmg, src){
+  if(src && G.reg && friendlyLand(src.owner, src.x, src.z)) dmg *= 1.15; // Heimvorteil wie in EE2
   t.hp -= dmg;
   if(t.size){ if(t.owner===0 && !G.alarmT){ G.alarmT=8; EE.toast('Deine '+BUILD[t.kind].name+' wird angegriffen!'); EE.sfx('error',.6); } if(t.hp<=0) destroyBuilding(t); return; }
   if(t.owner===0 && !G.alarmT){ G.alarmT=8; EE.toast('Deine Leute werden angegriffen!'); EE.vib(40); }
@@ -337,7 +341,8 @@ function destroyBuilding(b){
   for(const k of b.cells) if(k>=0) G.grid[k]=0;
   const p=G.players[b.owner], d=BUILD[b.kind];
   if(b.built>=1 && d.pop) p.popCap=Math.max(0,p.popCap-d.pop);
-  if(b===p.tc) p.tc=null;
+  if(b===p.tc) p.tc=G.builds.find(o=>o.owner===b.owner && o.kind==='tc' && o.built>=1) || null;
+  if(b.kind==='tc'){ releaseRegion(b); buildBorders(); }
   if(G.selB===b){ G.selB=null; drawPanelSoon(); }
   b.ring.visible=false; sfxAt('build',b.x,b.z,1); EE.sfx('place',.5);
   const m=b.mesh; let t=0; const sink=()=>{ if(!G) return; t+=.016; m.position.y-=.03; m.rotation.z=Math.sin(t*9)*.02; if(t<2.5) requestAnimationFrame(sink); else { G.scene.remove(m); G.scene.remove(b.ring); } }; sink();
@@ -358,11 +363,20 @@ function updateAIWar(p, mine, tc){
   const workers = mine.filter(u=>u.kind==='worker').length;
   if(!barr && workers>=8 && p.res.wood>=120 && p.res.stone>=40 && !G.builds.some(b=>b.owner===p.id && b.built<1)){
     for(let t=0;t<25;t++){ const a=G.rand()*6.28, r=10+G.rand()*6; const x=tc.x+Math.cos(a)*r, z=tc.z+Math.sin(a)*r;
-      if(validPlace('barracks',x,z)){ p.res.wood-=120; p.res.stone-=40; const b=addBuilding('barracks',p.id,x,z,false); mine.filter(u=>u.kind==='worker').slice(0,3).forEach(w=>cmdBuild(w,b)); break; } }
+      if(validPlace('barracks',x,z,p.id)){ p.res.wood-=120; p.res.stone-=40; const b=addBuilding('barracks',p.id,x,z,false); mine.filter(u=>u.kind==='worker').slice(0,3).forEach(w=>cmdBuild(w,b)); break; } }
   }
   if(barr && barr.built>=1 && barr.queue.length<2 && p.pop<p.popCap){
     const army = mine.filter(isSoldier).length, want = atWar ? 6+Math.floor(G.t/240) : 3;
     if(army<want){ const k=['club','spear','bow'][(G.rand()*3)|0], c=UNIT[k].cost; if(canPay(p,c)){ pay(p,c); barr.queue.push(k); } }
+  }
+  // Land erweitern: neues Stadtzentrum am Rand des Gebiets
+  p.expT = (p.expT ?? (300 + G.rand()*240)) - 1.5;
+  if(p.expT<=0 && workers>=10 && canPay(p, BUILD.tc.cost) && !G.builds.some(b=>b.owner===p.id && b.kind==='tc' && b.built<1)){
+    p.expT = 240 + G.rand()*200;
+    const cand=[]; for(const [id,ow] of G.reg.owner) if(ow===p.id) for(const n of regNeighbors(id)) if(regOwner(n.id)<0) cand.push(n);
+    for(let t=0;t<40 && cand.length;t++){ const n=cand[(G.rand()*cand.length)|0], a=G.rand()*6.28, r=G.rand()*REG_S*.3, x=n.x+Math.cos(a)*r, z=n.z+Math.sin(a)*r;
+      if(rawLand(x,z)<.7) continue;
+      if(validPlace('tc',x,z,p.id)){ pay(p, BUILD.tc.cost); const b=addBuilding('tc',p.id,x,z,false); mine.filter(u=>u.kind==='worker').slice(0,4).forEach(w=>cmdBuild(w,b)); break; } }
   }
   // Angriff: nur im Krieg und frühestens nach 8 Minuten
   const soldiers = mine.filter(u=>isSoldier(u));
@@ -396,6 +410,7 @@ function action(a){
     if(b.queue.length>=5){ EE.toast('Warteschlange voll'); return; }
     if(!canPay(p,c)){ EE.toast('Nicht genug Rohstoffe'); EE.sfx('error'); return; }
     pay(p,c); b.queue.push(k); EE.vib(15);
+  } else if(a==='b-tc'){ startPlace('tc');
   } else if(a==='b-wall'){ startWall('wall');
   } else if(a==='b-road'){ startWall('road');
   } else if(a==='dip'){ openDip('rel');
@@ -735,8 +750,8 @@ function genChunk(ci,cj){
     const forest = fbm(x*.03,z*.03,H_SEED+40);
     const r = R();
     if(ds>.5){ if(r<.02) placeCluster('tree',x,z,3,1.5); else if(r<.05) placeCluster('stone',x,z,2,1); }
-    else if(bd>24 && forest>.5 && cold<.85 && r<.26 && getH(x,z)<WATER_Y+11) placeCluster('tree',x,z,G.gfx===0?4+(R()*4|0):6+(R()*9|0),(2.2+R()*2.5)*1.8);
-    else if(bd>18 && r<.018 && cold<.85 && getH(x,z)<WATER_Y+11) placeCluster('tree',x,z,1+(R()*2|0),3);
+    else if(bd>24 && forest>.6 && cold<.85 && r<.2 && getH(x,z)<WATER_Y+11) placeCluster('tree',x,z,G.gfx===0?3+(R()*4|0):5+(R()*6|0),(3+R()*3)*2.1);
+    else if(bd>18 && r<.008 && cold<.85 && getH(x,z)<WATER_Y+11) placeCluster('tree',x,z,1,3);
     else if(r<.05) placeCluster('bush',x,z,3,1.6);
     else if(r<.075 && mt>.4) placeCluster('stone',x,z,3,1.5);
     else if(r<.085) placeCluster('gold',x,z,2,1.2);
@@ -789,6 +804,7 @@ function genWorld(){
   for(let j=0;j<G.hnz;j++) for(let i=0;i<G.hnx;i++) G.hm[j*G.hnx+i] = rawH(i*G.hs-NX/2, j*G.hs-NZ/2);
   // Raster für Wegfindung: wird kachelweise gefüllt, sobald eine Gegend gebraucht wird
   G.grid = new Uint8Array(NX*NZ); G.road = new Uint8Array(NX*NZ);
+  initRegions();
   G.tnx = NX/TILE; G.tnz = NZ/TILE; G.tiles = new Array(G.tnx*G.tnz); G.tileCount=0; G.tileMeshes=[];
   const PW=320; G.pfW=PW; G.pfG = new Float32Array(PW*PW); G.pfF = new Int32Array(PW*PW); G.pfS = new Uint32Array(PW*PW); G.pfC = new Uint32Array(PW*PW); G.pfStamp = 0;
   G.bases.forEach(b=>ensureArea(b.x-90,b.z-90,b.x+90,b.z+90));
@@ -1823,6 +1839,11 @@ function teamFlag(g, color, x, y, z, h){
 const cellIdx = (x,z) => { const i=Math.floor(x+G.NX/2), j=Math.floor(z+G.NZ/2); if(i<0||j<0||i>=G.NX||j>=G.NZ) return -1; const ti=(i/TILE)|0, tj=(j/TILE)|0; if(!G.tiles[tj*G.tnx+ti]) ensureTile(ti,tj); return j*G.NX+i; };
 function freeCell(x,z){ const k=cellIdx(x,z); return k>=0 && !G.grid[k]; }
 
+// Bäume brauchen Abstand zueinander (Lücken im Wald, Kronen überlappen nicht zu stark)
+const TREE_GAP = 3.4;
+function treeTooClose(x,z){ if(!G.treeHash) G.treeHash=new Map(); const ci=Math.floor(x/4), cj=Math.floor(z/4);
+  for(let j=cj-1;j<=cj+1;j++) for(let i=ci-1;i<=ci+1;i++){ const a=G.treeHash.get(i+','+j); if(a) for(let k=0;k<a.length;k+=2){ if(Math.hypot(a[k]-x,a[k+1]-z)<TREE_GAP) return true; } } return false; }
+function treeMark(x,z){ const key=Math.floor(x/4)+','+Math.floor(z/4); let a=G.treeHash.get(key); if(!a) G.treeHash.set(key,a=[]); a.push(x,z); }
 function placeCluster(type, cx, cz, count, spread, minB){
   const R = G.rand;
   for(let i=0,tries=0;i<count && tries<count*6;tries++){
@@ -1831,7 +1852,9 @@ function placeCluster(type, cx, cz, count, spread, minB){
     if(!freeCell(x,z)) continue;
     if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<(minB||6.5))) continue;
     if(getH(x,z)<WATER_Y+.3) continue;
+    if(type==='tree' && treeTooClose(x,z)) continue;
     addRes(type,x,z); i++;
+    if(type==='tree') treeMark(x,z);
   }
 }
 function addRes(type,x,z){
@@ -1891,10 +1914,11 @@ function addBuilding(kind, owner, x, z, done){
   for(const k of fp.cells) if(k>=0) G.grid[k]=1;
   const ring = new T.Mesh(new T.RingGeometry(d.size*.62, d.size*.7, 32), new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.85, depthWrite:false}));
   ring.rotation.x = -Math.PI/2; ring.position.set(fp.cx, m.position.y+.08, fp.cz); ring.visible=false; G.scene.add(ring);
-  const b = {kind, owner, x:fp.cx, z:fp.cz, size:d.size, mesh:m, ring, cells:fp.cells, built:done?1:0, hp:done?d.hp:1, queue:[], qT:0};
+  const b = {kind, owner, x:fp.cx, z:fp.cz, size:d.size, mesh:m, ring, cells:fp.cells, built:done?1:0, hp:done?d.hp:1, queue:[], qT:0, slow:!done && kind!=='tc' && kind!=='road' && G.reg && !friendlyLand(owner,fp.cx,fp.cz)};
   if(!done){ m.scale.y = .25; m.traverse(o=>{ if(o.material && o.isMesh){ o.material = o.material.clone(); o.material.transparent=true; o.material.opacity=.55; } }); }
   else if(d.pop) G.players[owner].popCap += d.pop;
   G.builds.push(b);
+  if(done && kind==='tc' && G.borderGrp){ claimRegion(b); buildBorders(); }
   return b;
 }
 
@@ -1913,7 +1937,7 @@ function decorAssets(){
 }
 function addDecorChunk(x0,z0,CH,R){
   decorAssets();
-  const nT=[300,800,1300][G.gfx], nS=[8,22,34][G.gfx], nP=[15,40,60][G.gfx];
+  const nT=[110,300,480][G.gfx], nS=[6,16,24][G.gfx], nP=[12,30,45][G.gfx];
   const F=flora();
   const BT=batch('d:tuft',TUFT_GEO,TUFT_MAT,{decor:true}), BF=batch('d:fl',FLOWER_GEO,FLOWER_MAT,{decor:true}), BS=batch('d:shrub',F.geo.bush[0],F.mat,{decor:true,shadow:true,depth:F.depth}), BP=batch('d:peb',PEBBLE_GEO,PEBBLE_MAT,{decor:true});
   const ck=chunkKeyOf(x0+CH/2, z0+CH/2);
@@ -1929,7 +1953,7 @@ function addDecorChunk(x0,z0,CH,R){
     m4.compose(p,q,sv);
     const v=.8+R()*.35; if(ds>.3) c.setRGB(1.3*v,1.1*v,.55*v); else if(h>WATER_Y+6) c.setRGB(.85*v,.95*v,.7*v); else c.setRGB(v*(.9+R()*.15), v, v*.85);
     batchAdd(BT, ck, m4, c); gi++;
-    if(ds<.3 && h<WATER_Y+8 && R()<.15){ p.set(x+.1,h+.25,z+.08); sv.set(1,1,1); m4.compose(p,q,sv); batchAdd(BF, ck, m4, c.setHex(fcols[(R()*5)|0])); }
+    if(ds<.3 && h<WATER_Y+8 && R()<.2){ p.set(x+.1,h+.25,z+.08); sv.set(1,1,1); m4.compose(p,q,sv); batchAdd(BF, ck, m4, c.setHex(fcols[(R()*5)|0])); }
     if(si<nS && ds<.4 && R()<.03){ e.set(0,R()*6.28,0); q.setFromEuler(e); const s2=.45+R()*.35; sv.set(s2,s2*(.8+R()*.4),s2); p.set(x,h-.05,z); m4.compose(p,q,sv); batchAdd(BS, ck, m4, c.setRGB(1,1,1)); si++; }
     if(pi<nP && R()<.05){ e.set(R(),R()*6.28,R()); q.setFromEuler(e); const s3=.4+R()*1.1; sv.set(s3,s3,s3); p.set(x,h,z); m4.compose(p,q,sv); batchAdd(BP, ck, m4, c.setRGB(1,1,1)); pi++; }
   }
@@ -2110,7 +2134,7 @@ function updateWorker(u,dt){
       if(near(u,b.x,b.z,b.size*.5+1.1)){
         u.path=null; u.working=true; u.face=Math.atan2(b.x-u.x,b.z-u.z);
         u.hitT=(u.hitT||0)+dt; if(u.hitT>.9){ u.hitT=0; sfxAt('build',u.x,u.z,.8); }
-        b.built = Math.min(1, b.built + dt/BUILD[b.kind].time);
+        b.built = Math.min(1, b.built + dt/BUILD[b.kind].time/(b.slow?3:1));
         b.hp = Math.max(1, BUILD[b.kind].hp*b.built);
         if(b.kind==='road') b.mesh.children[0].material.opacity=.35+.6*b.built; else b.mesh.scale.y = .25 + .75*b.built;
         if(b.built>=1) finishBuilding(b);
@@ -2159,6 +2183,7 @@ function finishBuilding(b){
   if(b.kind==='road'){ for(const k of b.roadCells) G.road[k]=1; b.mesh.traverse(o=>{ if(o.isMesh) o.material.opacity=1; }); }
   else b.mesh.traverse(o=>{ if(o.isMesh && o.material && o.material.transparent && o.material.opacity<.6){ o.material.opacity=1; o.material.transparent=false; } });
   if(d.pop) G.players[b.owner].popCap += d.pop;
+  if(b.kind==='tc'){ const p=G.players[b.owner]; if(!p.tc) p.tc=b; claimRegion(b); buildBorders(); if(b.owner===0 && G.t>5){ EE.toast('Dein Gebiet ist gewachsen!'); EE.sfx('fanfare',.7); } }
   if(b.wallId){
     for(const u of G.units) if(u.site===b){ const next=G.builds.filter(o=>o.wallId===b.wallId && o.built<1).sort((p,q)=>Math.hypot(p.x-u.x,p.z-u.z)-Math.hypot(q.x-u.x,q.z-u.z))[0];
       if(next) cmdBuild(u,next); else { u.site=null; u.state='idle'; autoJob(u); } }
@@ -2220,7 +2245,7 @@ function updateAI(p,dt){
   if(mine.filter(u=>u.kind==='worker').length<10 && !tc.queue.length && p.res.food>=50 && p.pop<p.popCap){ p.res.food-=50; tc.queue.push('worker'); }
   if(p.pop>=p.popCap-1 && p.res.wood>=30 && !G.builds.some(b=>b.owner===p.id && b.built<1)){
     for(let t=0;t<20;t++){ const a=G.rand()*6.28, r=6+G.rand()*4; const x=tc.x+Math.cos(a)*r, z=tc.z+Math.sin(a)*r;
-      if(validPlace('house',x,z)){ p.res.wood-=30; const b=addBuilding('house',p.id,x,z,false); const w=mine.find(u=>u.state!=='build'); if(w) cmdBuild(w,b); break; } }
+      if(validPlace('house',x,z,p.id)){ p.res.wood-=30; const b=addBuilding('house',p.id,x,z,false); const w=mine.find(u=>u.state!=='build'); if(w) cmdBuild(w,b); break; } }
   }
 }
 
@@ -2300,6 +2325,7 @@ function drawMinimap(){
   const px=v=>(v+G.NX/2)*s, pz=v=>(v+G.NZ/2)*s;
   G.miniResT=(G.miniResT||0)-1;
   for(const r of G.res){ if(!r.alive||r.deer||r.kind==='wood'||r.kind==='food'||r.kind==='stone') continue; x.fillStyle = r.kind==='gold'?'#ffd24a':r.kind==='metal'?'#c87a4a':r.kind==='oil'?'#111':'#d0d4d8'; x.fillRect(px(r.x)-1,pz(r.z)-1,2,2); }
+  if(G.reg) drawRegionsMini(x, px, pz);
   for(const b of G.builds){ x.fillStyle='#'+COLORS[b.owner].toString(16).padStart(6,'0'); const z=Math.max(3,b.size*s); x.fillRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); x.strokeStyle='#000'; x.lineWidth=1; x.strokeRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); }
   for(const u of G.units){ x.fillStyle='#'+COLORS[u.owner].toString(16).padStart(6,'0'); x.fillRect(px(u.x)-1,pz(u.z)-1,2,2); }
   const pts=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([a,b])=>groundAtNDC(a,b)).filter(Boolean);
@@ -2578,7 +2604,7 @@ function updateWallGhost(){
     const ks = new Set();
     for(let t=-.45;t<=.45;t+=.15){ const k=cellIdx(x+ux*seg*t, z+uz*seg*t); ks.add(k); }
     const arr=[...ks];
-    const ok = arr.every(k=>k>=0 && !G.grid[k]) && getH(x,z)>WATER_Y+.15 && !pl.cells.some(c=>c.ks.some(k=>arr.includes(k)) && false);
+    const ok = arr.every(k=>k>=0 && !G.grid[k]) && getH(x,z)>WATER_Y+.15 && true;
     pl.cells.push({ks:arr, x, z, len:seg, ok, gate: !road && pl.gate && n>=3 && i===mid});
   }
   let okCount=0;
@@ -2623,7 +2649,119 @@ function addWall(owner, c, ang, id, road){
 }
 
 /* ---------- Gebäude platzieren ---------- */
-function validPlace(kind,x,z){
+/* ============================================================
+   GEBIETE (wie Empire Earth 2): Die Welt ist in feste Gebiete aufgeteilt (ein Land hat mehrere).
+   Ein Stadtzentrum macht das ganze Gebiet zu deinem. Weitere Gebiete holt man sich mit neuen
+   Stadtzentren in Nachbargebieten – fremde Gebiete erst, wenn deren Stadtzentrum zerstört ist.
+   ============================================================ */
+const REG_S = 70;
+function initRegions(){
+  const S=REG_S, gw=Math.ceil(G.NX/S), gh=Math.ceil(G.NZ/S), R=rng(G.seed^0x5bd1e995);
+  G.reg={S, gw, gh, seeds:new Array(gw*gh).fill(null), owner:new Map(), poly:new Map()};
+  for(let j=0;j<gh;j++) for(let i=0;i<gw;i++){
+    const x=(i+.2+R()*.6)*S-G.NX/2, z=(j+.2+R()*.6)*S-G.NZ/2;
+    if(rawLand(x,z)>.62) G.reg.seeds[j*gw+i]={id:j*gw+i, x, z};
+  }
+}
+function regionAt(x,z){
+  const g=G.reg; if(!g) return -1; const gi=Math.floor((x+G.NX/2)/g.S), gj=Math.floor((z+G.NZ/2)/g.S);
+  let best=-1, bd=1e18;
+  for(let j=gj-2;j<=gj+2;j++) for(let i=gi-2;i<=gi+2;i++){ if(i<0||j<0||i>=g.gw||j>=g.gh) continue; const s=g.seeds[j*g.gw+i]; if(!s) continue; const d=(s.x-x)**2+(s.z-z)**2; if(d<bd){ bd=d; best=s.id; } }
+  return best;
+}
+const regOwner = id => (id>=0 && G.reg.owner.has(id)) ? G.reg.owner.get(id) : -1;
+const inOwn = (owner,x,z) => regOwner(regionAt(x,z))===owner;
+function regNeighbors(id){
+  const g=G.reg, s=g.seeds[id], out=[]; if(!s) return out;
+  const gi=id%g.gw, gj=(id/g.gw)|0;
+  for(let j=gj-2;j<=gj+2;j++) for(let i=gi-2;i<=gi+2;i++){ if(i<0||j<0||i>=g.gw||j>=g.gh) continue; const n=g.seeds[j*g.gw+i]; if(n && n!==s) out.push(n); }
+  return out;
+}
+// Umriss eines Gebiets (Voronoi-Zelle): Quadrat Schritt für Schritt an den Mittelsenkrechten abschneiden
+function regPoly(id){
+  const g=G.reg; if(g.poly.has(id)) return g.poly.get(id);
+  const s=g.seeds[id], S=g.S*2.2; let P=[[s.x-S,s.z-S,-1],[s.x+S,s.z-S,-1],[s.x+S,s.z+S,-1],[s.x-S,s.z+S,-1]];
+  for(const n of regNeighbors(id)){
+    const mx=(s.x+n.x)/2, mz=(s.z+n.z)/2, dx=n.x-s.x, dz=n.z-s.z, f=p=>(p[0]-mx)*dx+(p[1]-mz)*dz, out=[];
+    for(let k=0;k<P.length;k++){ const a=P[k], b=P[(k+1)%P.length], fa=f(a), fb=f(b);
+      if(fa<=0) out.push(a);
+      if((fa<=0)!==(fb<=0)){ const t=fa/(fa-fb); out.push([a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, n.id]); }
+      // Kante ab Punkt a gehört zu dem Nachbarn, der sie erzeugt hat (3. Wert)
+    }
+    for(let k=0;k<out.length;k++){ const a=out[k], b=out[(k+1)%out.length]; if(f(a)>-1e-6 && f(b)>-1e-6) a[2]=n.id; }
+    P=out;
+  }
+  g.poly.set(id,P); return P;
+}
+function claimRegion(b){ const id=regionAt(b.x,b.z); if(id>=0){ G.reg.owner.set(id,b.owner); b.region=id; } }
+function releaseRegion(b){ const id=b.region; if(id==null||id<0) return; if(!G.builds.some(o=>o!==b && o.kind==='tc' && o.built>=1 && o.region===id && o.owner===b.owner)) G.reg.owner.delete(id); }
+function terrCheck(owner, kind, x, z){
+  if(kind==='road') return null;
+  const id=regionAt(x,z), o=regOwner(id);
+  if(kind==='tc'){
+    if(id<0) return 'Hier kann man kein Gebiet gründen';
+    if(o===owner) return 'Dieses Gebiet gehört dir schon – baue im Nachbargebiet';
+    if(o>=0) return 'Das Gebiet gehört den '+G.players[o].civ[0]+' – erst deren Stadtzentrum zerstören';
+    if(G.builds.some(b=>b.kind==='tc' && b.built<1 && regionAt(b.x,b.z)===id)) return 'Hier wird schon ein Stadtzentrum gebaut';
+    const mine=[...G.reg.owner].filter(([k,v])=>v===owner).map(([k])=>k);
+    if(!mine.length) return null;
+    const near = regNeighbors(id).some(n=>regOwner(n.id)===owner && regPoly(id).some(p=>p[2]===n.id));
+    return near ? null : 'Nur ein Nachbargebiet deines Landes';
+  }
+  if(id<0) return 'Hier kann man nicht bauen';
+  if(kind==='house' && G.builds.filter(b=>b.kind==='house' && b.owner===owner && regionAt(b.x,b.z)===id).length>=HOUSE_MAX) return 'Höchstens '+HOUSE_MAX+' Hütten pro Gebiet – erweitere dein Land';
+  return null;
+}
+// Wie in Empire Earth 2: Außerhalb des eigenen (oder verbündeten) Gebiets darf man bauen, aber es dauert dreimal so lange
+const HOUSE_MAX = 6;
+function friendlyLand(owner,x,z){ const o=regOwner(regionAt(x,z)); if(o<0) return false; if(o===owner) return true; const p=o===0?owner:owner===0?o:-1; return p>=0 && G.dip[p] && G.dip[p].state==='ally'; }
+// Grenzen zeichnen: Außengrenze in Teamfarbe (leicht nach innen versetzt), innere Gebietsgrenzen zart,
+// freie Nachbargebiete weiß gestrichelt
+function buildBorders(){
+  if(G.borderGrp){ G.scene.remove(G.borderGrp); G.borderGrp.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+  const grp=new T.Group(); G.borderGrp=grp; G.scene.add(grp);
+  const lines=new Map(); // farbe+art -> positions
+  const add=(key,col,op,w,x0,z0,x1,z1,nx,nz,inset,dash)=>{
+    let L=lines.get(key); if(!L){ L={col,op,pos:[]}; lines.set(key,L); }
+    const len=Math.hypot(x1-x0,z1-z0), n=Math.max(1,Math.ceil(len/1.5));
+    for(let k=0;k<n;k++){ if(dash && k%2) continue; const t0=k/n, t1=(k+1)/n;
+      const ax=x0+(x1-x0)*t0+nx*inset, az=z0+(z1-z0)*t0+nz*inset, bx=x0+(x1-x0)*t1+nx*inset, bz=z0+(z1-z0)*t1+nz*inset;
+      if(getH(ax,az)<WATER_Y+.05 && getH(bx,bz)<WATER_Y+.05) continue;
+      const y=(x,z)=>Math.max(getH(x,z),WATER_Y)+.14;
+      const cx=ax+nx*w, cz=az+nz*w, dx=bx+nx*w, dz=bz+nz*w;
+      L.pos.push(ax,y(ax,az),az, cx,y(cx,cz),cz, bx,y(bx,bz),bz,  bx,y(bx,bz),bz, cx,y(cx,cz),cz, dx,y(dx,dz),dz); }
+  };
+  const owned=[...G.reg.owner.entries()];
+  const shownFree=new Set();
+  for(const [id,ow] of owned){
+    const P=regPoly(id), s=G.reg.seeds[id], col=COLORS[ow];
+    for(let k=0;k<P.length;k++){
+      const a=P[k], b=P[(k+1)%P.length], nb=a[2];
+      const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1; nx/=L; nz/=L;
+      const other = nb>=0 ? regOwner(nb) : -1;
+      if(other===ow) add('in'+ow, col, .45, .4, a[0],a[1],b[0],b[1], nx,nz, .2, true);
+      else { add('out'+ow, col, 1, .8, a[0],a[1],b[0],b[1], nx,nz, .3, false); add('glow'+ow, col, .3, 4, a[0],a[1],b[0],b[1], nx,nz, 1.1, false); }
+      if(ow===0 && nb>=0 && other<0) shownFree.add(nb);
+    }
+  }
+  // freie Nachbargebiete des Spielers zart umranden
+  for(const id of shownFree){ const P=regPoly(id), s=G.reg.seeds[id];
+    for(let k=0;k<P.length;k++){ const a=P[k], b=P[(k+1)%P.length]; if(a[2]>=0 && regOwner(a[2])===0) continue;
+      const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1;
+      add('free', 0xd8d8d8, .6, .4, a[0],a[1],b[0],b[1], nx/L,nz/L, .1, false); } }
+  for(const L of lines.values()){ if(!L.pos.length) continue;
+    const geo=new T.BufferGeometry(); geo.setAttribute('position',new T.Float32BufferAttribute(L.pos,3));
+    const m=new T.Mesh(geo,new T.MeshBasicMaterial({color:L.col, transparent:true, opacity:L.op, depthWrite:false, side:T.DoubleSide, polygonOffset:true, polygonOffsetFactor:-4}));
+    m.renderOrder=3; m.frustumCulled=false; grp.add(m); }
+  if(G.miniBase) drawMinimap();
+}
+function drawRegionsMini(x, px, pz){
+  for(const [id,ow] of G.reg.owner){ const P=regPoly(id), col='#'+COLORS[ow].toString(16).padStart(6,'0');
+    x.beginPath(); P.forEach((p,i)=>i?x.lineTo(px(p[0]),pz(p[1])):x.moveTo(px(p[0]),pz(p[1]))); x.closePath();
+    x.globalAlpha=.35; x.fillStyle=col; x.fill(); x.globalAlpha=.9; x.strokeStyle=col; x.lineWidth=1; x.stroke(); x.globalAlpha=1; }
+}
+function validPlace(kind,x,z,owner){
+  if(terrCheck(owner|0, kind, x, z)) return false;
   const fp = footprint(kind,x,z);
   if(fp.cells.some(k=>k<0||G.grid[k])) return false;
   for(const u of G.units){ if(Math.abs(u.x-fp.cx)<BUILD[kind].size/2+.2 && Math.abs(u.z-fp.cz)<BUILD[kind].size/2+.2 && u.owner!==0) return false; }
@@ -2644,14 +2782,17 @@ function updateGhost(){
   const pl=G.place, fp=footprint(pl.kind,pl.x,pl.z);
   const y = getH(fp.cx,fp.cz);
   pl.ghost.position.set(fp.cx,y,fp.cz); pl.pad.position.set(fp.cx,y+.1,fp.cz);
-  pl.ok = validPlace(pl.kind,pl.x,pl.z);
-  pl.pad.material.color.setHex(pl.ok?0x44ff66:0xff4444);
+  pl.ok = validPlace(pl.kind,pl.x,pl.z,0);
+  pl.why = terrCheck(0, pl.kind, fp.cx, fp.cz);
+  const slow = pl.ok && pl.kind!=='tc' && !friendlyLand(0,fp.cx,fp.cz);
+  $('#pTxt').textContent = pl.why || (BUILD[pl.kind].name + (!pl.ok ? ' – hier ist kein Platz' : slow ? ' – außerhalb deines Landes: Bau dauert 3× so lange' : ' – hier bauen?'));
+  pl.pad.material.color.setHex(!pl.ok?0xff4444:slow?0xffcc33:0x44ff66);
   $('#pOk').classList.toggle('dim', !pl.ok);
 }
 function confirmPlace(){
   if(G.place && G.place.line) return confirmWall();
   const pl=G.place, p=G.players[0];
-  if(!pl.ok){ EE.toast('Hier kann nicht gebaut werden'); return; }
+  if(!pl.ok){ EE.toast(pl.why || 'Hier kann nicht gebaut werden'); EE.sfx('error'); return; }
   if(!canPay(p,BUILD[pl.kind].cost)){ EE.toast('Nicht genug Ressourcen'); cancelPlace(); return; }
   pay(p,BUILD[pl.kind].cost);
   const b = addBuilding(pl.kind,0,pl.x,pl.z,false);
@@ -2667,5 +2808,5 @@ function endPlace(){
   G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k)}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
