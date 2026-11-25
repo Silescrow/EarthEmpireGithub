@@ -48,7 +48,7 @@ async function start(){
   await Promise.all([loadModels(), loadWorldMask()]);
   EE.hideMenu();
   const S = EE.S;
-  const NX = [1000,1500,2000,2600][S.map|0] || 1500, HS = NX<=1000?2:NX<=1500?3:4, NZ = Math.round(NX*(LAT0-LAT1)/360/HS)*HS;
+  const NX = [2000,3000,4000,5400][S.map|0] || 3000, HS = [4,5,5,6][S.map|0] || 5, NZ = Math.round(NX*(LAT0-LAT1)/360/HS)*HS;
   const civ = EE.CIVS[S.civ] || EE.CIVS[0];
   const foes = clamp(S.ai||3, 1, 17);
   // Gegner möglichst weit weg wählen (bei wenigen Gegnern nie Nachbarn)
@@ -425,11 +425,14 @@ function genWorld(){
   // Raster für Wegfindung
   G.grid = new Uint8Array(NX*NZ);
   const PW=320; G.pfW=PW; G.pfG = new Float32Array(PW*PW); G.pfF = new Int32Array(PW*PW); G.pfS = new Uint32Array(PW*PW); G.pfC = new Uint32Array(PW*PW); G.pfStamp = 0;
+  // Höhe je Feld einmal berechnen (schneller bei großen Karten), Steilheit aus den Nachbarfeldern
+  const CHt = new Float32Array(NX*NZ);
+  for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++) CHt[j*NX+i] = getH(i-NX/2+.5, j-NZ/2+.5);
   for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
-    const x=i-NX/2+.5, z=j-NZ/2+.5, h=getH(x,z);
+    const k=j*NX+i, h=CHt[k];
     const edge = i<2||j<2||i>NX-3||j>NZ-3;
-    const steep = Math.abs(getH(x+.5,z)-getH(x-.5,z))+Math.abs(getH(x,z+.5)-getH(x,z-.5)) > 2.2;
-    if(h<WATER_Y+.15 || edge || steep) G.grid[j*NX+i]=1;
+    const steep = !edge && (Math.abs(CHt[k+1]-CHt[k-1])+Math.abs(CHt[k+NX]-CHt[k-NX]))*.5 > 2.2;
+    if(h<WATER_Y+.15 || edge || steep) G.grid[k]=1;
   }
   buildTerrain();
   buildWater();

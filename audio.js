@@ -8,6 +8,21 @@
 'use strict';
 let AC=null, master, musicBus, sfxBus, ambBus, reverb, noiseBuf;
 let mode=null, nextBar=0, barIdx=0, timer=null, started=false;
+// Menümusik als MP3 ("Where the Morning Breathes"); fällt sie aus, spielt das erzeugte Hauptthema
+let menuEl=null, menuOk=true;
+function menuTrack(){
+  if(menuEl || !menuOk || !AC) return menuEl;
+  try{
+    menuEl = new Audio(window.EE_MENU_MUSIC || 'musik_menue.mp3');
+    menuEl.loop = true; menuEl.preload = 'auto';
+    menuEl.addEventListener('error', ()=>{ menuOk=false; });
+    const src = AC.createMediaElementSource(menuEl), g = AC.createGain(); g.gain.value = 1.5;
+    src.connect(g); g.connect(musicBus);
+  }catch(e){ menuOk=false; menuEl=null; }
+  return menuEl;
+}
+function startMenu(){ const el=menuTrack(); if(!el) return; try{ el.currentTime=0; }catch(e){} const p=el.play(); if(p&&p.catch) p.catch(()=>{ menuOk=false; }); }
+function stopMenu(){ if(menuEl) menuEl.pause(); }
 const mtof = m => 440*Math.pow(2,(m-69)/12);
 
 function init(){
@@ -28,7 +43,7 @@ function init(){
   const nd = noiseBuf.getChannelData(0); for(let i=0;i<nd.length;i++) nd[i]=Math.random()*2-1;
   startAmbient();
   timer = setInterval(schedule, 90);
-  document.addEventListener('visibilitychange', ()=>{ if(!AC) return; if(document.hidden) AC.suspend(); else AC.resume(); });
+  document.addEventListener('visibilitychange', ()=>{ if(!AC) return; if(document.hidden){ AC.suspend(); stopMenu(); } else { AC.resume(); if(mode==='theme' && menuEl && menuOk){ const p=menuEl.play(); if(p&&p.catch) p.catch(()=>{}); } } });
 }
 function setVol(music, sfx, mute){
   if(!AC) return;
@@ -136,6 +151,7 @@ function calmBar(t, bar, beat){
 }
 function schedule(){
   if(!AC || !mode) return;
+  if(mode==='theme' && menuEl && menuOk){ nextBar=0; return; }
   const bpm = mode==='theme' ? 78 : 64, beat = 60/bpm, barLen = beat*4;
   if(nextBar < AC.currentTime) nextBar = AC.currentTime+.05;
   while(nextBar < AC.currentTime+.7){
@@ -147,8 +163,8 @@ function play(m){
   if(!AC || m===mode) return;
   const t=AC.currentTime;
   if(mode){ musicBus.gain.cancelScheduledValues(t); const v=musicBus.gain.value; musicBus.gain.setValueAtTime(v,t); musicBus.gain.linearRampToValueAtTime(0.0001,t+1.2);
-    setTimeout(()=>{ mode=m; barIdx = m==='theme'?16:0; nextBar=AC.currentTime+.1; if(window.EE && EE.applyVol) EE.applyVol(); }, 1300); return; }
-  mode=m; barIdx=0; nextBar=t+.1;
+    setTimeout(()=>{ if(mode==='theme') stopMenu(); mode=m; barIdx = m==='theme'?16:0; nextBar=AC.currentTime+.1; if(m==='theme') startMenu(); if(window.EE && EE.applyVol) EE.applyVol(); }, 1300); return; }
+  mode=m; barIdx=0; nextBar=t+.1; if(m==='theme') startMenu();
 }
 
 /* ---------- Geräusche ---------- */
