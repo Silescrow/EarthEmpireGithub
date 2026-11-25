@@ -645,7 +645,7 @@ function rawH(x,z){
     const mt = mountainAt(lon,lat);
     if(mt>0){ const rg = ridged(x*.085, z*.085, H_SEED+21), rg2 = ridged(x*.21+3, z*.21+3, H_SEED+41);
       const m2 = Math.min(mt, 1.2) + Math.max(0, mt-1.2)*.55, mm = clamp(mt*1.5,0,1);
-      h += land*(m2*.6 + mm*Math.pow(rg,1.6)*m2*5.5 + mm*rg2*m2*.8); }
+      h += land*(m2*.9 + mm*Math.pow(rg,1.5)*m2*8.5 + mm*rg2*m2*1.1); }
     const ds = desertAt(lon,lat);
     if(ds>0) h += ds*land*Math.sin(x*.9+Math.sin(z*.35)*2)*.12;   // Dünen
   }
@@ -717,13 +717,14 @@ function genChunk(ci,cj){
   for(let i=0;i<tries;i++){
     const x=x0+R()*CH, z=z0+R()*CH;
     if(rawLand(x,z)<.7) continue;
-    if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<12)) continue;
+    const bd = G.bases.reduce((m,b)=>Math.min(m,Math.hypot(b.x-x,b.z-z)),1e9); if(bd<12) continue;
     const lon=toLon(x), lat=toLat(z), ds=desertAt(lon,lat), cold=coldAt(lat), mt=mountainAt(lon,lat);
     const forest = fbm(x*.03,z*.03,H_SEED+40);
     const r = R();
     if(ds>.5){ if(r<.02) placeCluster('tree',x,z,3,1.5); else if(r<.05) placeCluster('stone',x,z,2,1); }
-    else if(forest>.55 && cold<.85 && mt<2.5 && r<.22) placeCluster('tree',x,z,G.gfx===0?3+(R()*4|0):4+(R()*7|0),(2.2+R()*2.5)*1.9);
-    else if(r<.045) placeCluster('bush',x,z,3,1.6);
+    else if(bd>24 && forest>.5 && cold<.85 && r<.26 && getH(x,z)<WATER_Y+11) placeCluster('tree',x,z,G.gfx===0?4+(R()*4|0):6+(R()*9|0),(2.2+R()*2.5)*1.8);
+    else if(bd>18 && r<.018 && cold<.85 && getH(x,z)<WATER_Y+11) placeCluster('tree',x,z,1+(R()*2|0),3);
+    else if(r<.05) placeCluster('bush',x,z,3,1.6);
     else if(r<.075 && mt>.4) placeCluster('stone',x,z,3,1.5);
     else if(r<.085) placeCluster('gold',x,z,2,1.2);
     else if(r<.13 && cold<.9) spawnDeer(x,z);
@@ -736,9 +737,12 @@ function genChunk(ci,cj){
 function updateChunks(){
   if(!G.chunks || G.farView) return;
   const CH=G.CH, ci=Math.floor((G.camS.x+G.NX/2)/CH), cj=Math.floor((G.camS.z+G.NZ/2)/CH);
-  const rad = G.camS.dist<30?1:2;
-  let made=0;
-  for(let dj=-rad;dj<=rad && made<1;dj++) for(let di=-rad;di<=rad && made<1;di++){ const key=(ci+di)+','+(cj+dj); if(!G.chunks.has(key)){ genChunk(ci+di,cj+dj); made++; } }
+  // so weit füllen, wie man sehen kann – nächste Stücke zuerst, eins pro Aufruf (kein Ruckeln)
+  const fx=(G.camS.x+G.NX/2)/CH, fz=(G.camS.z+G.NZ/2)/CH, rad=Math.min(5, Math.ceil(G.scene.fog.far*.9/CH));
+  let best=null, bd=1e9;
+  for(let dj=-rad;dj<=rad;dj++) for(let di=-rad;di<=rad;di++){ const i=ci+di, j=cj+dj, key=i+','+j; if(G.chunks.has(key)) continue;
+    const d=Math.hypot(i+.5-fx, j+.5-fz); if(d<=rad+.5 && d<bd){ bd=d; best=[i,j]; } }
+  if(best){ genChunk(best[0],best[1]); G.chunkT=.03; }
 }
 function rawLand(x,z){ const m=landAt(toLon(x),toLat(z)); return m; }
 function genWorld(){
@@ -849,7 +853,7 @@ function groundW(x,z,h,out,o){
   if(h<WATER_Y+.45) sand = Math.max(sand, clamp((WATER_Y+.45-h)/.4,0,1));
   const rock = clamp((h-(WATER_Y+3.6))/3,0,1)*.85;
   const cold = coldAt(lat);
-  const sn = WATER_Y + 10.5 + (vnoise(x*.08,z*.08,5)-.5)*3;
+  const sn = WATER_Y + 14 + (vnoise(x*.08,z*.08,5)-.5)*4;
   const snow = Math.max(clamp((h-sn)/1.2,0,1), cold>.55 ? clamp((cold-.55)*2.5,0,1) : 0);
   let rest = 1;
   const ws = snow*rest; rest -= ws;
@@ -968,6 +972,7 @@ function cullFar(){
   const vis=(x,z,r)=>{ const dx=x-cx, dz=z-cz, rr=R+(r||0); return dx*dx+dz*dz < rr*rr; };
   if(G.trees) for(const k in G.trees){ const t=G.trees[k]; t.im.visible = vis(t.cx,t.cz,TILE*.75); }
   if(G.coarse) for(const c of G.coarse) c.m.visible = vis(c.cx,c.cz,c.r);
+  if(G.decor && !G.farView) for(const d of G.decor){ const c=d.userData.c; if(c) d.visible = vis(c[0],c[1],TILE*.75) && Math.hypot(c[0]-cx,c[1]-cz) < R*.75; }
   for(const t of G.tileMeshes) if(t.mesh){ const v=vis(t.x0+TILE/2, t.z0+TILE/2, TILE*.75); if(t.mesh.visible!==v){ t.mesh.visible=v; G.covData[t.id]=v?255:0; G.covTex.needsUpdate=true; } }
   for(const r of G.res) if(r.alive && r.mesh && !r.mesh.inst) r.mesh.visible = !G.farView && vis(r.x,r.z,3);
   for(const d of G.deer) if(d.alive && d.mesh) d.mesh.visible = vis(d.x,d.z,2);
@@ -1827,28 +1832,44 @@ function addBuilding(kind, owner, x, z, done){
   return b;
 }
 
-let DECOR_GEO=null, DECOR_MAT=null, FLOWER_GEO=null, FLOWER_MAT=null;
+// Bodenbewuchs: Grasbüschel, Blumen, Sträucher und Steinchen – alles instanziert (billig zu zeichnen)
+let TUFT_GEO=null, TUFT_MAT=null, FLOWER_GEO=null, FLOWER_MAT=null, PEBBLE_GEO=null, PEBBLE_MAT=null;
+function decorAssets(){
+  if(TUFT_GEO) return;
+  const P=[], C=[], N=[];
+  for(let k=0;k<7;k++){ const a=k/7*6.283+Math.random()*.5, r=.05+Math.random()*.1, h=.28+Math.random()*.3, lean=.12+Math.random()*.15;
+    const bx=Math.cos(a)*r, bz=Math.sin(a)*r, px=-Math.sin(a)*.035, pz=Math.cos(a)*.035, tx=bx+Math.cos(a)*lean, tz=bz+Math.sin(a)*lean;
+    P.push(bx-px,0,bz-pz, bx+px,0,bz+pz, tx,h,tz); C.push(.35,.5,.2, .35,.5,.2, .9,1,.6); N.push(0,1,0, 0,1,0, 0,1,0); }
+  TUFT_GEO=new T.BufferGeometry(); TUFT_GEO.setAttribute('position',new T.Float32BufferAttribute(P,3)); TUFT_GEO.setAttribute('color',new T.Float32BufferAttribute(C,3)); TUFT_GEO.setAttribute('normal',new T.Float32BufferAttribute(N,3));
+  TUFT_MAT=new T.MeshLambertMaterial({vertexColors:true, side:T.DoubleSide});
+  FLOWER_GEO=new T.IcosahedronGeometry(.07,0); FLOWER_MAT=new T.MeshBasicMaterial({color:0xffffff});
+  PEBBLE_GEO=new T.DodecahedronGeometry(.18,0); PEBBLE_GEO.scale(1,.55,1); PEBBLE_MAT=new T.MeshLambertMaterial({color:0x8d8a84});
+}
 function addDecorChunk(x0,z0,CH,R){
-  if(!DECOR_GEO){ DECOR_GEO=new T.ConeGeometry(.08,.45,3); DECOR_GEO.translate(0,.2,0); DECOR_MAT=new T.MeshLambertMaterial({color:0x5e9e36});
-    FLOWER_GEO=new T.IcosahedronGeometry(.08,0); FLOWER_MAT=new T.MeshBasicMaterial({color:0xffffff}); }
-  const count=[90,220,420][G.gfx];
-  const im=new T.InstancedMesh(DECOR_GEO, DECOR_MAT, count), fl=new T.InstancedMesh(FLOWER_GEO, FLOWER_MAT, Math.floor(count/4));
+  decorAssets();
+  const nT=[350,900,1500][G.gfx], nS=[8,22,34][G.gfx], nP=[15,40,60][G.gfx];
+  const tuft=new T.InstancedMesh(TUFT_GEO, TUFT_MAT, nT), fl=new T.InstancedMesh(FLOWER_GEO, FLOWER_MAT, Math.floor(nT/6)), pb=new T.InstancedMesh(PEBBLE_GEO, PEBBLE_MAT, nP);
+  const F=flora(), sh=new T.InstancedMesh(F.geo.bush[0], F.mat, nS); sh.customDepthMaterial=F.depth; sh.castShadow=G.gfx>=1;
   const m4=new T.Matrix4(), q=new T.Quaternion(), sv=new T.Vector3(), p=new T.Vector3(), e=new T.Euler(), c=new T.Color();
-  const fcols=[0xfff1a8,0xff9fc4,0xb9a3ff,0xffffff]; let gi=0, fi=0;
-  for(let k=0;k<count*3 && gi<count;k++){
+  const fcols=[0xfff1a8,0xff9fc4,0xb9a3ff,0xffffff,0xffd36b]; let gi=0, fi=0, si=0, pi=0;
+  const snowAt = (x,z)=> WATER_Y + 13;
+  for(let k=0;k<nT*2 && gi<nT;k++){
     const x=x0+R()*CH, z=z0+R()*CH, h=getH(x,z);
-    if(h<WATER_Y+.4 || h>WATER_Y+3.2) continue;
-    const lon=toLon(x), lat=toLat(z); if(desertAt(lon,lat)>.3 || coldAt(lat)>.7) continue;
-    if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<7)) continue;
-    e.set(0,R()*6,0); q.setFromEuler(e); const sc=.7+R()*.8; sv.set(sc,sc,sc); p.set(x,h,z);
-    m4.compose(p,q,sv); im.setMatrixAt(gi++, m4);
-    if(fi<fl.count && R()<.25){ p.set(x+.2,h+.12,z+.1); sv.set(1,1,1); m4.compose(p,q,sv); fl.setMatrixAt(fi, m4); fl.setColorAt(fi, c.setHex(fcols[(R()*4)|0])); fi++; }
+    if(h<WATER_Y+.35 || h>snowAt(x,z)) continue;
+    const lon=toLon(x), lat=toLat(z), ds=desertAt(lon,lat), cold=coldAt(lat); if(cold>.75) continue;
+    if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<6)) continue;
+    if(ds>.5 && R()<.75) continue;
+    e.set(0,R()*6.28,0); q.setFromEuler(e); const sc=.8+R()*.9; sv.set(sc,sc*(.8+R()*.5),sc); p.set(x,h-.02,z);
+    m4.compose(p,q,sv); tuft.setMatrixAt(gi, m4);
+    const v=.8+R()*.35; if(ds>.3) c.setRGB(1.3*v,1.1*v,.55*v); else if(h>WATER_Y+6) c.setRGB(.85*v,.95*v,.7*v); else c.setRGB(v*(.9+R()*.15), v, v*.85);
+    tuft.setColorAt(gi, c); gi++;
+    if(fi<fl.count && ds<.3 && h<WATER_Y+8 && R()<.18){ p.set(x+.1,h+.25,z+.08); sv.set(1,1,1); m4.compose(p,q,sv); fl.setMatrixAt(fi, m4); fl.setColorAt(fi, c.setHex(fcols[(R()*5)|0])); fi++; }
+    if(si<nS && ds<.4 && R()<.03){ e.set(0,R()*6.28,0); q.setFromEuler(e); const s2=.45+R()*.35; sv.set(s2,s2*(.8+R()*.4),s2); p.set(x,h-.05,z); m4.compose(p,q,sv); sh.setMatrixAt(si++, m4); }
+    if(pi<nP && R()<.05){ e.set(R(),R()*6.28,R()); q.setFromEuler(e); const s3=.4+R()*1.1; sv.set(s3,s3,s3); p.set(x,h,z); m4.compose(p,q,sv); pb.setMatrixAt(pi++, m4); }
   }
   if(!gi) return;
-  im.count=gi; fl.count=fi; im.computeBoundingSphere(); if(fi) fl.computeBoundingSphere();
-  im.receiveShadow=true; G.scene.add(im); if(fi) G.scene.add(fl);
-  (G.decor||(G.decor=[])).push(im); if(fi) G.decor.push(fl);
-  if(G.farView){ im.visible=false; fl.visible=false; }
+  const cx=x0+CH/2, cz=z0+CH/2;
+  for(const [im,n] of [[tuft,gi],[fl,fi],[sh,si],[pb,pi]]){ if(!n) continue; im.count=n; if(im.instanceColor) im.instanceColor.needsUpdate=true; im.computeBoundingSphere(); im.receiveShadow=true; im.userData.c=[cx,cz]; G.scene.add(im); (G.decor||(G.decor=[])).push(im); if(G.farView) im.visible=false; }
 }
 
 /* ============================================================
@@ -2151,7 +2172,7 @@ function update(dt){
   for(const b of G.builds) updateBuilding(b,dt);
   for(let i=1;i<G.players.length;i++) updateAI(G.players[i],dt);
   if(G.waterU) G.waterU.value = G.t;
-  G.chunkT=(G.chunkT||0)-dt; if(G.chunkT<=0){ G.chunkT=.2; updateChunks(); }
+  G.chunkT=(G.chunkT||0)-dt; if(G.chunkT<=0){ G.chunkT=.25; updateChunks(); }
   G.tileT=(G.tileT||0)-dt; if(G.tileT<=0){ G.tileT=.12; updateTiles(); }
   G.cullT=(G.cullT||0)-dt; if(G.cullT<=0){ G.cullT=.2; cullFar(); }
   TERRAIN_T.value = G.t;
@@ -2583,5 +2604,5 @@ function endPlace(){
   G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start, stop, dbg:()=>G, dev:{build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k)}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start, stop, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k)}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
