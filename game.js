@@ -424,10 +424,19 @@ function attachWeapon(g, kind){
   const sk=g.children[0], s=sk.scale.x, bb=m.geo.boundingBox, L=bb.max.y-bb.min.y;
   const w=new T.Mesh(m.geo, m.mat); w.castShadow=true;
   const k=U.wlen/L/s; w.scale.setScalar(k);
-  if(kind==='bow'){ w.position.set(0,-L*k*.5,0); w.rotation.set(0,Math.PI/2,0); g.rig.handL.add(w); }
+  if(kind==='bow'){ g.bowK=k; g.bowL=L; g.bowS=s; g.weapon=w; setBowSlot(g,false); if(g.club) g.club.visible=false; return; }
   else { const grip = kind==='spear' ? .42 : .12; w.position.set(0,-L*k*grip,.02/s); w.rotation.set(kind==='spear'?1.45:1.25,0,0); g.rig.handR.add(w); }
   g.weapon=w;
   if(g.club) g.club.visible=false;
+}
+// Bogen: auf dem Rücken getragen, nur beim Schießen senkrecht in der linken Hand
+const BOW_T = {back:{p:[0,.95,-.2], r:[0,0,.55]}, hand:{r:[Math.PI/2,-Math.PI/2,0]}};
+function setBowSlot(g, inHand){
+  const w=g.weapon; if(!w || g.bowInHand===inHand) return; g.bowInHand=inHand;
+  if(w.parent) w.parent.remove(w);
+  const bb=w.geometry.boundingBox, mid=new T.Vector3(0,(bb.min.y+bb.max.y)/2,0);
+  if(inHand){ w.scale.setScalar(g.bowK); w.rotation.set(...BOW_T.hand.r); w.position.copy(mid.applyEuler(w.rotation).multiplyScalar(-g.bowK)); g.rig.handL.add(w); }
+  else { const ws=g.bowK*g.bowS; w.scale.setScalar(ws); w.rotation.set(...BOW_T.back.r); w.position.set(...BOW_T.back.p).add(mid.applyEuler(w.rotation).multiplyScalar(-ws)); g.add(w); }
 }
 function makeSoldier(kind, color){
   const key = MODELS.warrior ? 'warrior' : (Math.random()<.5?'cavem':'cavef');
@@ -475,6 +484,7 @@ function updateArrows(dt){
   }
 }
 function damage(t, dmg, src){
+  if(!t.size) bloodFx(t.x,t.z,5+(G.rand()*4|0), G.rand()<.35?.35:0);
   if(src && G.reg && friendlyLand(src.owner, src.x, src.z)) dmg *= 1.15; // Heimvorteil wie in EE2
   t.hp -= dmg;
   if(t.size){ if(t.owner===0 && !G.alarmT){ G.alarmT=8; EE.toast('Deine '+BUILD[t.kind].name+' wird angegriffen!'); EE.sfx('error',.6); } if(t.hp<=0) destroyBuilding(t); return; }
@@ -482,11 +492,28 @@ function damage(t, dmg, src){
   if(t.hp<=0){ killUnit(t); return; }
   if(isSoldier(t) && (t.state==='idle' || t.state==='move' && t.owner!==0) && src && alive(src)) cmdAttack(t, src);
 }
+// Blut: Spritzer bei Treffern und eine Lache am Boden, die langsam verblasst
+const BLOOD = {parts:[], pools:[]};
+function bloodFx(x,z,n,pool){
+  if(!G || G.farView) return;
+  if(!BLOOD.geo){ BLOOD.geo=new T.IcosahedronGeometry(.05,0); BLOOD.mat=new T.MeshBasicMaterial({color:0x8a0b0b}); BLOOD.pgeo=new T.CircleGeometry(.5,10); BLOOD.pgeo.rotateX(-Math.PI/2); }
+  const y=getH(x,z);
+  for(let i=0;i<n && BLOOD.parts.length<80;i++){ const m=new T.Mesh(BLOOD.geo,BLOOD.mat); m.position.set(x,y+.9+G.rand()*.3,z); const s=.6+G.rand()*.9; m.scale.setScalar(s); G.scene.add(m);
+    const a=G.rand()*6.28, v=.8+G.rand()*1.6; BLOOD.parts.push({m, vx:Math.cos(a)*v, vz:Math.sin(a)*v, vy:1+G.rand()*1.8}); }
+  if(pool && BLOOD.pools.length<40){ const mat=new T.MeshBasicMaterial({color:0x5e0606, transparent:true, opacity:.85, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2});
+    const m=new T.Mesh(BLOOD.pgeo, mat); const s=pool*(.7+G.rand()*.5); m.scale.set(s,1,s*(.7+G.rand()*.5)); m.rotation.y=G.rand()*6.28; m.position.set(x+(G.rand()-.5)*.3,y+.03,z+(G.rand()-.5)*.3); G.scene.add(m); BLOOD.pools.push({m,t:0}); }
+}
+function updateBlood(dt){
+  for(let i=BLOOD.parts.length-1;i>=0;i--){ const p=BLOOD.parts[i], m=p.m; p.vy-=9.8*dt; m.position.x+=p.vx*dt; m.position.z+=p.vz*dt; m.position.y+=p.vy*dt;
+    if(m.position.y<getH(m.position.x,m.position.z)){ G.scene.remove(m); BLOOD.parts.splice(i,1); } }
+  for(let i=BLOOD.pools.length-1;i>=0;i--){ const p=BLOOD.pools[i]; p.t+=dt; if(p.t>20){ p.m.material.opacity=.85*(1-(p.t-20)/10); if(p.t>30){ G.scene.remove(p.m); p.m.material.dispose(); BLOOD.pools.splice(i,1); } } }
+}
 function hit(u,t){
   const U=UNIT[u.kind]; const dmg = (t.size ? U.atk*U.bld : U.atk) * (.85+G.rand()*.3);
   if(U.ranged) shootArrow(u,t,dmg); else { damage(t,dmg,u); sfxAt('chop',u.x,u.z,.6); }
 }
 function killUnit(u){
+  bloodFx(u.x,u.z,10,.8);
   u.dead=true; u.hp=0; const i=G.units.indexOf(u); if(i>=0) G.units.splice(i,1);
   G.players[u.owner].pop = Math.max(0, G.players[u.owner].pop-1);
   if(G.sel.includes(u)){ G.sel=G.sel.filter(x=>x!==u); drawPanelSoon(); }
@@ -494,6 +521,63 @@ function killUnit(u){
   const m=u.mesh; let t=0; const fall=()=>{ if(!G) return; t+=.016; m.rotation.x=-Math.min(1,t*2.2)*Math.PI/2; m.position.y = getH(u.x,u.z)+.12 - Math.max(0,t-1.6)*.6;
     if(t<2.6) requestAnimationFrame(fall); else { G.scene.remove(m); G.scene.remove(u.ring); if(u.bar) G.scene.remove(u.bar); } }; fall();
   if(u.owner===0) updateHUD();
+}
+// Gebäude zerbrechen bei 0 Leben in Einzelteile: das Modell wird in Brocken zerlegt,
+// die wegfliegen, aufschlagen, abprallen, rollen und liegen bleiben
+const DEBRIS = {list:[], dust:[]};
+function shatterBuilding(b){
+  const root=b.mesh; root.updateMatrixWorld(true);
+  const box=new T.Box3().setFromObject(root), size=box.getSize(new T.Vector3()), ctr=box.getCenter(new T.Vector3());
+  const N = b.kind==='wall'||b.kind==='gate' ? 2 : G.gfx===0 ? 3 : 4, NY=N+1;
+  const cx=size.x/N||1, cy=size.y/NY||1, cz=size.z/N||1, made=[];
+  root.traverse(o=>{
+    if(!o.isMesh || o.isInstancedMesh || !o.geometry || !o.geometry.attributes.position || !o.visible) return;
+    let g=o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
+    const P=g.attributes.position.array, Nn=g.attributes.normal&&g.attributes.normal.array, U=g.attributes.uv&&g.attributes.uv.array, C=g.attributes.color&&g.attributes.color.array;
+    const bk=new Map();
+    for(let t=0;t<P.length/9;t++){ const i=t*9, mx=(P[i]+P[i+3]+P[i+6])/3, my=(P[i+1]+P[i+4]+P[i+7])/3, mz=(P[i+2]+P[i+5]+P[i+8])/3;
+      const key=Math.min(N-1,Math.floor((mx-box.min.x)/cx))+','+Math.min(NY-1,Math.floor((my-box.min.y)/cy))+','+Math.min(N-1,Math.floor((mz-box.min.z)/cz));
+      let a=bk.get(key); if(!a){ a=[]; bk.set(key,a); } a.push(t); }
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+    for(const tris of bk.values()){
+      const n=tris.length*3, pos=new Float32Array(n*3), nor=Nn?new Float32Array(n*3):null, uv=U?new Float32Array(n*2):null, col=C?new Float32Array(n*3):null;
+      let sx=0,sy=0,sz=0;
+      tris.forEach((t,j)=>{ for(let v=0;v<3;v++){ const si=t*3+v, di=j*3+v; pos[di*3]=P[si*3]; pos[di*3+1]=P[si*3+1]; pos[di*3+2]=P[si*3+2]; sx+=P[si*3]; sy+=P[si*3+1]; sz+=P[si*3+2];
+        if(nor){ nor[di*3]=Nn[si*3]; nor[di*3+1]=Nn[si*3+1]; nor[di*3+2]=Nn[si*3+2]; } if(uv){ uv[di*2]=U[si*2]; uv[di*2+1]=U[si*2+1]; } if(col){ col[di*3]=C[si*3]; col[di*3+1]=C[si*3+1]; col[di*3+2]=C[si*3+2]; } } });
+      sx/=n; sy/=n; sz/=n; let r=0;
+      for(let k=0;k<n;k++){ pos[k*3]-=sx; pos[k*3+1]-=sy; pos[k*3+2]-=sz; r=Math.max(r, Math.abs(pos[k*3+1])); }
+      const geo=new T.BufferGeometry(); geo.setAttribute('position',new T.BufferAttribute(pos,3)); if(nor) geo.setAttribute('normal',new T.BufferAttribute(nor,3)); else geo.computeVertexNormals();
+      if(uv) geo.setAttribute('uv',new T.BufferAttribute(uv,2)); if(col) geo.setAttribute('color',new T.BufferAttribute(col,3));
+      const m=new T.Mesh(geo, mat); m.position.set(sx,sy,sz); m.castShadow=G.gfx>0; m.frustumCulled=true; G.scene.add(m);
+      // Wucht: nach außen und oben, oben liegende Teile fliegen weiter; dazu zufälliges Drehen
+      const dx=sx-ctr.x, dz=sz-ctr.z, dl=Math.hypot(dx,dz)||1, hgt=(sy-box.min.y)/(size.y||1), push=1.2+G.rand()*2.2+hgt*2;
+      made.push({m, vx:dx/dl*push+(G.rand()-.5), vy:1+G.rand()*2.5+hgt*1.5, vz:dz/dl*push+(G.rand()-.5),
+        wx:(G.rand()-.5)*6, wy:(G.rand()-.5)*4, wz:(G.rand()-.5)*6, r:Math.max(.08,Math.min(r,.6)), t:0, rest:false, delay:hgt*.25*G.rand()});
+    }
+    g.dispose();
+  });
+  DEBRIS.list.push(...made);
+  while(DEBRIS.list.length>700){ const d=DEBRIS.list.shift(); G.scene.remove(d.m); d.m.geometry.dispose(); }
+  // Staubwolke
+  if(!DEBRIS.dmat){ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'), gr=x.createRadialGradient(32,32,2,32,32,31); gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.5,'rgba(255,255,255,.5)'); gr.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=gr; x.fillRect(0,0,64,64);
+    DEBRIS.dmat=new T.SpriteMaterial({map:new T.CanvasTexture(c), color:0xa89478, transparent:true, opacity:.55, depthWrite:false}); }
+  for(let i=0;i<(G.gfx===0?4:9);i++){ const sp=new T.Sprite(DEBRIS.dmat.clone()); const a=G.rand()*6.28, rr=G.rand()*b.size*.4; sp.position.set(ctr.x+Math.cos(a)*rr, box.min.y+.5+G.rand()*size.y*.4, ctr.z+Math.sin(a)*rr); sp.scale.setScalar(1.5); G.scene.add(sp); DEBRIS.dust.push({s:sp,t:0,vx:Math.cos(a)*.8,vz:Math.sin(a)*.8}); }
+  G.scene.remove(root);
+}
+function updateDebris(dt){
+  for(let i=DEBRIS.list.length-1;i>=0;i--){ const d=DEBRIS.list[i], m=d.m; d.t+=dt;
+    if(d.t<d.delay) continue;
+    if(!d.rest){
+      d.vy-=9.8*dt; m.position.x+=d.vx*dt; m.position.y+=d.vy*dt; m.position.z+=d.vz*dt;
+      m.rotation.x+=d.wx*dt; m.rotation.y+=d.wy*dt; m.rotation.z+=d.wz*dt;
+      const gy=getH(m.position.x,m.position.z)+d.r*.45;
+      if(m.position.y<gy){ m.position.y=gy;
+        if(d.vy<-1.2){ d.vy=-d.vy*.28; d.vx*=.55; d.vz*=.55; d.wx*=.5; d.wy*=.5; d.wz*=.5; }   // aufschlagen und abprallen
+        else { d.vy=0; d.vx*=.86; d.vz*=.86; d.wx*=.8; d.wz*=.8; d.wy*=.8; }                     // rutschen/rollen
+        if(Math.hypot(d.vx,d.vz)<.12 && Math.abs(d.vy)<.2){ d.rest=true; d.restT=d.t; } }
+    } else if(d.t-d.restT>40){ m.position.y-=dt*.08; if(d.t-d.restT>52){ G.scene.remove(m); m.geometry.dispose(); DEBRIS.list.splice(i,1); } }
+  }
+  for(let i=DEBRIS.dust.length-1;i>=0;i--){ const p=DEBRIS.dust[i]; p.t+=dt; const s=p.s; s.position.x+=p.vx*dt; s.position.z+=p.vz*dt; s.position.y+=dt*.4; s.scale.setScalar(1.5+p.t*1.6); s.material.opacity=.55*Math.max(0,1-p.t/3.5); if(p.t>3.5){ G.scene.remove(s); s.material.dispose(); DEBRIS.dust.splice(i,1); } }
 }
 function destroyBuilding(b){
   b.dead=true; b.hp=0; const i=G.builds.indexOf(b); if(i>=0) G.builds.splice(i,1);
@@ -503,9 +587,10 @@ function destroyBuilding(b){
   if(b===p.tc) p.tc=G.builds.find(o=>o.owner===b.owner && o.kind==='tc' && o.built>=1) || null;
   if(b.kind==='tc'){ releaseRegion(b); buildBorders(); }
   if(G.selB===b){ G.selB=null; drawPanelSoon(); }
-  b.ring.visible=false; if(b.bar) G.scene.remove(b.bar); sfxAt('build',b.x,b.z,1); EE.sfx('place',.5);
-  const m=b.mesh; let t=0; const sink=()=>{ if(!G) return; t+=.016; m.position.y-=.03; m.rotation.z=Math.sin(t*9)*.02; if(t<2.5) requestAnimationFrame(sink); else { G.scene.remove(m); G.scene.remove(b.ring); } }; sink();
-  if(b.owner===0) EE.toast(d.name+' wurde zerstört');
+  b.ring.visible=false; removePiles(b); if(b.bar) G.scene.remove(b.bar); sfxAt('build',b.x,b.z,1); EE.sfx('place',.5);
+  G.scene.remove(b.ring);
+  if(b.kind==='road' || b.quietRemove) G.scene.remove(b.mesh); else { shatterBuilding(b); sfxAt('chop',b.x,b.z,1); }
+  if(b.owner===0 && !b.quietRemove) EE.toast(d.name+' wurde zerstört');
   checkEnd();
 }
 function checkEnd(){
@@ -572,7 +657,7 @@ function action(a){
   } else if(a==='helpin'){ helperIn(G.selB); drawPanel();
   } else if(a==='helpout'){ helpersOut(G.selB); drawPanel();
   } else if(a==='togate'){ const w=G.selB; if(!canPay(p,BUILD.gate.cost)){ EE.sfx('error'); EE.toast('Tor: '+missingTxt(p,BUILD.gate.cost)); return; }
-    pay(p,BUILD.gate.cost); destroyBuilding(w); w.mesh&&G.scene.remove(w.mesh); G.scene.remove(w.ring);
+    pay(p,BUILD.gate.cost); w.quietRemove=true; destroyBuilding(w); G.scene.remove(w.ring);
     const g=addWall(0, {...w.seg, gate:true}, w.seg.ang, w.wallId, false);
     G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.inside && !u.dead).sort((a,b)=>Math.hypot(a.x-g.x,a.z-g.z)-Math.hypot(b.x-g.x,b.z-g.z)).slice(0,2).forEach(u=>cmdBuild(u,g));
     G.selB=null; EE.toast('Tor wird gebaut'); EE.sfx('place');
@@ -1488,6 +1573,13 @@ function poseRig(g, mode, ph){
     arm('shL',s*.5); arm('shR',-s*.5); set('elL',-.25); set('elR',-.25);
     set('spine',.06,0,0); set('chest',0,s*.08,0);
     B.hips.position.y = g.rig.hips.userData.y0 + Math.abs(c)*.02*g.children[0].geometry.boundingSphere.radius;
+  } else if(mode==='shoot'){
+    // Bogen schießen: linker Arm gestreckt nach vorn, rechte Hand zieht die Sehne zurück
+    const draw = Math.min(1, ph*1.6);
+    set('chest',0,-.35,0); set('spine',.05,0,0); set('head',0,.3,0);
+    arm('shL',-1.5,.05); set('elL',0);
+    arm('shR',-1.45,.25+draw*.2); set('elR',-.4-draw*1.5);
+    set('hipL',-.15); set('kneeL',.1); set('hipR',.2); set('kneeR',.05);
   } else if(mode==='work'){
     const t=(Math.sin(ph)+1)/2;
     set('spine',.25*t,0,0); set('chest',.15*t,0,0);
@@ -2324,7 +2416,7 @@ function updateWorker(u,dt){
   const m = u.mesh; m.position.set(u.x, getH(u.x,u.z), u.z);
   let df = u.face - m.rotation.y; df = Math.atan2(Math.sin(df),Math.cos(df)); m.rotation.y += df*Math.min(1,dt*10);
   u.phase += dt*(u.moving?8.5:u.working?6:2);
-  if(m.isRigged){ if(!G.farView && m.visible) poseRig(m, u.moving?'walk':u.working?'work':'idle', u.phase); }
+  if(m.isRigged){ const shoot = u.working && UNIT[u.kind] && UNIT[u.kind].ranged; if(m.bowK) setBowSlot(m, shoot); if(!G.farView && m.visible) poseRig(m, u.moving?'walk':shoot?'shoot':u.working?'work':'idle', shoot ? 1-clamp(u.cd/UNIT[u.kind].cd,0,1) : u.phase); }
   else {
   const sw = u.moving ? Math.sin(u.phase)*.7 : 0;
   m.legs[0].rotation.x = sw; m.legs[1].rotation.x = -sw;
@@ -2403,7 +2495,37 @@ function updateBBar(b){
   b.bar.fg.scale.x=Math.max(.001,W*clamp(f,0,1)); b.bar.fg.material.color.setHex(col);
   if(G.selB===b){ const el=document.querySelector('#panel .bar div'); if(el) el.style.width=(clamp(f,0,1)*100).toFixed(1)+'%'; }
 }
+// Lager füllen sich sichtbar: Haufen aus Holzstämmen, Steinen, Goldbrocken und Beeren-/Fleischvorrat
+// wachsen und schrumpfen mit dem Vorrat des Volkes
+const PILE = {types:['wood','stone','gold','food'], step:{wood:40,stone:30,gold:20,food:40}, max:14};
+function pileGeo(){
+  if(PILE.geo) return;
+  const log=new T.CylinderGeometry(.11,.11,1.1,7); log.rotateZ(Math.PI/2);
+  PILE.geo={wood:log, stone:new T.DodecahedronGeometry(.2,0), gold:new T.DodecahedronGeometry(.13,0), food:new T.SphereGeometry(.16,7,5)};
+  PILE.mat={wood:new T.MeshLambertMaterial({color:0x8a5a2e}), stone:new T.MeshLambertMaterial({color:0x9aa0a6, flatShading:true}), gold:new T.MeshLambertMaterial({color:0xf2c230, emissive:0x3a2a00, flatShading:true}), food:new T.MeshLambertMaterial({color:0xb5262e})};
+}
+function pileSlot(type, i){
+  // Haufen stapeln: unten breit, nach oben enger
+  const layer = i<6?0:i<10?1:i<13?2:3, k = layer===0?i:layer===1?i-6:layer===2?i-10:0, per=[6,4,3,1][layer];
+  if(type==='wood') return [ (k-(per-1)/2)*.0, .11+layer*.2, (k-(per-1)/2)*.23, 0 ];
+  const a=k/per*6.28+layer*.5, r=[.38,.26,.14,0][layer]; return [Math.cos(a)*r, .12+layer*.17, Math.sin(a)*r, a];
+}
+function updatePiles(b){
+  if(b.built<1 || b.dead || !BUILD[b.kind].drop) return;
+  pileGeo(); const p=G.players[b.owner];
+  if(!b.piles){ b.piles={}; const off=b.size*.5+.9;
+    const spots={wood:[off,-off*.45], stone:[off,off*.45], gold:[-off,off*.45], food:[-off,-off*.45]};
+    for(const t of PILE.types){ const im=new T.InstancedMesh(PILE.geo[t], PILE.mat[t], PILE.max); im.castShadow=G.gfx>0; im.receiveShadow=true; im.count=0;
+      const [sx,sz]=spots[t]; im.position.set(b.x+sx, getH(b.x+sx,b.z+sz)-.02, b.z+sz); im.userData.n=-1; G.scene.add(im); b.piles[t]=im; } }
+  for(const t of PILE.types){ const im=b.piles[t], n=Math.min(PILE.max, Math.floor((p.res[t]||0)/PILE.step[t]));
+    if(im.userData.n===n) continue; im.userData.n=n; im.count=n;
+    const m4=new T.Matrix4(), q=new T.Quaternion(), e=new T.Euler(), sc=new T.Vector3(1,1,1), ps=new T.Vector3(), R=rng(b.x*7+b.z*13+t.length);
+    for(let i=0;i<n;i++){ const [x,y,z,a]=pileSlot(t,i); ps.set(x+(R()-.5)*.06,y,z+(R()-.5)*.06); e.set(t==='wood'?0:R()*3, t==='wood'?(R()-.5)*.15:R()*6, t==='wood'?0:R()*3); q.setFromEuler(e); const s=t==='wood'?1:.8+R()*.4; sc.set(s,s,s); m4.compose(ps,q,sc); im.setMatrixAt(i,m4); }
+    im.instanceMatrix.needsUpdate=true; }
+}
+function removePiles(b){ if(b.piles){ for(const t in b.piles) G.scene.remove(b.piles[t]); b.piles=null; } }
 function updateBuilding(b,dt){
+  b.pileT=(b.pileT||0)-dt; if(b.pileT<=0){ b.pileT=1; updatePiles(b); }
   if(b.owner===0) updateBBar(b);
   if(b.kind==='tc' && b.mesh.fireFx && !G.farView) animateFire(b.mesh.fireFx, G.t+b.x, dt);
 
@@ -2448,7 +2570,7 @@ function update(dt){
   if((G.saveT-=dt)<=0){ G.saveT=30; saveGame(); }
   for(const u of G.units.slice()) updateWorker(u,dt);
   updatePopulation(dt);
-  updateArrows(dt); if(G.alarmT) G.alarmT=Math.max(0,G.alarmT-dt);
+  updateArrows(dt); updateBlood(dt); updateDebris(dt); if(G.alarmT) G.alarmT=Math.max(0,G.alarmT-dt);
   for(const d of G.deer) updateDeer(d,dt);
   for(const b of G.builds) updateBuilding(b,dt);
   for(let i=1;i<G.players.length;i++) updateAI(G.players[i],dt);
@@ -3047,5 +3169,5 @@ function endPlace(){
   G.place=null; G.costH=null; $('#pCost').innerHTML=''; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
