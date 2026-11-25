@@ -190,6 +190,8 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 #offer span{display:flex;align-items:center;gap:8px;color:var(--gold2);font-weight:700;font-size:14px}
 #offer i{height:18px}
 #placebar.hidden{display:none}
+#fps{position:absolute;left:50%;top:6px;transform:translateX(-50%);padding:2px 8px;border-radius:8px;background:#000a;color:#7dff9a;font:700 13px monospace;z-index:3;pointer-events:none}
+#fps.hidden{display:none}
 #placebar span{color:#ffe9b0;font-weight:700;font-size:14px}
 .pb{width:54px;height:48px;border-radius:10px;font:800 24px sans-serif;cursor:pointer;border:2px solid #fff6}
 .pb.ok{background:#2e9b47;color:#fff}.pb.gate{width:auto;padding:0 12px;font-size:16px;background:#3a2a08;color:#ffe9b0}.pb.gate.on{background:var(--gold);color:#2b1a02}.pb.hidden{display:none}.pb.no{background:#a8323a;color:#fff}.pb.dim{opacity:.45}
@@ -219,7 +221,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.11</div>
+    <div class="ver2">Version 1.12</div>
     <div class="snd" id="soundHint">Tippe für Ton</div>
   </div>
 </section>
@@ -238,7 +240,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.11</div>
+  <div class="ver">Earth Empire · V1.12</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -265,6 +267,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <div class="row"><label>Musik</label><input type="range" min="0" max="100" data-k="music"></div>
     <div class="row"><label>Effekte</label><input type="range" min="0" max="100" data-k="sfx"></div>
     <div class="row"><label>Vibration</label><div class="seg" data-k="vib"><button>Aus</button><button>An</button></div></div>
+    <div class="row"><label>FPS-Anzeige</label><div class="seg" data-k="fps"><button>Aus</button><button>An</button></div></div>
     <div class="acts"><button class="btn main small" data-close>Fertig</button></div>
   </div></div>
 
@@ -277,7 +280,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 /* ---------- Einstellungen ---------- */
-const DEF={ai:3,civ:0,map:1,foes:0,diff:0,age:0,gfx:1,music:60,sfx:80,vib:1,mute:0};
+const DEF={ai:3,civ:0,map:1,foes:0,diff:0,age:0,gfx:1,music:60,sfx:80,vib:1,mute:0,fps:0};
 let S={...DEF};
 try{Object.assign(S,JSON.parse(localStorage.getItem('ee_settings')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('ee_settings',JSON.stringify(S))}catch(e){}};
