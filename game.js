@@ -201,7 +201,7 @@ function buildUI(){
   <button class="hb" id="bIdle" aria-label="Untätige Arbeiter"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="#f0d3a8"/><path d="M4 21q1-8 8-8t8 8z" fill="#8a5a2b"/><text x="18" y="9" font-size="9" fill="#ffd24a" font-weight="700">z</text></svg><i id="idleN">0</i></button>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
   <div id="panel"></div>
-  <div id="placebar" class="hidden"><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">Tor</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
+  <div id="placebar" class="hidden"><span id="pCost"></span><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">+ Tore</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
   <div id="fps" class="hidden"></div>
   <div id="offer" class="hidden"></div>
   <div id="dip" class="hidden"><div class="dcard"><div class="dhead"><button class="dtab" data-t="rel">Beziehungen</button><button class="dtab" data-t="trade">Handel</button><button class="dtab" data-t="trib">Tribut</button><button class="dx" id="dClose" aria-label="Schließen">✕</button></div><div id="dipBody"></div></div></div>
@@ -240,6 +240,8 @@ function updateHUD(){
 }
 
 function costText(c){ return Object.keys(c).map(k=>`<span class="c">${ICON[k]}${c[k]}</span>`).join(''); }
+// Kosten in der Bauleiste wie in Empire Earth 2: Symbol + Menge, rot wenn es noch fehlt
+function setCost(c){ const p=G.players[0], h=Object.keys(c).filter(k=>c[k]>0).map(k=>`<span class="c${p.res[k]<c[k]?' miss':''}">${ICON[k]}${c[k]}</span>`).join(''); if(G.costH!==h){ G.costH=h; $('#pCost').innerHTML=h; } }
 function canPay(p,c){ return Object.keys(c).every(k=>p.res[k]>=c[k]); }
 const missingTxt = (p,c) => 'Es fehlen noch '+Object.keys(c).filter(k=>p.res[k]<c[k]).map(k=>Math.ceil(c[k]-p.res[k])+' '+RES_DE[k]).join(', ');
 function pay(p,c){ for(const k in c) p.res[k]-=c[k]; }
@@ -258,6 +260,7 @@ function drawPanel(){
       h += `<button class="ab lock" data-a="age"><span class="ai"><svg viewBox="0 0 24 24"><path d="M12 3l8 9h-5v9H9v-9H4z" fill="#e8b64a"/></svg></span>Bronzezeit<span class="ac">${costText({food:500,wood:300})}</span></button>`;
       if(q) h += `<div class="bar"><div style="width:${(b.qT/WORKER_TIME*100)|0}%"></div></div>`;
     }
+    if(b.owner===0 && b.built>=1 && b.kind==='wall' && b.seg) h += `<button class="ab" data-a="togate"><span class="ai"><svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13h-5v-7H9v7z" fill="#a8743e"/></svg></span>Zu Tor machen<span class="ac">${costText(BUILD.gate.cost)}</span></button>`;
     if(b.owner===0 && b.built>=1 && b.kind==='barracks'){
       const q=b.queue.length;
       for(const k of ['club','spear','bow']) h += `<button class="ab" data-a="t-${k}"><span class="ai">${unitPic({owner:0,kind:k,hp:1,maxHp:1})}</span>${UNIT[k].name}<span class="ac">${costText(UNIT[k].cost)}</span>${q&&b.queue[0]===k?'<i class="q">'+q+'</i>':''}</button>`;
@@ -464,6 +467,11 @@ function action(a){
     if(b.queue.length>=5){ EE.toast('Warteschlange voll'); return; }
     if(!canPay(p,c)){ EE.toast('Nicht genug Rohstoffe'); EE.sfx('error'); return; }
     pay(p,c); b.queue.push(k); EE.vib(15);
+  } else if(a==='togate'){ const w=G.selB; if(!canPay(p,BUILD.gate.cost)){ EE.sfx('error'); EE.toast('Tor: '+missingTxt(p,BUILD.gate.cost)); return; }
+    pay(p,BUILD.gate.cost); destroyBuilding(w); w.mesh&&G.scene.remove(w.mesh); G.scene.remove(w.ring);
+    const g=addWall(0, {...w.seg, gate:true}, w.seg.ang, w.wallId, false);
+    G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.dead).sort((a,b)=>Math.hypot(a.x-g.x,a.z-g.z)-Math.hypot(b.x-g.x,b.z-g.z)).slice(0,2).forEach(u=>cmdBuild(u,g));
+    G.selB=null; EE.toast('Tor wird gebaut'); EE.sfx('place');
   } else if(a==='b-tc'){ if(!canPay(p,BUILD.tc.cost)){ EE.sfx('error'); EE.toast('Stadtzentrum: '+missingTxt(p,BUILD.tc.cost)); return; } startPlace('tc');
   } else if(a==='b-wall'){ startWall('wall');
   } else if(a==='b-road'){ startWall('road');
@@ -2651,7 +2659,7 @@ function updateWallGhost(){
   const pl=G.place, NX=G.NX, NZ=G.NZ;
   for(const gh of pl.ghosts) G.scene.remove(gh); pl.ghosts=[];
   const road = pl.kind==='road';
-  const dx=pl.bx-pl.ax, dz=pl.bz-pl.az, L=Math.min(Math.hypot(dx,dz), road?80:50);
+  const dx=pl.bx-pl.ax, dz=pl.bz-pl.az, L=Math.min(Math.hypot(dx,dz), 150);
   const n = Math.max(1, Math.round(L/1.15)), seg = Math.max(.6, L/n);
   const ux = L>0.01?dx/Math.hypot(dx,dz):1, uz = L>0.01?dz/Math.hypot(dx,dz):0;
   const ang = Math.atan2(uz, ux), mid = Math.floor(n/2);
@@ -2662,7 +2670,7 @@ function updateWallGhost(){
     for(let t=-.45;t<=.45;t+=.15){ const k=cellIdx(x+ux*seg*t, z+uz*seg*t); ks.add(k); }
     const arr=[...ks];
     const ok = arr.every(k=>k>=0 && !G.grid[k]) && getH(x,z)>WATER_Y+.15 && true;
-    pl.cells.push({ks:arr, x, z, len:seg, ok, gate: !road && pl.gate && n>=3 && i===mid});
+    pl.cells.push({ks:arr, x, z, len:seg, ok, gate: !road && pl.gate && n>=3 && (n<=30 ? i===mid : i%24===12)});
   }
   let okCount=0;
   for(const c of pl.cells){
@@ -2674,8 +2682,9 @@ function updateWallGhost(){
   pl.ang = ang;
   const cost = road ? 0 : pl.cells.reduce((s,c)=>s+(c.ok?(c.gate?BUILD.gate.cost.wood:BUILD.wall.cost.wood):0),0);
   pl.cost = cost; pl.ok = okCount>0;
-  $('#pTxt').textContent = okCount ? (road ? 'Weg: '+Math.round(okCount*seg)+' m · kostenlos' : okCount+' Stück · '+cost+' Holz') : 'Mit dem Finger eine Linie ziehen';
-  $('#pOk').classList.toggle('dim', !pl.ok);
+  const pay = G.players[0].res.wood >= cost; setCost({wood:cost});
+  $('#pTxt').textContent = okCount ? (road ? 'Weg: '+Math.round(okCount*seg)+' m · kostenlos' : okCount+' Stück · '+cost+' Holz'+(pay?'':' – es fehlen '+Math.ceil(cost-G.players[0].res.wood)+' Holz')) : 'Mit dem Finger eine Linie ziehen';
+  $('#pOk').classList.toggle('dim', !pl.ok || !pay); $('#pOk').disabled = !pl.ok || !pay;
 }
 function confirmWall(){
   const pl=G.place, p=G.players[0];
@@ -2881,14 +2890,16 @@ function updateGhost(){
   if(pl.kind==='tc') regionPreview(pl, regionAt(fp.cx,fp.cz), pl.ok);
   const slow = pl.ok && pl.kind!=='tc' && !friendlyLand(0,fp.cx,fp.cz);
   $('#pTxt').textContent = pl.why || (BUILD[pl.kind].name + (!pl.ok ? ' – hier ist kein Platz' : slow ? ' – außerhalb deines Landes: Bau dauert 3× so lange' : ' – hier bauen?'));
-  pl.pad.material.color.setHex(!pl.ok?0xff4444:slow?0xffcc33:0x44ff66);
-  $('#pOk').classList.toggle('dim', !pl.ok);
+  const pay = canPay(G.players[0], BUILD[pl.kind].cost); setCost(BUILD[pl.kind].cost);
+  if(pl.ok && !pay) $('#pTxt').textContent = missingTxt(G.players[0], BUILD[pl.kind].cost);
+  pl.pad.material.color.setHex(!pl.ok||!pay?0xff4444:slow?0xffcc33:0x44ff66);
+  $('#pOk').classList.toggle('dim', !pl.ok || !pay); $('#pOk').disabled = !pl.ok || !pay;
 }
 function confirmPlace(){
   if(G.place && G.place.line) return confirmWall();
   const pl=G.place, p=G.players[0];
   if(!pl.ok){ EE.toast(pl.why || 'Hier kann nicht gebaut werden'); EE.sfx('error'); return; }
-  if(!canPay(p,BUILD[pl.kind].cost)){ EE.toast(missingTxt(p,BUILD[pl.kind].cost)); EE.sfx('error'); return; }
+  if(!canPay(p,BUILD[pl.kind].cost)){ EE.sfx('error'); return; }
   if(!pl.workers.length){ const w=G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.dead).sort((a,b)=>Math.hypot(a.x-pl.x,a.z-pl.z)-Math.hypot(b.x-pl.x,b.z-pl.z)).slice(0,3); pl.workers=w; }
   pay(p,BUILD[pl.kind].cost);
   const b = addBuilding(pl.kind,0,pl.x,pl.z,false);
@@ -2903,7 +2914,7 @@ function endPlace(){
   if(pl.ghost) G.scene.remove(pl.ghost); if(pl.pad) G.scene.remove(pl.pad);
   if(pl.ghosts) for(const gh of pl.ghosts) G.scene.remove(gh);
   if(pl.regM){ G.scene.remove(pl.regM); pl.regM.geometry.dispose(); }
-  G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
+  G.place=null; G.costH=null; $('#pCost').innerHTML=''; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
 window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
