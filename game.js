@@ -40,8 +40,10 @@ let G = null; // aktives Spiel
 /* ============================================================
    START / STOPP
    ============================================================ */
-function start(){
+async function start(){
   if(G) stop();
+  EE.toast('Die Welt wird geladen …');
+  await loadModels();
   EE.hideMenu();
   const S = EE.S;
   const N = [80,104,128][S.map] || 104;
@@ -165,7 +167,7 @@ function drawPanel(){
     }
     el.innerHTML = h; el.className='';
   } else {
-    el.innerHTML = `<div class="info hint"><b>Tipp</b><small>Arbeiter antippen, dann Bäume, Beeren, Steine oder Gold antippen</small></div>`;
+    el.innerHTML = `<div class="info hint"><b>Tipp</b><small>Ein Finger ziehen: Auswahlrahmen · Zwei Finger: Karte bewegen und zoomen</small></div>`;
     el.className='';
   }
   el.querySelectorAll('.ab').forEach(b=>b.onclick=()=>action(b.dataset.a));
@@ -401,6 +403,9 @@ function makeTree(R){
 function makeBush(R){
   geos();
   const g = new T.Group();
+  if(MODELS.bush){ const bm=modelMesh('bush', 1.5+R()*.3); g.add(bm);
+    for(let i=0;i<9;i++){ const a=R()*6.28, y=.35+R()*.55, r=.55+R()*.15; g.add(mesh(GEO.berry, mat(0xd8283a), Math.cos(a)*r, y, Math.sin(a)*r)); }
+    g.rotation.y = R()*6.28; return g; }
   const b = mesh(GEO.bush, mat(0x3f8f3a), 0,.45,0); b.scale.set(1.1,.8,1.1); g.add(b);
   for(let i=0;i<7;i++){ const a=R()*6.28, y=.35+R()*.4, r=.5+R()*.12;
     g.add(mesh(GEO.berry, mat(0xd8283a), Math.cos(a)*r, y, Math.sin(a)*r)); }
@@ -449,6 +454,18 @@ const LOADCOL = {food:0xd8283a, wood:0x9a6232, stone:0x9aa3ad, gold:0xffd24a};
 function makeTC(color){
   geos();
   const g = new T.Group();
+  if(MODELS.tc){
+    g.add(modelMesh('tc', 5.0));
+    if(MODELS.fence){ const n=9; for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+Math.PI/2+.35; if(i===0) continue;
+      const f=modelMesh('fence', 2.2); f.position.set(Math.cos(a)*3.05,0,Math.sin(a)*3.05); f.rotation.y=-a+Math.PI/2; g.add(f); } }
+    g.flag = teamFlag(g, color, 2.2, 0, 2.0, 3.6);
+    const fire = new T.Group(); fire.position.set(0,0,3.7);
+    for(let i=0;i<5;i++){ const s2=mesh(GEO.rock, mat(0x777777), Math.cos(i*1.26)*.42,.06,Math.sin(i*1.26)*.42); s2.scale.set(.16,.12,.16); fire.add(s2); }
+    const f1 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xffa31a})); f1.position.y=.32; fire.add(f1);
+    const f2 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xffe066})); f2.position.y=.25; f2.scale.set(.55,.6,.55); fire.add(f2);
+    g.add(fire); g.fire=[f1,f2];
+    return g;
+  }
   const wall = mesh(new T.CylinderGeometry(1.7,1.85,1.3,10), mat(0x8a5a2e), 0,.65,0); g.add(wall);
   const roof = mesh(new T.ConeGeometry(2.25,1.9,10), mat(0xc9a14e), 0,2.25,0); g.add(roof);
   const roof2 = mesh(new T.ConeGeometry(1.2,1,10), mat(0xb08a3e), 0,3.1,0); g.add(roof2);
@@ -471,6 +488,7 @@ function makeTC(color){
 function makeHouse(color){
   geos();
   const g = new T.Group();
+  if(MODELS.house){ g.add(modelMesh('house', 2.3)); teamFlag(g, color, .75, 1.0, .75, 1.3); return g; }
   const tent = mesh(new T.ConeGeometry(1.05,1.9,7), mat(0xb98b56), 0,.95,0); g.add(tent);
   const hide = mesh(new T.ConeGeometry(.75,1.1,7,1,true,0,2.2), mat(0x8a5a2e,{side:T.DoubleSide}), 0,.7,0); hide.rotation.y=1; g.add(hide);
   for(let i=0;i<4;i++){ const a=i*1.57+.4; const p=mesh(GEO.box, mat(0x5a3818), Math.cos(a)*.18,2,Math.sin(a)*.18); p.scale.set(.05,.6,.05); p.rotation.set(Math.sin(a)*.4,0,-Math.cos(a)*.4); g.add(p); }
@@ -480,6 +498,7 @@ function makeHouse(color){
 function makeStore(color){
   geos();
   const g = new T.Group();
+  if(MODELS.store){ const m=modelMesh('store', 3.1); g.add(m); teamFlag(g, color, 1.3, 0, 1.2, 2.4); return g; }
   const base = mesh(GEO.box, mat(0x7a4d28), 0,.15,0); base.scale.set(2.6,.3,2.4); g.add(base);
   for(let i=0;i<4;i++){ const l=mesh(new T.CylinderGeometry(.16,.16,1.6,6), mat(0x9a6232), -.4,.48+i*.0,-.7+i*.34); l.rotation.z=Math.PI/2; g.add(l); }
   for(let i=0;i<3;i++){ const l=mesh(new T.CylinderGeometry(.16,.16,1.6,6), mat(0x8a5428), -.4,.78,-.53+i*.34); l.rotation.z=Math.PI/2; g.add(l); }
@@ -489,6 +508,75 @@ function makeStore(color){
   const roof = mesh(GEO.box, mat(0xc9a14e), 0,1.9,0); roof.scale.set(2.8,.12,2.6); roof.rotation.z=.08; g.add(roof);
   const band = mesh(GEO.box, mat(color), 0,1.75,1.32); band.scale.set(.6,.18,.04); g.add(band);
   return g;
+}
+
+
+/* ============================================================
+   3D-MODELLE (eigene, verkleinerte GLB-Dateien)
+   ============================================================ */
+const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb' };
+const MODELS = {};
+let modelsReady = null;
+function parseGLB(buf){
+  const dv = new DataView(buf), jl = dv.getUint32(12,true);
+  const j = JSON.parse(new TextDecoder().decode(new Uint8Array(buf,20,jl)));
+  const binOff = 20+jl+8;
+  const view = i => { const bv=j.bufferViews[i]; return {off:binOff+(bv.byteOffset||0), len:bv.byteLength}; };
+  const accArr = i => { const a=j.accessors[i], v=view(a.bufferView), n={SCALAR:1,VEC2:2,VEC3:3,VEC4:4}[a.type];
+    const C = a.componentType===5126?Float32Array:a.componentType===5125?Uint32Array:Uint16Array;
+    return new C(buf.slice(v.off, v.off + a.count*n*C.BYTES_PER_ELEMENT)); };
+  const pr = j.meshes[0].primitives[0], at = pr.attributes;
+  const geo = new T.BufferGeometry();
+  geo.setAttribute('position', new T.BufferAttribute(accArr(at.POSITION),3));
+  if(at.NORMAL!=null) geo.setAttribute('normal', new T.BufferAttribute(accArr(at.NORMAL),3));
+  if(at.COLOR_0!=null) geo.setAttribute('color', new T.BufferAttribute(accArr(at.COLOR_0),3));
+  if(at.TEXCOORD_0!=null) geo.setAttribute('uv', new T.BufferAttribute(accArr(at.TEXCOORD_0),2));
+  geo.setIndex(new T.BufferAttribute(accArr(pr.indices),1));
+  if(at.NORMAL==null) geo.computeVertexNormals();
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, c = new T.Vector3(); bb.getCenter(c);
+  geo.translate(-c.x, -bb.min.y, -c.z); geo.computeBoundingBox();
+  const mat = new T.MeshLambertMaterial({side:T.DoubleSide, vertexColors: at.COLOR_0!=null});
+  let texP = Promise.resolve();
+  if(j.images && j.images.length){
+    const v = view(j.images[0].bufferView);
+    const blob = new Blob([new Uint8Array(buf, v.off, v.len)], {type:j.images[0].mimeType||'image/jpeg'});
+    texP = new Promise(res=>{ const img=new Image(); img.onload=()=>{ const t=new T.Texture(img); t.flipY=false; t.colorSpace=T.SRGBColorSpace; t.needsUpdate=true; mat.map=t; mat.needsUpdate=true; res(); }; img.onerror=res; img.src=URL.createObjectURL(blob); });
+  }
+  return texP.then(()=>({geo, mat}));
+}
+function loadModels(){
+  if(modelsReady) return modelsReady;
+  const src = window.EE_MODELS || {};
+  modelsReady = Promise.all(Object.entries(MODEL_FILES).map(([k,f]) =>
+    fetch(src[k] || f).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(parseGLB).then(m=>{ MODELS[k]=m; if(k==='tree'||k==='palm'||k==='bush'){ m.mat.color.setRGB(1.25,1.55,1.05); m.mat.emissive.setHex(0x14220a); } }).catch(()=>{})
+  ));
+  return modelsReady;
+}
+function modelMesh(k, width){
+  const m = MODELS[k]; const bb = m.geo.boundingBox;
+  const s = width / Math.max(bb.max.x-bb.min.x, bb.max.z-bb.min.z);
+  const o = new T.Mesh(m.geo, m.mat); o.scale.setScalar(s); o.castShadow=true; o.receiveShadow=true;
+  return o;
+}
+function treeInstance(x,z){
+  const R=G.rand, h=getH(x,z);
+  const palm = MODELS.palm && (h < WATER_Y+1.1 || R()<.08);
+  const key = palm?'palm':'tree';
+  if(!G.trees) G.trees={};
+  let t = G.trees[key];
+  if(!t){ const m=MODELS[key]; const im=new T.InstancedMesh(m.geo, m.mat, 1400); im.count=0; im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; G.scene.add(im); t=G.trees[key]={im}; }
+  const bb=MODELS[key].geo.boundingBox, hgt=bb.max.y-bb.min.y;
+  const sc=(palm?3.6:3.0)/hgt*(.8+R()*.45);
+  const o=new T.Object3D(); o.position.set(x,h-.05,z); o.rotation.y=R()*6.28; o.scale.setScalar(sc); o.updateMatrix();
+  const i=t.im.count; if(i>=1400) return makeTree(R);
+  t.im.setMatrixAt(i,o.matrix); t.im.count++; t.im.instanceMatrix.needsUpdate=true;
+  const d=new T.Object3D(); d.inst={im:t.im,i}; return d;
+}
+function teamFlag(g, color, x, y, z, h){
+  const pole = mesh(GEO.box, mat(0x5a3818), x, y+h/2, z); pole.scale.set(.08,h,.08); g.add(pole);
+  const flag = mesh(GEO.box, mat(color), x+.35, y+h-.3, z); flag.scale.set(.7,.45,.04); g.add(flag);
+  return flag;
 }
 
 /* ---------- Objekte anlegen ---------- */
@@ -508,12 +596,13 @@ function placeCluster(type, cx, cz, count, spread){
 }
 function addRes(type,x,z){
   let m, kind, amt;
-  if(type==='tree'){ m=makeTree(G.rand); kind='wood'; amt=100; }
+  if(type==='tree' && MODELS.tree && G.gfx>=1){ m=treeInstance(x,z); kind='wood'; amt=100; }
+  else if(type==='tree'){ m=makeTree(G.rand); kind='wood'; amt=100; }
   else if(type==='bush'){ m=makeBush(G.rand); kind='food'; amt=125; }
   else if(type==='stone'){ m=makeRock(G.rand,false); kind='stone'; amt=250; }
   else { m=makeRock(G.rand,true); kind='gold'; amt=250; }
   m.position.set(x, getH(x,z), z);
-  G.scene.add(m);
+  if(!m.inst) G.scene.add(m);
   const r = {type, kind, amt, max:amt, x, z, mesh:m, alive:true, r:.6};
   G.grid[cellIdx(x,z)] = 1;
   G.res.push(r);
@@ -772,6 +861,7 @@ function autoJob(u){
 }
 function removeRes(r){
   r.alive=false; G.scene.remove(r.mesh);
+  if(r.mesh.inst){ const {im,i}=r.mesh.inst; im.setMatrixAt(i, new T.Matrix4().makeScale(0,0,0)); im.instanceMatrix.needsUpdate=true; }
   if(!r.deer){ const k=cellIdx(r.x,r.z); if(k>=0) G.grid[k]=0; }
 }
 function finishBuilding(b){
@@ -908,7 +998,6 @@ function pDown(e){
   if(P.size===1){
     gesture={type:'tap'};
     clearTimeout(longT);
-    longT = setTimeout(()=>{ if(gesture && gesture.type==='tap' && !G.place){ const p=[...P.values()][0]; gesture={type:'box',x0:p.sx,y0:p.sy}; EE.vib(15); showBox(p.sx,p.sy,p.x,p.y); } }, 420);
   } else if(P.size===2){
     clearTimeout(longT); hideBox();
     const [a,b]=[...P.values()];
@@ -921,7 +1010,7 @@ function pMove(e){
   if(!gesture) return;
   if(gesture.type==='tap' && Math.hypot(p.x-p.sx,p.y-p.sy)>10){
     clearTimeout(longT);
-    gesture = G.place ? {type:'ghost'} : {type:'pan'};
+    gesture = G.place ? {type:'ghost'} : {type:'box', x0:p.sx, y0:p.sy};
   }
   if(gesture.type==='pan'){ panBy(p.x-px, p.y-py); }
   else if(gesture.type==='ghost'){ const g=groundAt(p.x,p.y); if(g){ G.place.x=g.x; G.place.z=g.z; } }
