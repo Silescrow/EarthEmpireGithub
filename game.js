@@ -2796,7 +2796,7 @@ function buildBorders(){
       L.pos.push(ax,y(ax,az),az, cx,y(cx,cz),cz, bx,y(bx,bz),bz,  bx,y(bx,bz),bz, cx,y(cx,cz),cz, dx,y(dx,dz),dz); }
   };
   // Außengrenzen: kleine Holzpfosten in gleichmäßigem Abstand (ein einziges InstancedMesh)
-  const P=[], POST_GAP=2.0;
+  const P=[], POST_GAP=1.5;
   let PC=0, PH=1;
   const posts=(x0,z0,x1,z1,nx,nz)=>{ const len=Math.hypot(x1-x0,z1-z0), n=Math.max(1,Math.round(len/POST_GAP));
     for(let k=0;k<n;k++){ const t=(k+.5)/n, x=x0+(x1-x0)*t+nx*.3, z=z0+(z1-z0)*t+nz*.3; if(getH(x,z)<WATER_Y+.1) continue; P.push(x,z,PC,PH); } };
@@ -2825,7 +2825,7 @@ function buildBorders(){
       const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1;
       add('free', 0xffffff, .35, .12, a[0],a[1],b[0],b[1], nx/L,nz/L, .1, false); } }
   if(P.length){
-    if(!GEO.post){ const I=new T.Matrix4(); GEO.post=mergeParts([[new T.CylinderGeometry(.11,.13,1.05,6,1,true), new T.Matrix4().makeTranslation(0,.45,0)],[new T.ConeGeometry(.11,.22,6,1,true), new T.Matrix4().makeTranslation(0,1.08,0)]]); }
+    if(!GEO.post){ const I=new T.Matrix4(); GEO.post=mergeParts([[new T.CylinderGeometry(.06,.07,.5,6,1,true), new T.Matrix4().makeTranslation(0,.2,0)],[new T.ConeGeometry(.06,.12,6,1,true), new T.Matrix4().makeTranslation(0,.51,0)]]); }
     const NP=P.length/4, im=new T.InstancedMesh(GEO.post, new T.MeshLambertMaterial({color:0xffffff}), NP), m4=new T.Matrix4(), q=new T.Quaternion(), e=new T.Euler(), sc=new T.Vector3(), ps=new T.Vector3();
     const R=rng(77);
     const col=new T.Color();
