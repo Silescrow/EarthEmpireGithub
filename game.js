@@ -198,7 +198,7 @@ function buildUI(){
     <button class="hb" id="bPause" aria-label="Menü"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
   </div>
   <canvas id="mini" width="150" height="150"></canvas>
-  <button class="hb" id="bIdle" aria-label="Untätige Arbeiter"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="#f0d3a8"/><path d="M4 21q1-8 8-8t8 8z" fill="#8a5a2b"/><text x="18" y="9" font-size="9" fill="#ffd24a" font-weight="700">z</text></svg><i id="idleN">0</i></button>
+  <button class="hb" id="bIdle" aria-label="Untätige Bauern"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="#f0d3a8"/><path d="M4 21q1-8 8-8t8 8z" fill="#8a5a2b"/><text x="18" y="9" font-size="9" fill="#ffd24a" font-weight="700">z</text></svg><i id="idleN">0</i></button>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
   <div id="panel"></div>
   <div id="placebar" class="hidden"><span id="pCost"></span><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">+ Tore</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
@@ -259,7 +259,7 @@ function drawPanel(){
       h += `<div class="info"><small>Tempo ${tm?'+'+tm+' %':'normal'} · Hütten im Gebiet +5 % je Hütte · Helfer +10 %</small></div>`;
       h += `<button class="ab" data-a="helpin"><span class="ai">${ICON.pop}</span>Helfer rein<span class="ac">${hn}/${HELP_MAX}</span></button>`;
       if(hn) h += `<button class="ab" data-a="helpout"><span class="ai">${ICON.pop}</span>Helfer raus<span class="ac">${hn}</span></button>`;
-      h += `<button class="ab" data-a="worker"><span class="ai">${ICON.pop}</span>Arbeiter<span class="ac">${costText(WORKER_COST)}</span>${q?'<i class="q">'+q+'</i>':''}</button>`;
+      h += `<button class="ab" data-a="worker"><span class="ai">${ICON.pop}</span>Bauer<span class="ac">${costText(WORKER_COST)}</span>${q?'<i class="q">'+q+'</i>':''}</button>`;
       h += `<button class="ab" data-a="dip"><span class="ai">${dipSVG()}</span>Diplomatie<span class="ac">Bündnis · Handel</span></button>`;
       h += `<button class="ab lock" data-a="age"><span class="ai"><svg viewBox="0 0 24 24"><path d="M12 3l8 9h-5v9H9v-9H4z" fill="#e8b64a"/></svg></span>Bronzezeit<span class="ac">${costText({food:500,wood:300})}</span></button>`;
       if(q) h += `<div class="bar"><div style="width:${(b.qT/WORKER_TIME*100)|0}%"></div></div>`;
@@ -301,7 +301,7 @@ function drawPanel(){
   el.querySelectorAll('.sx').forEach(b=>b.onclick=()=>{ EE.click(); select([],null); });
   if(G.sel.length){ const ws=G.sel.slice(); el.querySelectorAll('.pic').forEach(b=>b.onclick=()=>{ EE.click(); const u=ws[+b.dataset.u]; if(u){ select([u],null); } }); }
 }
-const UNIT_DE = {worker:'Arbeiter'};
+const UNIT_DE = {worker:'Bauern'};
 function unitPic(u){
   const col='#'+COLORS[u.owner].toString(16).padStart(6,'0'), f=u.sex==='f';
   return `<svg viewBox="0 0 24 28"><path d="M5 27q0-11 7-11t7 11z" fill="#8a5a2b"/><path d="M6 21l12-3v3l-12 3z" fill="${col}"/>`+
@@ -346,7 +346,7 @@ function growUp(u){
   const old=u.home; u.home=null; u.moveOut=true; u.oldHome=old;
   const nh = findHome(u, occupancy(), old);
   if(nh){ u.home=nh; cmdMove(u, nh.x+(G.rand()-.5)*3, nh.z+nh.size*.5+1.2); }
-  if(u.owner===0){ EE.toast(nh ? 'Ein Kind ist erwachsen und zieht in eine eigene Hütte' : 'Ein Kind ist erwachsen – es braucht eine eigene Hütte!'); drawPanelSoon(); }
+  if(u.owner===0){ EE.toast(nh ? 'Ein Kind ist erwachsen und zieht als Bauer in eine eigene Hütte' : 'Ein Kind ist erwachsen – es braucht eine eigene Hütte!'); drawPanelSoon(); }
 }
 function updateKid(u,dt){
   u.grow += dt;
@@ -367,7 +367,7 @@ const helpers = b => G.units.filter(u=>u.inside===b && !u.dead);
 function helperIn(b){
   if(helpers(b).length>=HELP_MAX){ EE.toast('Höchstens '+HELP_MAX+' Helfer'); return; }
   const w = G.units.filter(u=>u.owner===b.owner && u.kind==='worker' && !u.inside && !u.dead).sort((p,q)=>Math.hypot(p.x-b.x,p.z-b.z)-Math.hypot(q.x-b.x,q.z-b.z))[0];
-  if(!w){ EE.toast('Kein Arbeiter frei'); return; }
+  if(!w){ EE.toast('Kein Bauer frei'); return; }
   if(G.sel.includes(w)) G.sel=G.sel.filter(x=>x!==w);
   w.inside=b; w.state='idle'; w.path=null; w.site=null; w.target=null; w.ring.visible=false; if(w.bar) w.bar.visible=false;
 }
@@ -408,7 +408,7 @@ function updatePopulation(dt){
    KRIEGER & KAMPF (Steinzeit): Krieger sind Höhlenmenschen mit Waffen
    ============================================================ */
 const UNIT = {
-  worker:{name:'Arbeiter', hp:40, atk:2, range:.9, cd:1.3, speed:3.1, bld:.2},
+  worker:{name:'Bauer', hp:40, atk:2, range:.9, cd:1.3, speed:3.1, bld:.2},
   club:  {name:'Axtkrieger', hp:95, atk:9, range:1.1, cd:1.15, speed:3.0, bld:.6, cost:{food:50,wood:20}, time:12, weapon:'w_axe', wlen:.85},
   spear: {name:'Speerträger', hp:85, atk:7, range:1.7, cd:1.0, speed:3.2, bld:.4, cost:{food:45,wood:30}, time:12, weapon:'w_spear', wlen:2.0},
   bow:   {name:'Bogenschütze', hp:55, atk:6, range:9, cd:1.7, speed:3.0, bld:.25, cost:{food:40,wood:45}, time:14, weapon:'w_bow', wlen:1.25, ranged:true},
@@ -439,7 +439,7 @@ function makeBar(){
   const g=new T.Group();
   const bg=new T.Sprite(new T.SpriteMaterial({color:0x220000, depthTest:false})); bg.scale.set(.9,.11,1);
   const fg=new T.Sprite(new T.SpriteMaterial({color:0x5fe36a, depthTest:false})); fg.scale.set(.86,.07,1); fg.center.set(0,.5); fg.position.x=-.43;
-  bg.renderOrder=fg.renderOrder=8; g.add(bg); g.add(fg); g.fg=fg; g.visible=false; return g;
+  bg.renderOrder=8; fg.renderOrder=9; g.add(bg); g.add(fg); g.fg=fg; g.visible=false; return g;
 }
 function updateBar(u){
   if(!u.bar){ u.bar=makeBar(); G.scene.add(u.bar); }
@@ -2298,10 +2298,11 @@ function updateWorker(u,dt){
       break; }
     case 'build': {
       const b = u.site;
-      if(!b || b.built>=1 || b.dead){ u.state='idle'; autoJob(u); break; }
+      if(!b || b.dead || (b.built>=1 && b.hp>=BUILD[b.kind].hp)){ u.state='idle'; autoJob(u); break; }
       if(near(u,b.x,b.z,b.size*.5+1.1)){
         u.path=null; u.working=true; u.face=Math.atan2(b.x-u.x,b.z-u.z);
         u.hitT=(u.hitT||0)+dt; if(u.hitT>.9){ u.hitT=0; sfxAt('build',u.x,u.z,.8); }
+        if(b.built>=1){ b.hp = Math.min(BUILD[b.kind].hp, b.hp + dt*BUILD[b.kind].hp/BUILD[b.kind].time*.5); if(G.selB===b && u.owner===0) drawPanelSoon(); break; } // reparieren
         b.built = Math.min(1, b.built + dt/BUILD[b.kind].time/(b.slow?3:1));
         b.hp = Math.max(1, BUILD[b.kind].hp*b.built);
         if(b.kind==='road') b.mesh.children[0].material.opacity=.35+.6*b.built; else b.mesh.scale.y = .25 + .75*b.built;
@@ -2642,6 +2643,7 @@ function hideBox(){ const b=$('#sel-box'); if(b) b.style.display='none'; }
 
 function pickAt(sx,sy){
   let best=null, bd=34;
+  if(G.sel.some(u=>u.owner===0 && u.kind==='worker')){ let bb=1e9; for(const b of G.builds){ if(b.owner!==0 || b.kind==='road' || (b.built>=1 && b.hp>=BUILD[b.kind].hp)) continue; const s=toScreen(b.x, b.mesh.position.y+.5, b.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<26+b.size*14 && d<bb){ bb=d; best={b}; } } if(best) return best; }
   for(const u of G.units){ const s=toScreen(u.x, getH(u.x,u.z)+.7, u.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<bd){bd=d;best={u};} }
   if(best) return best;
   bd = 1e9;
@@ -2671,7 +2673,7 @@ function tapAt(sx,sy){
   if(mine.length){
     if(hit && hit.r && (hit.r.kind==='metal'||hit.r.kind==='oil')){ EE.toast(RES_DE[hit.r.kind]+'-Vorkommen – kann noch nicht abgebaut werden'); return; }
     if(hit && hit.r){ mine.forEach(u=>cmdGather(u,hit.r)); marker(hit.r.x,hit.r.z,0xffd24a); EE.vib(10); drawPanel(); return; }
-    if(hit && hit.b && hit.b.owner===0 && hit.b.built<1){ mine.forEach(u=>cmdBuild(u,hit.b)); marker(hit.b.x,hit.b.z,0xffd24a); EE.vib(10); drawPanel(); return; }
+    if(hit && hit.b && hit.b.owner===0 && (hit.b.built<1 || hit.b.hp<BUILD[hit.b.kind].hp)){ const bs=mine.filter(u=>u.kind==='worker'); if(!bs.length){ EE.toast('Nur Bauern können bauen'); return; } bs.forEach(u=>cmdBuild(u,hit.b)); if(bs.length>1) EE.toast(bs.length+' Bauern '+(hit.b.built<1?'bauen':'reparieren')+' zusammen – das geht schneller'); marker(hit.b.x,hit.b.z,0xffd24a); EE.vib(10); drawPanel(); return; }
     if(hit && hit.b && hit.b.owner===0 && BUILD[hit.b.kind].drop){ mine.forEach(u=>{ if(u.carry.amt>0){u.state='drop';u.path=null;} }); marker(hit.b.x,hit.b.z,0xffffff); return; }
     if(hit && hit.b && hit.b.owner!==0){ if(hostile(0,hit.b.owner)){ mine.forEach(u=>cmdAttack(u,hit.b)); marker(hit.b.x,hit.b.z,0xff4444); EE.vib(12); }
       else EE.toast('Ihr habt keinen Krieg mit den '+G.players[hit.b.owner].civ[0]); return; }
@@ -2707,7 +2709,7 @@ function select(us,b){
 }
 function selectIdle(){
   const idle = G.units.filter(u=>u.owner===0 && u.state==='idle' && u.kind!=='kid' && !u.inside);
-  if(!idle.length){ EE.toast('Alle Arbeiter sind beschäftigt'); return; }
+  if(!idle.length){ EE.toast('Alle Bauern sind beschäftigt'); return; }
   G.idleI = ((G.idleI||0)+1) % idle.length;
   const u = idle[G.idleI]; select([u],null); centerCamOn(u.x,u.z-4);
 }
@@ -2814,7 +2816,7 @@ function updateWallGhost(){
 function confirmWall(){
   const pl=G.place, p=G.players[0];
   if(!pl.ok){ EE.toast(pl.kind==='road'?'Hier kann kein Weg entstehen':'Hier kann keine Palisade stehen'); return; }
-  if(pl.kind==='road' && !pl.workers.length){ EE.toast('Wähle zuerst Arbeiter aus, die den Weg anlegen'); return; }
+  if(pl.kind==='road' && !pl.workers.length){ EE.toast('Wähle zuerst Bauern aus, die den Weg anlegen'); return; }
   if(p.res.wood < pl.cost){ EE.toast('Nicht genug Holz ('+pl.cost+' nötig)'); return; }
   p.res.wood -= pl.cost;
   const id = WALL_ID++, ang = pl.ang||0, segs=[];
@@ -3029,7 +3031,7 @@ function confirmPlace(){
   pay(p,BUILD[pl.kind].cost);
   const b = addBuilding(pl.kind,0,pl.x,pl.z,false);
   pl.workers.forEach(u=>cmdBuild(u,b));
-  if(pl.kind==='tc') EE.toast('Stadtzentrum wird gebaut – deine Arbeiter sind unterwegs');
+  if(pl.kind==='tc') EE.toast('Stadtzentrum wird gebaut – deine Bauern sind unterwegs');
   EE.sfx('place'); EE.vib(20);
   endPlace(); updateHUD(); select(pl.workers,null);
 }
