@@ -778,11 +778,8 @@ function makeTC(color, civ){
   if(MODELS.tc){
     g.add(modelMesh('tc', 5.6));
     g.flag = civ ? civFlag(g, civ, color, 2.2, 0, 2.0, 4.2) : teamFlag(g, color, 2.2, 0, 2.0, 3.6);
-    const fire = new T.Group(); fire.position.set(0,0,3.7);
-    for(let i=0;i<5;i++){ const s2=mesh(GEO.rock, mat(0x777777), Math.cos(i*1.26)*.42,.06,Math.sin(i*1.26)*.42); s2.scale.set(.16,.12,.16); fire.add(s2); }
-    const f1 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xffa31a})); f1.position.y=.32; fire.add(f1);
-    const f2 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xffe066})); f2.position.y=.25; f2.scale.set(.55,.6,.55); fire.add(f2);
-    g.add(fire); g.fire=[f1,f2];
+    const fire = makeCampfire(); fire.position.set(0,0,3.9);
+    g.add(fire); g.fire=fire.flames; g.fireFx=fire;
     return g;
   }
   const wall = mesh(new T.CylinderGeometry(1.7,1.85,1.3,10), mat(0x8a5a2e), 0,.65,0); g.add(wall);
@@ -833,7 +830,7 @@ function makeStore(color){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/palisade.glb' };
+const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -899,8 +896,9 @@ function civFlagTex(civ, color){
   const c=document.createElement('canvas'); c.width=128; c.height=96; const x=c.getContext('2d');
   x.fillStyle='#'+color.toString(16).padStart(6,'0'); x.fillRect(0,0,128,96);
   const t=new T.CanvasTexture(c); t.colorSpace=T.SRGBColorSpace; civTexCache[key]=t;
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 36">'+civ[2].replace(/cp/g,'cpf')+'</svg>';
-  const img=new Image(); img.onload=()=>{ x.fillStyle='#'+color.toString(16).padStart(6,'0'); x.fillRect(0,0,128,96); x.drawImage(img,8,6,112,84*1.0); t.needsUpdate=true; };
+  const body=civ[2].replace(/cp/g,'cpf').split('M0 0H30V34L15 27L0 34Z').join('M0 0H30V36H0Z').replace(/<path d="M0 0H30V36H0Z" fill="none"[^>]*\/>/,'');
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 3 30 27" preserveAspectRatio="none">'+body+'</svg>';
+  const img=new Image(); img.onload=()=>{ x.clearRect(0,0,128,96); x.drawImage(img,0,0,128,96); t.needsUpdate=true; };
   img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
   return t;
 }
@@ -931,6 +929,30 @@ function civFlag(g, civ, color, x, y, z, h){
   const fl = new T.Mesh(clothGeo(1.6,1.15), clothMat({map:civFlagTex(civ,color)}));
   fl.position.set(x+.05, y+h-.62, z); fl.castShadow=true; g.add(fl);
   return fl;
+}
+let GLOW_TEX=null, SMOKE_TEX=null;
+function radialTex(inner, outer){ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'); const gr=x.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,inner); gr.addColorStop(1,outer); x.fillStyle=gr; x.fillRect(0,0,64,64); return new T.CanvasTexture(c); }
+function makeCampfire(){
+  geos();
+  const g = new T.Group();
+  if(MODELS.fire){ const m=modelMesh('fire', 1.7); m.material = MODELS.fire.glowMat || (MODELS.fire.glowMat=(()=>{ const x=MODELS.fire.mat.clone(); x.emissive=new T.Color(0x3a1200); return x; })()); g.add(m); }
+  else for(let i=0;i<5;i++){ const s2=mesh(GEO.rock, mat(0x777777), Math.cos(i*1.26)*.42,.06,Math.sin(i*1.26)*.42); s2.scale.set(.16,.12,.16); g.add(s2); }
+  const f1 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xff8a1a, transparent:true, opacity:.9})); f1.position.y=.55; g.add(f1);
+  const f2 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xffe27a, transparent:true, opacity:.95})); f2.position.y=.45; g.add(f2);
+  if(!GLOW_TEX){ GLOW_TEX=radialTex('rgba(255,170,60,.85)','rgba(255,120,20,0)'); SMOKE_TEX=radialTex('rgba(90,90,90,.55)','rgba(90,90,90,0)'); }
+  const glow = new T.Sprite(new T.SpriteMaterial({map:GLOW_TEX, blending:T.AdditiveBlending, depthWrite:false, transparent:true}));
+  glow.scale.set(3.2,3.2,1); glow.position.y=.6; g.add(glow);
+  const smoke=[]; for(let i=0;i<5;i++){ const sp=new T.Sprite(new T.SpriteMaterial({map:SMOKE_TEX, depthWrite:false, transparent:true, opacity:.5})); sp.userData.t=i/5; g.add(sp); smoke.push(sp); }
+  g.flames=[f1,f2]; g.glow=glow; g.smoke=smoke;
+  return g;
+}
+function animateFire(fx, t, dt){
+  const [f1,f2]=fx.flames;
+  f1.scale.set(1.3+Math.sin(t*13)*.18, 1.4+Math.sin(t*9.7)*.35, 1.3+Math.cos(t*11)*.18); f1.rotation.y=t*1.7;
+  f2.scale.set(.7+Math.sin(t*15)*.1, .9+Math.sin(t*12.3)*.25, .7);
+  fx.glow.material.opacity = .75+Math.sin(t*17)*.12+Math.sin(t*5.3)*.1;
+  for(const sp of fx.smoke){ sp.userData.t=(sp.userData.t+dt*.22)%1; const k=sp.userData.t;
+    sp.position.set(Math.sin(k*5+sp.id)*.35*k, 1+k*4.5, Math.cos(k*4)*.25*k); const sc=.6+k*2.4; sp.scale.set(sc,sc,1); sp.material.opacity=.45*(1-k)*Math.min(1,k*5); }
 }
 function teamFlag(g, color, x, y, z, h){
   const pole = mesh(GEO.box, mat(0x5a3818), x, y+h/2, z); pole.scale.set(.08,h,.08); g.add(pole);
@@ -1266,7 +1288,7 @@ function updateDeer(d,dt){
 }
 
 function updateBuilding(b,dt){
-  if(b.kind==='tc' && b.mesh.fire){ const t=G.t*12+b.x; b.mesh.fire[0].scale.set(1+Math.sin(t)*.15,1+Math.sin(t*1.3)*.25,1+Math.cos(t)*.15); b.mesh.fire[1].scale.set(.55,.6+Math.sin(t*1.7)*.15,.55); }
+  if(b.kind==='tc' && b.mesh.fireFx && !G.farView) animateFire(b.mesh.fireFx, G.t+b.x, dt);
 
   if(b.built<1 || !b.queue.length) return;
   const p = G.players[b.owner];
@@ -1542,17 +1564,18 @@ function marker(x,z,col){
    PALISADE (selbst bauen: Linie ziehen, optional Tor)
    ============================================================ */
 let WALL_ID = 1;
-function makeWallPiece(color, gate){
+function makeWallPiece(color, gate, len){
+  len = len||1;
   geos();
   const g = new T.Group();
   if(gate){
-    for(const x of [-.5,.5]){ const p=mesh(GEO.box, mat(0x5a3818), x, 1.1, 0); p.scale.set(.24,2.2,.24); g.add(p); }
-    const top=mesh(GEO.box, mat(0x6a4422), 0, 2.15, 0); top.scale.set(1.35,.2,.28); g.add(top);
+    for(const x of [-.5*len,.5*len]){ const p=mesh(GEO.box, mat(0x5a3818), x, 1.1, 0); p.scale.set(.24,2.2,.24); g.add(p); }
+    const top=mesh(GEO.box, mat(0x6a4422), 0, 2.15, 0); top.scale.set(len*1.3,.2,.28); g.add(top);
     const fl=mesh(GEO.box, mat(color), 0, 1.85, .16); fl.scale.set(.45,.28,.03); g.add(fl);
     return g;
   }
-  if(MODELS.palisade){ const m=modelMesh('palisade', 1.12); const bb=MODELS.palisade.geo.boundingBox; m.scale.y = 1.95/(bb.max.y-bb.min.y); m.scale.z*=1.6; g.add(m); }
-  else { for(let i=0;i<4;i++){ const p=mesh(GEO.box, mat(0x7a4d28), -.38+i*.25, .65+((i*7)%3)*.06, 0); p.scale.set(.16,1.3,.16); g.add(p); } }
+  if(MODELS.palisade){ const m=modelMesh('palisade', len*1.08); const bb=MODELS.palisade.geo.boundingBox; m.scale.y = 1.95/(bb.max.y-bb.min.y); m.scale.z*=1.6; g.add(m); }
+  else { for(let i=0;i<4;i++){ const p=mesh(GEO.box, mat(0x7a4d28), (-.38+i*.25)*len, .65+((i*7)%3)*.06, 0); p.scale.set(.16,1.3,.16); g.add(p); } }
   return g;
 }
 function wallCells(x0,z0,x1,z1){
@@ -1573,18 +1596,27 @@ function startWall(){
 function updateWallGhost(){
   const pl=G.place, NX=G.NX, NZ=G.NZ;
   for(const gh of pl.ghosts) G.scene.remove(gh); pl.ghosts=[];
-  const cells = wallCells(pl.ax,pl.az,pl.bx,pl.bz);
-  const ang = Math.atan2(pl.bz-pl.az, pl.bx-pl.ax);
-  const mid = Math.floor(cells.length/2);
-  pl.cells = cells.map(([i,j],n)=>{ const k=j*NX+i, x=i-NX/2+.5, z=j-NZ/2+.5; const ok = i>=0&&j>=0&&i<NX&&j<NZ && !G.grid[k] && getH(x,z)>WATER_Y+.15;
-    return {k, x, z, ok, gate: pl.gate && cells.length>=3 && n===mid}; });
+  const dx=pl.bx-pl.ax, dz=pl.bz-pl.az, L=Math.min(Math.hypot(dx,dz), 50);
+  const n = Math.max(1, Math.round(L/1.15)), seg = Math.max(.6, L/n);
+  const ux = L>0.01?dx/Math.hypot(dx,dz):1, uz = L>0.01?dz/Math.hypot(dx,dz):0;
+  const ang = Math.atan2(uz, ux), mid = Math.floor(n/2);
+  pl.cells = [];
+  for(let i=0;i<n;i++){
+    const x = pl.ax + ux*seg*(i+.5), z = pl.az + uz*seg*(i+.5);
+    const ks = new Set();
+    for(let t=-.45;t<=.45;t+=.15){ const k=cellIdx(x+ux*seg*t, z+uz*seg*t); ks.add(k); }
+    const arr=[...ks];
+    const ok = arr.every(k=>k>=0 && !G.grid[k]) && getH(x,z)>WATER_Y+.15 && !pl.cells.some(c=>c.ks.some(k=>arr.includes(k)) && false);
+    pl.cells.push({ks:arr, x, z, len:seg, ok, gate: pl.gate && n>=3 && i===mid});
+  }
   let okCount=0;
   for(const c of pl.cells){
-    const gh = makeWallPiece(COLORS[0], c.gate);
+    const gh = makeWallPiece(COLORS[0], c.gate, c.len);
     gh.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; o.material.color.setHex(c.ok?0x66ff77:0xff5555); o.castShadow=false; } });
     gh.position.set(c.x, getH(c.x,c.z), c.z); gh.rotation.y = -ang;
     G.scene.add(gh); pl.ghosts.push(gh); if(c.ok) okCount++;
   }
+  pl.ang = ang;
   const cost = pl.cells.reduce((s,c)=>s+(c.ok?(c.gate?BUILD.gate.cost.wood:BUILD.wall.cost.wood):0),0);
   pl.cost = cost; pl.ok = okCount>0;
   $('#pTxt').textContent = okCount ? okCount+' Stück · '+cost+' Holz' : 'Mit dem Finger eine Linie ziehen';
@@ -1595,7 +1627,7 @@ function confirmWall(){
   if(!pl.ok){ EE.toast('Hier kann keine Palisade stehen'); return; }
   if(p.res.wood < pl.cost){ EE.toast('Nicht genug Holz ('+pl.cost+' nötig)'); return; }
   p.res.wood -= pl.cost;
-  const id = WALL_ID++, ang = Math.atan2(pl.bz-pl.az, pl.bx-pl.ax), segs=[];
+  const id = WALL_ID++, ang = pl.ang||0, segs=[];
   for(const c of pl.cells){ if(!c.ok) continue; segs.push(addWall(0, c, ang, id)); }
   const ws = pl.workers;
   ws.forEach((u,i)=>{ const seg = segs[Math.floor(i*segs.length/Math.max(1,ws.length))]; if(seg) cmdBuild(u,seg); });
@@ -1604,13 +1636,13 @@ function confirmWall(){
 }
 function addWall(owner, c, ang, id){
   const kind = c.gate?'gate':'wall', d=BUILD[kind];
-  const m = makeWallPiece(COLORS[owner], c.gate);
+  const m = makeWallPiece(COLORS[owner], c.gate, c.len);
   m.position.set(c.x, getH(c.x,c.z)-.03, c.z); m.rotation.y = -ang;
   G.scene.add(m);
-  if(!c.gate) G.grid[c.k]=1;
+  if(!c.gate) for(const k of c.ks) if(k>=0) G.grid[k]=1;
   const ring = new T.Mesh(new T.RingGeometry(.55,.68,20), new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.85, depthWrite:false}));
   ring.rotation.x=-Math.PI/2; ring.position.set(c.x, m.position.y+.08, c.z); ring.visible=false; G.scene.add(ring);
-  const b = {kind, owner, x:c.x, z:c.z, size:1, mesh:m, ring, cells:c.gate?[]:[c.k], built:0, hp:1, queue:[], qT:0, wallId:id};
+  const b = {kind, owner, x:c.x, z:c.z, size:1, mesh:m, ring, cells:c.gate?[]:c.ks.filter(k=>k>=0), built:0, hp:1, queue:[], qT:0, wallId:id};
   m.scale.y=.25; m.traverse(o=>{ if(o.material && o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; } });
   G.builds.push(b);
   return b;
