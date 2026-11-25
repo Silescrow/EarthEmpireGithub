@@ -116,7 +116,7 @@ function saveGame(){
     const sv = { v:1, date:Date.now(), map:G.map, seed:G.seed, t:Math.round(G.t), civs:G.players.map(p=>p.civ[0]),
       res, players:G.players.map(p=>({res:p.res, ...(p.expT!=null?{expT:p.expT}:{})})),
       dip:Object.fromEntries(Object.entries(G.dip).map(([k,d])=>[k,{state:d.state, mood:Math.round(d.mood), ask:Math.round(d.ask||0)}])),
-      builds:G.builds.filter(b=>!b.dead).map(b=>({k:b.kind, o:b.owner, x:r1(b.x), z:r1(b.z), b:r1(b.built), hp:Math.round(b.hp), s:b.slow?1:0,
+      builds:G.builds.filter(b=>!b.dead).map(b=>({k:b.kind, o:b.owner, x:r1(b.x), z:r1(b.z), b:r1(b.built), hp:Math.round(b.hp), s:b.slow?1:0, r:b.recv||undefined,
         q:(b.queue||[]).length?b.queue.slice():undefined, w:b.wallId||undefined, seg:b.seg||undefined})),
       units:G.units.filter(u=>!u.dead).map(u=>({k:u.kind, o:u.owner, x:r1(u.x), z:r1(u.z), hp:Math.round(u.hp), c:u.carry&&u.carry.amt?[u.carry.type,u.carry.amt]:undefined, sx:u.sex, g:u.kind==='kid'?[u.stage,Math.round(u.grow)]:undefined})),
       cam:{x:r1(G.camS.x), z:r1(G.camS.z), d:r1(G.camS.dist), y:r1(G.camS.yaw)} };
@@ -137,7 +137,7 @@ function applySave(sv){
     let b;
     if(s.seg){ b = addWall(s.o, s.seg, s.seg.ang, s.w, s.k==='road'); maxW=Math.max(maxW,s.w|0); if(s.b>=1) finishBuilding(b); else b.built=s.b; }
     else { b = addBuilding(s.k, s.o, s.x, s.z, s.b>=1); if(s.b<1){ b.built=s.b; b.mesh.scale.y=.25+.75*s.b; } if(b.kind==='tc' && b.built>=1){ claimRegion(b); const p=G.players[b.owner]; if(!p.tc) p.tc=b; } }
-    b.hp = s.hp; b.slow = !!s.s; if(s.q) b.queue = s.q.slice();
+    b.hp = s.hp; b.slow = !!s.s; if(s.r) b.recv=s.r; if(s.q) b.queue = s.q.slice();
   }
   WALL_ID = Math.max(WALL_ID, maxW+1);
   for(const s of sv.units){ G.nextSex = s.sx; const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.g){ u.grow=s.g[1]; setStage(u,s.g[0]); } if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; }
@@ -254,6 +254,9 @@ function drawPanel(){
     const b = G.selB, d = BUILD[b.kind];
     let h = `<div class="info"><b>${d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):'Gegner ('+COLNAMES[b.owner]+')'}</small></div>`;
     if(b.owner===0 && homeCap(b)) h += `<div class="info"><small>${residentsTxt(b)}</small></div>`;
+    if(b.owner===0 && b.built>=1 && d.drop){ const R=b.recv||{}, keys=d.drop.filter(k=>k in RES_DE);
+      const chip=(o)=>keys.map(k=>`<span class="c">${ICON[k]||''}${Math.floor(o[k]||0)}</span>`).join('');
+      h += `<div class="store"><div><small>Hier abgegeben</small><span class="ac">${chip(R)}</span></div><div><small>Vorrat deines Volkes</small><span class="ac">${chip(G.players[0].res)}</span></div></div>`; }
     if(b.owner===0 && b.built>=1 && b.kind==='tc'){
       const q = b.queue.length, hn=helpers(b).length, tm=Math.round((trainMul(b)-1)*100);
       h += `<div class="info"><small>Tempo ${tm?'+'+tm+' %':'normal'} · Hütten im Gebiet +5 % je Hütte · Helfer +10 %</small></div>`;
@@ -2287,7 +2290,7 @@ function updateWorker(u,dt){
       const b = dropoffFor(u);
       if(!b){ u.state='idle'; break; }
       if(near(u,b.x,b.z,b.size*.5+1.1)){
-        p.res[u.carry.type] += u.carry.amt; u.carry.amt=0; u.path=null;
+        p.res[u.carry.type] += u.carry.amt; b.recv=b.recv||{}; b.recv[u.carry.type]=(b.recv[u.carry.type]||0)+u.carry.amt; u.carry.amt=0; u.path=null; if(G.selB===b) drawPanelSoon();
         if(u.owner===0) updateHUD();
         const r = (u.target && u.target.alive && u.target.amt>0) ? u.target : nearestRes(u.lastType, u.x,u.z, 16, u.owner);
         if(r) cmdGather(u,r); else u.state='idle';
