@@ -73,12 +73,78 @@ html,body{margin:0;height:100%;background:#050814;color:var(--ink);overflow:hidd
 .seg button.on{background:var(--gold);color:#2b1a02;border-color:var(--gold2)}
 input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .acts{display:flex;gap:10px;margin-top:14px}
+.card.wide{width:min(860px,96vw)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.nats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+.nat{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 1px;min-height:44px;border:1.5px solid #e8b64a50;border-radius:9px;background:#0b1130;color:#fff7e2;cursor:pointer;font:700 13px "Barlow Semi Condensed",sans-serif}
+.nat svg{width:24px;height:29px;filter:drop-shadow(0 1px 2px #000a)}
+.nat span{font-size:11.5px;line-height:1.1;white-space:nowrap}
+.nat.on{border-color:var(--gold2);background:#3a2a08;box-shadow:0 0 0 2px var(--gold) inset}
+.bonus{margin-top:6px;min-height:2.6em;font-size:14px;color:#ffe9b0;text-align:center}
+.bonus b{color:var(--gold)}
+@media (orientation:landscape) and (min-width:560px){.cols{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
+ .card.wide .row{grid-template-columns:6.6em minmax(0,1fr);margin:6px 0}.seg button{min-height:34px}.card.wide .seg{flex-wrap:nowrap}.card.wide .seg button{padding:4px 3px;font-size:13.5px}}
+@media (max-width:480px){.nat span{font-size:9.5px}.nats{gap:3px}}
+@media (max-height:430px){.card.wide{padding:10px 14px}.card.wide h2{margin-bottom:6px;font-size:19px}.nat{padding:3px 1px}.nat svg{width:20px;height:24px}.acts{margin-top:8px}}
 .mis{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:6px 0;border:1.5px solid #e8b64a60;border-radius:10px;background:#0b1130}
 .mis b{font:800 18px "Cinzel",Georgia,serif;color:var(--gold);width:1.4em;text-align:center}
 .mis div{flex:1}.mis small{display:block;color:#fff9}
 .mis.lock{opacity:.45}
 .toast{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:10px;
   background:#0b1130ee;border:1.5px solid var(--gold);color:var(--gold2);font-weight:700;transition:opacity .3s;white-space:nowrap}
+
+
+/* ---------- Spiel ---------- */
+#game{background:#000;touch-action:none}
+#gc{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#sel-box{position:absolute;display:none;border:2px solid #ffe38a;background:#ffe38a22;pointer-events:none;border-radius:4px}
+#topbar{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:clamp(4px,1.2vw,12px);
+  padding:max(6px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 6px max(10px,env(safe-area-inset-left));
+  background:linear-gradient(180deg,#0a0f22e6,#0a0f2200);pointer-events:none}
+.rs{display:flex;align-items:center;gap:4px;padding:3px 9px 3px 5px;border-radius:20px;background:#0b1130d9;border:1.5px solid #e8b64a70;
+  font:700 15px "Barlow Semi Condensed",sans-serif;color:#fff7e2;min-width:62px}
+.rs svg{width:20px;height:20px}
+.rs.full{border-color:#ff6060;color:#ffb0b0}
+.age{margin-left:auto;font:700 14px "Cinzel",Georgia,serif;color:var(--gold2);text-shadow:0 1px 2px #000;white-space:nowrap}
+.age span{color:var(--gold)}
+.hb{pointer-events:auto;width:44px;height:44px;border-radius:12px;border:2px solid var(--gold);background:#0b1130e0;color:var(--gold2);display:grid;place-items:center;cursor:pointer;position:relative}
+.hb svg{width:24px;height:24px}
+.hb.dim{opacity:.5}
+.hb i{position:absolute;right:-6px;top:-6px;min-width:20px;height:20px;border-radius:10px;background:#e23b3b;color:#fff;font:700 12px/20px sans-serif;font-style:normal;text-align:center;padding:0 4px}
+#mini{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:10px;width:clamp(96px,30vh,150px);height:clamp(96px,30vh,150px);
+  border:2px solid var(--gold);border-radius:8px;box-shadow:0 4px 14px #000a;touch-action:none;background:#000}
+#bIdle{position:absolute;left:calc(max(10px,env(safe-area-inset-left)) + clamp(96px,30vh,150px) + 10px);bottom:62px}
+#bHome{position:absolute;left:calc(max(10px,env(safe-area-inset-left)) + clamp(96px,30vh,150px) + 10px);bottom:10px}
+#panel{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:10px;display:flex;align-items:stretch;gap:6px;
+  padding:6px;border-radius:12px;background:#0b1130e6;border:2px solid #e8b64a90;max-width:calc(100vw - 260px);flex-wrap:wrap;justify-content:flex-end}
+#panel.hidden{display:none}
+#panel .info{display:flex;flex-direction:column;justify-content:center;padding:0 8px;min-width:96px}
+#panel .info b{font:800 15px "Cinzel",Georgia,serif;color:var(--gold)}
+#panel .info small{font-size:13px;color:#ffe9b0;line-height:1.2}
+#panel .info.hint{max-width:300px}
+.ab{position:relative;width:74px;min-height:62px;border-radius:10px;border:1.5px solid #e8b64a;background:linear-gradient(180deg,#24306a,#111a40);color:#fff7e2;
+  font:700 12.5px "Barlow Semi Condensed",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;padding:3px}
+.ab:active{transform:translateY(2px)}
+.ab.lock{opacity:.55}
+.ab .ai{width:24px;height:24px;display:grid;place-items:center;font-size:18px}
+.ab .ai svg{width:24px;height:24px}
+.ab .ac{display:flex;gap:4px;font-size:11.5px;color:#ffe9b0}
+.ab .c{display:flex;align-items:center;gap:1px}.ab .c svg{width:13px;height:13px}
+.ab .q{position:absolute;right:-6px;top:-6px;min-width:20px;height:20px;border-radius:10px;background:var(--gold);color:#2b1a02;font:800 12px/20px sans-serif;font-style:normal}
+#panel .bar{flex-basis:100%;height:6px;border-radius:3px;background:#0006;overflow:hidden}
+#panel .bar div{height:100%;background:linear-gradient(90deg,#fff3b0,#e8b64a)}
+#placebar{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:10px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:#0b1130e6;border:2px solid var(--gold)}
+#placebar.hidden{display:none}
+#placebar span{color:#ffe9b0;font-weight:700;font-size:14px}
+.pb{width:54px;height:48px;border-radius:10px;font:800 24px sans-serif;cursor:pointer;border:2px solid #fff6}
+.pb.ok{background:#2e9b47;color:#fff}.pb.no{background:#a8323a;color:#fff}.pb.dim{opacity:.45}
+#pause{position:absolute;inset:0;display:grid;place-items:center;background:#02040cb8}
+#pause.hidden{display:none}
+.pcard{width:min(320px,86vw);display:flex;flex-direction:column;gap:12px;padding:18px;border:2px solid var(--gold);border-radius:14px;background:linear-gradient(180deg,#18224a,#0a0f26)}
+.pcard h2{margin:0;text-align:center;font:800 24px "Cinzel",Georgia,serif;color:var(--gold)}
+#rotate{display:none}
+@media (orientation:portrait){#rotate{position:absolute;inset:0;display:grid;place-items:center;background:#0a0f22f2;z-index:5;
+  font:800 20px "Cinzel",Georgia,serif;color:var(--gold2);text-align:center;padding:30px}}
 
 @media (orientation:portrait){
   #menu::before{content:"";position:absolute;inset:-40px;background:url(menue.jpg) 30% center/cover;filter:blur(18px) brightness(.6)}
@@ -101,6 +167,8 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   </div>
 </section>
 
+<section id="game" class="screen hidden"></section>
+
 <section id="menu" class="screen hidden">
   <div class="bg"></div><div class="shade"></div>
   <div class="panel">
@@ -113,15 +181,20 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.00</div>
+  <div class="ver">Earth Empire · V1.01</div>
 
-  <div class="dlg hidden" id="dPlay"><div class="card">
+  <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
-    <div class="row"><label>Karte</label><div class="seg" data-k="map"><button>Klein</button><button>Mittel</button><button>Groß</button></div></div>
-    <div class="row"><label>Gegner</label><div class="seg" data-k="foes"><button>1</button><button>2</button><button>3</button></div></div>
-    <div class="row"><label>Schwierigkeit</label><div class="seg" data-k="diff"><button>Leicht</button><button>Mittel</button><button>Schwer</button></div></div>
-    <div class="row"><label>Start-Zeitalter</label><div class="seg" data-k="age"><button>Steinzeit</button><button>Bronzezeit</button><button>Mittelalter</button></div></div>
-    <div class="acts"><button class="btn small" data-close>Zurück</button><button class="btn main small" id="bStart">Schlacht starten</button></div>
+    <div class="cols">
+      <div><div class="nats" id="nats"></div><div class="bonus" id="bonus"></div></div>
+      <div>
+        <div class="row"><label>Karte</label><div class="seg" data-k="map"><button>Klein</button><button>Mittel</button><button>Groß</button></div></div>
+        <div class="row"><label>Gegner</label><div class="seg" data-k="foes"><button>1</button><button>2</button><button>3</button></div></div>
+        <div class="row"><label>Schwierigkeit</label><div class="seg" data-k="diff"><button>Leicht</button><button>Mittel</button><button>Schwer</button></div></div>
+        <div class="row"><label>Zeitalter</label><div class="seg" data-k="age"><button>Steinzeit</button><button>Bronzezeit</button><button>Mittelalter</button></div></div>
+        <div class="acts"><button class="btn small" data-close>Zurück</button><button class="btn main small" id="bStart">Schlacht starten</button></div>
+      </div>
+    </div>
   </div></div>
 
   <div class="dlg hidden" id="dCamp"><div class="card">
@@ -147,7 +220,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 /* ---------- Einstellungen ---------- */
-const DEF={map:1,foes:0,diff:0,age:0,gfx:1,music:60,sfx:80,vib:1,mute:0};
+const DEF={civ:0,map:1,foes:0,diff:0,age:0,gfx:1,music:60,sfx:80,vib:1,mute:0};
 let S={...DEF};
 try{Object.assign(S,JSON.parse(localStorage.getItem('ee_settings')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('ee_settings',JSON.stringify(S))}catch(e){}};
@@ -258,6 +331,36 @@ $$('input[type=range]').forEach(r=>{
   r.addEventListener('change',click);
 });
 
+// Zivilisationen (Wappen-Banner)
+const B=(bg,sym)=>'<defs><clipPath id="cp"><path d="M0 0H30V34L15 27L0 34Z"/></clipPath></defs><g clip-path="url(#cp)">'+bg+sym+'</g><path d="M0 0H30V34L15 27L0 34Z" fill="none" stroke="#f5d27a" stroke-width="1.4"/>';
+const R=c=>'<rect width="30" height="36" fill="'+c+'"/>';
+const sun=(cx,cy,r,c)=>{let o='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+c+'"/>';for(let i=0;i<12;i++){const a=i*Math.PI/6;o+='<line x1="'+(cx+Math.cos(a)*(r+1))+'" y1="'+(cy+Math.sin(a)*(r+1))+'" x2="'+(cx+Math.cos(a)*(r+3.5))+'" y2="'+(cy+Math.sin(a)*(r+3.5))+'" stroke="'+c+'" stroke-width="1.2"/>'}return o};
+const CIVS=[
+ ['Osmanen','Kanonen und Belagerung +20 %, Janitscharen als Elite-Infanterie',B(R('#c8102e'),'<circle cx="13" cy="14" r="6" fill="#fff"/><circle cx="14.8" cy="14" r="4.9" fill="#c8102e"/><path d="M21.5 14l-4 1.3 2.5-3.4v4.2l-2.5-3.4z" fill="#fff"/>')],
+ ['Römer','Legionäre +15 % Angriff, Einheiten auf Straßen schneller',B(R('#8b0d12'),'<text x="15" y="17" font-size="7" font-family="Georgia,serif" font-weight="700" fill="#f5c542" text-anchor="middle">SPQR</text><path d="M8 21h14" stroke="#f5c542" stroke-width="1"/>')],
+ ['Griechen','Phalanx (Speerträger) stärker, Forschung schneller',B(R('#1d4fa0'),sun(15,14,4,'#f5c542'))],
+ ['Ägypter','Wunder und Tempel bauen schneller, Streitwagen stärker',B(R('#e0b440')+'<rect y="4" width="30" height="3" fill="#1d4fa0"/><rect y="10" width="30" height="3" fill="#1d4fa0"/><rect y="16" width="30" height="3" fill="#1d4fa0"/>','<path d="M15 6l7 15H8z" fill="#f7e2a0" stroke="#7a5310"/>')],
+ ['Babylonier','Universität und Forschung günstiger',B(R('#1f5fb0'),'<path d="M15 6l2 6 6-2-4 5 4 5-6-2-2 6-2-6-6 2 4-5-4-5 6 2z" fill="#f5c542"/>')],
+ ['Germanen','Gebäude stabiler, Krieger mit mehr Leben',B(R('#2f5d2a'),'<path d="M9 8l12 14M21 8L9 22" stroke="#d9d9d9" stroke-width="2.4" stroke-linecap="round"/><path d="M7 8q3-3 5 1M23 8q-3-3-5 1" stroke="#d9d9d9" stroke-width="2" fill="none"/>')],
+ ['Briten','Langbogenschützen mit mehr Reichweite, starke Flotte',B(R('#b5121b'),'<path d="M8 19V11l3.5 4L15 9l3.5 6L22 11v8z" fill="#f5c542"/><rect x="8" y="19" width="14" height="2.5" fill="#f5c542"/>')],
+ ['Franken','Ritter und Reiter schneller',B(R('#1b3d8f'),'<ellipse cx="15" cy="12" rx="2" ry="5.5" fill="#f5c542"/><ellipse cx="10.5" cy="15" rx="3.6" ry="1.8" transform="rotate(-35 10.5 15)" fill="#f5c542"/><ellipse cx="19.5" cy="15" rx="3.6" ry="1.8" transform="rotate(35 19.5 15)" fill="#f5c542"/><rect x="10" y="17" width="10" height="1.8" fill="#f5c542"/><path d="M15 19v4" stroke="#f5c542" stroke-width="2"/>')],
+ ['Wikinger','Schiffe schneller, Plünderer bringen Beute',B('<rect width="30" height="36" fill="#f2efe6"/><rect x="0" width="6" height="36" fill="#b3202a"/><rect x="12" width="6" height="36" fill="#b3202a"/><rect x="24" width="6" height="36" fill="#b3202a"/>','<circle cx="15" cy="14" r="6" fill="#1b2a44" stroke="#f5c542"/>')],
+ ['Mongolen','Reiterbogenschützen, sehr schnelle Kavallerie',B(R('#1673c7'),'<circle cx="15" cy="10" r="3" fill="#f5c542"/><path d="M10 15h10l-5 3z" fill="#f5c542"/><rect x="10" y="20" width="10" height="2" fill="#f5c542"/>')],
+ ['Chinesen','Arbeiter sammeln 15 % schneller',B(R('#c41e1e'),'<circle cx="15" cy="14" r="7" fill="none" stroke="#f5c542" stroke-width="1.6"/><path d="M11 14h8M15 10v8" stroke="#f5c542" stroke-width="1.6"/>')],
+ ['Japaner','Samurai stark im Nahkampf, Schiffe günstiger',B(R('#f4efe4'),'<circle cx="15" cy="14" r="6.5" fill="#b8002a"/>')],
+ ['Koreaner','Türme und Mauern stärker',B(R('#f4f1ea'),'<circle cx="15" cy="14" r="6.5" fill="#1a4b9a"/><path d="M8.5 14a6.5 6.5 0 0 1 13 0a3.25 3.25 0 0 1-6.5 0a3.25 3.25 0 0 0-6.5 0z" fill="#c8102e"/>')],
+ ['Azteken','Krieger werden durch Siege stärker',B(R('#138a7d'),sun(15,14,4,'#e74c3c'))],
+ ['Inka','Goldminen ergiebiger',B(['#d62828','#f77f00','#fcbf49','#2a9d8f','#1d6fb8','#6a4c93'].map((c,i)=>'<rect y="'+(i*6)+'" width="30" height="6" fill="'+c+'"/>').join(''),'<circle cx="15" cy="14" r="5" fill="#f5c542" stroke="#7a5310"/>')],
+ ['Maya','Tempel heilen schneller',B(R('#2e7d4f'),'<path d="M7 23h16v-3h-2v-3h-2v-3h-2v-3h-4v3h-2v3H9v3H7z" fill="#e8d9a8"/>')],
+ ['Russen','Einheiten billiger, harter Winter schwächt Gegner',B(R('#7a1020'),'<path d="M15 6q5 4 4 8q0 2-1 3h-6q-1-1-1-3q-1-4 4-8z" fill="#f5c542"/><rect x="11" y="17" width="8" height="6" fill="#f5c542"/><path d="M15 3v4" stroke="#f5c542" stroke-width="1.2"/>')],
+ ['Zulu','Infanterie sehr schnell und günstig',B(R('#c9a46a'),'<ellipse cx="15" cy="14" rx="5.5" ry="9" fill="#f2f2f2" stroke="#222"/><path d="M15 5v18" stroke="#222" stroke-width="1.6"/><ellipse cx="12.5" cy="11" rx="1.3" ry="2" fill="#222"/><ellipse cx="17.5" cy="17" rx="1.3" ry="2" fill="#222"/>')]
+];
+if(S.civ==null||S.civ>=CIVS.length)S.civ=0;
+$('#nats').innerHTML=CIVS.map((c,i)=>`<button class="nat" data-i="${i}"><svg viewBox="0 0 30 36">${c[2].replace(/cp/g,'cp'+i)}</svg><span>${c[0]}</span></button>`).join('');
+const drawCiv=()=>{$$('.nat').forEach((b,i)=>b.classList.toggle('on',i===S.civ));const c=CIVS[S.civ];$('#bonus').innerHTML='<b>'+c[0]+':</b> '+c[1]};
+$('#nats').addEventListener('click',e=>{const b=e.target.closest('.nat');if(!b)return;S.civ=+b.dataset.i;save();drawCiv();click();vib(10)});
+drawCiv();
+
 // Kampagne
 const MIS=[['Das erste Feuer','Steinzeit · Gründe dein Dorf'],['Der Bronzepakt','Bronzezeit · Verteidige den Tempel'],
   ['Die Belagerung','Mittelalter · Erobere die Burg'],['Neue Welten','Renaissance · Überquere das Meer'],
@@ -266,7 +369,9 @@ $('#mlist').innerHTML=MIS.map((m,i)=>`<div class="mis${i?' lock':''}"><b>${i+1}<
 $('#mlist').addEventListener('click',e=>{const m=e.target.closest('.mis');if(!m)return;
   click();toast(m.classList.contains('lock')?'Erst die vorherige Mission schaffen':'Missionen kommen im nächsten Update')});
 
-$('#bStart').addEventListener('click',()=>{fanfare();vib(40);toast('Das Schlachtfeld wird als Nächstes gebaut')});
+$('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
+  if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
+window.EE={S,CIVS,click,vib,toast,save,fanfare,showMenu:()=>{$('#menu').classList.remove('hidden')},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bTut').addEventListener('click',()=>{click();toast('Tutorial kommt mit dem Schlachtfeld')});
 
 // Ton & Vollbild
@@ -286,5 +391,7 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
+<script src="three.min.js"></script>
+<script src="game.js"></script>
 </body>
 </html>
