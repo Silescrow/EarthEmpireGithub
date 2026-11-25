@@ -46,15 +46,17 @@ let G = null; // aktives Spiel
 /* ============================================================
    START / STOPP
    ============================================================ */
-async function start(){
+async function start(sv){
   if(G) stop();
   EE.toast('Die Welt wird geladen …');
   await Promise.all([loadModels(EE.S.gfx|0), loadWorldMask()]);
   EE.hideMenu();
   const S = EE.S;
-  const NX = [3840,5760,8320,12800][S.map|0] || 5760, HS = NX<=6000?8:16, NZ = Math.round(NX*(LAT0-LAT1)/360/TILE)*TILE;
-  const civ = EE.CIVS[S.civ] || EE.CIVS[0];
-  const foes = clamp(S.ai||3, 1, 17);
+  const mapI = sv ? sv.map : S.map|0;
+  const NX = [3840,5760,8320,12800][mapI] || 5760, HS = NX<=6000?8:16, NZ = Math.round(NX*(LAT0-LAT1)/360/TILE)*TILE;
+  const byName = n => EE.CIVS.find(c=>c[0]===n);
+  const civ = sv ? byName(sv.civs[0]) : (EE.CIVS[S.civ] || EE.CIVS[0]);
+  const foes = sv ? sv.civs.length-1 : clamp(S.ai||3, 1, 17);
   // Gegner möglichst weit weg wählen (bei wenigen Gegnern nie Nachbarn)
   const dist = (a,b)=>{ const p=CIV_POS[a[0]]||[0,0], q=CIV_POS[b[0]]||[0,0]; let dl=Math.abs(p[0]-q[0]); return Math.hypot(dl, (p[1]-q[1])*1.3); };
   const chosen=[civ], pool=EE.CIVS.filter(c=>c!==civ);
@@ -63,9 +65,9 @@ async function start(){
     const pick = pool[(Math.random()*pool.length)|0];
     chosen.push(pick); pool.splice(pool.indexOf(pick),1);
   }
-  const others = chosen.slice(1);
+  const others = sv ? sv.civs.slice(1).map(byName) : chosen.slice(1);
   const gfx = S.gfx|0;
-  G = { NX, NZ, HS, foes, civ, gfx, seed:(Math.random()*1e9)|0, t:0, units:[], builds:[], res:[], deer:[],
+  G = { NX, NZ, HS, foes, civ, gfx, seed:sv?sv.seed:(Math.random()*1e9)|0, map:mapI, t:0, resMod:sv?sv.res:null, units:[], builds:[], res:[], deer:[],
         players:[], sel:[], selB:null, place:null, running:true, raf:0, msgT:0 };
   G.rand = rng(G.seed);
   [civ, ...others.slice(0,foes)].forEach((c,i)=>G.players.push({id:i, civ:c, res:{...START_RES}, pop:0, popCap:0, tc:null, color:COLORS[i]}));
@@ -73,13 +75,16 @@ async function start(){
   buildUI();
   initRenderer();
   genWorld();
+  if(sv) applySave(sv);
   buildOverview();
   for(const b of G.builds) if(b.kind==='tc' && b.built>=1) claimRegion(b);
   buildBorders();
+  G.saveT = 20;
   setTimeout(()=>{ if(G) drawMinimap(); }, 50);
   initInput();
   updateHUD(); drawPanel();
-  centerCamOn(G.players[0].tc.x, G.players[0].tc.z);
+  if(G.loadCam){ Object.assign(G.camS,{x:G.loadCam.x, z:G.loadCam.z, dist:G.loadCam.d, yaw:G.loadCam.y}); EE.toast('Spielstand geladen'); }
+  else if(G.players[0].tc) centerCamOn(G.players[0].tc.x, G.players[0].tc.z);
   updateCam(); updateTiles(true);
   $('#game').classList.remove('hidden');
   let last = performance.now();
@@ -96,9 +101,57 @@ async function start(){
   EE.music('calm');
 }
 
+/* ============================================================
+   SPIELSTAND: wird automatisch gespeichert (alle 30 s, beim Menü und beim Schließen der App).
+   Die Welt selbst entsteht aus dem Seed neu, gespeichert werden nur die Änderungen.
+   ============================================================ */
+const SAVE_KEY = 'ee_save_v1';
+const resKey = (x,z) => Math.round(x*4)+','+Math.round(z*4);
+const r1 = v => Math.round(v*100)/100;
+function saveGame(){
+  if(!G || G.over || !G.players[0].tc && !G.builds.some(b=>b.owner===0)) return;
+  try{
+    const res = Object.assign({}, G.resMod||{});
+    for(const r of G.res) if(!r.deer && (r.amt<r.max || !r.alive)) res[resKey(r.x,r.z)] = r.alive ? Math.round(r.amt) : 0;
+    const sv = { v:1, date:Date.now(), map:G.map, seed:G.seed, t:Math.round(G.t), civs:G.players.map(p=>p.civ[0]),
+      res, players:G.players.map(p=>({res:p.res, ...(p.expT!=null?{expT:p.expT}:{})})),
+      dip:Object.fromEntries(Object.entries(G.dip).map(([k,d])=>[k,{state:d.state, mood:Math.round(d.mood), ask:Math.round(d.ask||0)}])),
+      builds:G.builds.filter(b=>!b.dead).map(b=>({k:b.kind, o:b.owner, x:r1(b.x), z:r1(b.z), b:r1(b.built), hp:Math.round(b.hp), s:b.slow?1:0,
+        q:(b.queue||[]).length?b.queue.slice():undefined, w:b.wallId||undefined, seg:b.seg||undefined})),
+      units:G.units.filter(u=>!u.dead).map(u=>({k:u.kind, o:u.owner, x:r1(u.x), z:r1(u.z), hp:Math.round(u.hp), c:u.carry&&u.carry.amt?[u.carry.type,u.carry.amt]:undefined})),
+      cam:{x:r1(G.camS.x), z:r1(G.camS.z), d:r1(G.camS.dist), y:r1(G.camS.yaw)} };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(sv));
+  }catch(e){ console.warn('Speichern fehlgeschlagen', e); }
+}
+function readSave(){ try{ const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null'); return s && s.v===1 ? s : null; }catch(e){ return null; } }
+function applySave(sv){
+  G.quiet = true;
+  // Startaufbau entfernen, dann den gespeicherten Stand aufbauen
+  for(const b of G.builds){ G.scene.remove(b.mesh); G.scene.remove(b.ring); for(const k of b.cells||[]) if(k>=0) G.grid[k]=0; }
+  for(const u of G.units){ G.scene.remove(u.mesh); G.scene.remove(u.ring); if(u.bar) G.scene.remove(u.bar); }
+  G.builds.length=0; G.units.length=0; G.reg.owner.clear();
+  G.players.forEach((p,i)=>{ p.pop=0; p.popCap=0; p.tc=null; Object.assign(p, sv.players[i]||{}); p.res={...p.res}; });
+  for(const [k,d] of Object.entries(sv.dip||{})) if(G.dip[k]) Object.assign(G.dip[k], d);
+  let maxW = 0;
+  for(const s of sv.builds){
+    let b;
+    if(s.seg){ b = addWall(s.o, s.seg, s.seg.ang, s.w, s.k==='road'); maxW=Math.max(maxW,s.w|0); if(s.b>=1) finishBuilding(b); else b.built=s.b; }
+    else { b = addBuilding(s.k, s.o, s.x, s.z, s.b>=1); if(s.b<1){ b.built=s.b; b.mesh.scale.y=.25+.75*s.b; } if(b.kind==='tc' && b.built>=1){ claimRegion(b); const p=G.players[b.owner]; if(!p.tc) p.tc=b; } }
+    b.hp = s.hp; b.slow = !!s.s; if(s.q) b.queue = s.q.slice();
+  }
+  WALL_ID = Math.max(WALL_ID, maxW+1);
+  for(const s of sv.units){ const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; }
+  G.t = sv.t||0;
+  if(sv.cam) G.loadCam = sv.cam;
+  G.quiet = false;
+}
+function loadGame(){ const sv=readSave(); if(!sv){ EE.toast('Kein Spielstand gefunden'); return; } start(sv); }
+addEventListener('pagehide', ()=>saveGame());
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveGame(); });
+
 function toMenu(){
   if(!G) return;
-  G.inMenu=true; G.paused=true; $('#pause').classList.add('hidden');
+  G.inMenu=true; G.paused=true; $('#pause').classList.add('hidden'); saveGame();
   $('#game').classList.add('hidden'); EE.ambient({wind:.3,waves:0,birds:0,fire:0}); EE.music('theme'); EE.showMenu(true);
 }
 function resume(){
@@ -352,9 +405,9 @@ function destroyBuilding(b){
 function checkEnd(){
   if(G.over) return;
   const has = i => G.builds.some(b=>b.owner===i && b.kind!=='road') || G.units.some(u=>u.owner===i);
-  if(!has(0)){ G.over=true; setTimeout(()=>{ EE.toast('Niederlage – dein Volk ist untergegangen'); EE.sfx('error'); }, 400); return; }
+  if(!has(0)){ G.over=true; try{localStorage.removeItem(SAVE_KEY)}catch(e){} setTimeout(()=>{ EE.toast('Niederlage – dein Volk ist untergegangen'); EE.sfx('error'); }, 400); return; }
   for(let i=1;i<G.players.length;i++){ const p=G.players[i]; if(!p.out && !has(i)){ p.out=true; EE.toast('Die '+p.civ[0]+' sind besiegt!'); EE.sfx('fanfare',.8); } }
-  if(G.players.slice(1).every(p=>p.out)){ G.over=true; setTimeout(()=>{ EE.toast('Sieg! Alle Gegner sind besiegt'); EE.sfx('fanfare'); }, 600); }
+  if(G.players.slice(1).every(p=>p.out)){ G.over=true; try{localStorage.removeItem(SAVE_KEY)}catch(e){} setTimeout(()=>{ EE.toast('Sieg! Alle Gegner sind besiegt'); EE.sfx('fanfare'); }, 600); }
 }
 // KI: Kriegerhütte bauen, Krieger ausbilden, im Krieg angreifen
 function updateAIWar(p, mine, tc){
@@ -1870,6 +1923,7 @@ function addRes(type,x,z){
   const r = {type, kind, amt, max:amt, x, z, mesh:m, alive:true, r:.6};
   G.grid[cellIdx(x,z)] = 1;
   G.res.push(r);
+  if(G.resMod){ const k=resKey(x,z); if(k in G.resMod){ r.amt=G.resMod[k]; if(r.amt<=0) removeRes(r); } }
   return r;
 }
 function spawnDeer(x,z,kind){
@@ -2187,9 +2241,10 @@ function finishBuilding(b){
   if(b.wallId){
     for(const u of G.units) if(u.site===b){ const next=G.builds.filter(o=>o.wallId===b.wallId && o.built<1).sort((p,q)=>Math.hypot(p.x-u.x,p.z-u.z)-Math.hypot(q.x-u.x,q.z-u.z))[0];
       if(next) cmdBuild(u,next); else { u.site=null; u.state='idle'; autoJob(u); } }
-    if(b.owner===0 && !G.builds.some(o=>o.wallId===b.wallId && o.built<1)){ EE.toast(b.kind==='road'?'Weg fertig – hier laufen alle schneller':'Palisade fertig gebaut'); EE.vib(25); EE.sfx('done',.8); }
+    if(!G.quiet && b.owner===0 && !G.builds.some(o=>o.wallId===b.wallId && o.built<1)){ EE.toast(b.kind==='road'?'Weg fertig – hier laufen alle schneller':'Palisade fertig gebaut'); EE.vib(25); EE.sfx('done',.8); }
     return;
   }
+  if(G.quiet) return;
   if(b.owner===0){ EE.toast(d.name+' fertig gebaut'); EE.vib(25); EE.sfx('done',.8); updateHUD(); }
   for(const u of G.units) if(u.site===b){ u.site=null; u.state='idle'; autoJob(u); }
 }
@@ -2254,6 +2309,7 @@ function updateAI(p,dt){
    ============================================================ */
 function update(dt){
   G.t += dt;
+  if((G.saveT-=dt)<=0){ G.saveT=30; saveGame(); }
   for(const u of G.units.slice()) updateWorker(u,dt);
   updateArrows(dt); if(G.alarmT) G.alarmT=Math.max(0,G.alarmT-dt);
   for(const d of G.deer) updateDeer(d,dt);
@@ -2641,7 +2697,7 @@ function addWall(owner, c, ang, id, road){
   if(!c.gate && !road) for(const k of c.ks) if(k>=0) G.grid[k]=1;
   const ring = new T.Mesh(new T.RingGeometry(.55,.68,20), new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.85, depthWrite:false}));
   ring.rotation.x=-Math.PI/2; ring.position.set(c.x, m.position.y+.08, c.z); ring.visible=false; G.scene.add(ring);
-  const b = {kind, owner, x:c.x, z:c.z, size:1, mesh:m, ring, cells:(c.gate||road)?[]:c.ks.filter(k=>k>=0), roadCells:road?c.ks.filter(k=>k>=0):null, built:0, hp:1, queue:[], qT:0, wallId:id};
+  const b = {kind, owner, x:c.x, z:c.z, size:1, mesh:m, ring, cells:(c.gate||road)?[]:c.ks.filter(k=>k>=0), roadCells:road?c.ks.filter(k=>k>=0):null, built:0, hp:1, queue:[], qT:0, wallId:id, seg:{ks:c.ks, x:c.x, z:c.z, len:c.len, gate:!!c.gate, ang}};
   if(!road) m.scale.y=.25;
   m.traverse(o=>{ if(o.material && o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=road?.35:.55; } });
   G.builds.push(b);
@@ -2808,5 +2864,5 @@ function endPlace(){
   G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();

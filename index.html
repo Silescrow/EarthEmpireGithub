@@ -221,7 +221,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.17</div>
+    <div class="ver2">Version 1.18</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -241,7 +241,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.17</div>
+  <div class="ver">Earth Empire · V1.18</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -340,7 +340,7 @@ function ready(){
 function enter(){
   if(!audioOn){ initAudio(); EEAudio.play('theme'); }
   vib(30);
-  $('#load').classList.add('hidden');$('#menu').classList.remove('hidden');
+  $('#load').classList.add('hidden');$('#menu').classList.remove('hidden');EE.showMenu(false);
 }
 
 /* ---------- Menü ---------- */
@@ -413,8 +413,8 @@ $('#mlist').addEventListener('click',e=>{const m=e.target.closest('.mis');if(!m)
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{$('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!running); $('[data-open=dPlay]').textContent=running?'Neues Spiel':'Spielen';},hideMenu:()=>{$('#menu').classList.add('hidden')}};
-$('#bResume').addEventListener('click',()=>{click(); if(window.EEGame && EEGame.running()) EEGame.resume();});
+window.EE={S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+$('#bResume').addEventListener('click',()=>{click(); if(!window.EEGame) return; if(EEGame.running()) EEGame.resume(); else EEGame.load();});
 $('#bTut').addEventListener('click',()=>{click();toast('Tutorial kommt mit dem Schlachtfeld')});
 
 // Ton & Vollbild
