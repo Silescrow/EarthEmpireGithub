@@ -28,15 +28,15 @@ const RES = ['food','wood','stone','gold'];
 const RES_DE = {food:'Nahrung',wood:'Holz',stone:'Stein',gold:'Gold',metal:'Metall',oil:'Öl'};
 const BUILD = {
   tc:    {name:'Stadtzentrum', size:6, cost:{wood:250, stone:100, food:100}, time:60, hp:1200, drop:['food','wood','stone','gold'], pop:5},
-  house: {name:'Hütte', size:3, cost:{wood:30}, time:14, hp:300, pop:5},
+  house: {name:'Hütte', size:3, cost:{wood:30}, time:14, hp:300, pop:4},
   wall:  {name:'Palisade', size:1, cost:{wood:4}, time:3, hp:250},
   gate:  {name:'Tor', size:1, cost:{wood:15}, time:8, hp:500},
   store: {name:'Lager', size:3, cost:{wood:50}, time:18, hp:500, drop:['wood','stone','gold','food']},
   road:  {name:'Weg', size:1, cost:{}, time:2.2, hp:100},
   barracks:{name:'Kriegerhütte', size:4, cost:{wood:120, stone:40}, time:35, hp:900},
 };
-const WORKER_COST = {food:50};
-const WORKER_TIME = 10;
+const WORKER_COST = {food:60};
+const WORKER_TIME = 18;
 const CARRY = 10;
 const START_RES = {food:200, wood:200, stone:100, gold:50};
 
@@ -118,7 +118,7 @@ function saveGame(){
       dip:Object.fromEntries(Object.entries(G.dip).map(([k,d])=>[k,{state:d.state, mood:Math.round(d.mood), ask:Math.round(d.ask||0)}])),
       builds:G.builds.filter(b=>!b.dead).map(b=>({k:b.kind, o:b.owner, x:r1(b.x), z:r1(b.z), b:r1(b.built), hp:Math.round(b.hp), s:b.slow?1:0,
         q:(b.queue||[]).length?b.queue.slice():undefined, w:b.wallId||undefined, seg:b.seg||undefined})),
-      units:G.units.filter(u=>!u.dead).map(u=>({k:u.kind, o:u.owner, x:r1(u.x), z:r1(u.z), hp:Math.round(u.hp), c:u.carry&&u.carry.amt?[u.carry.type,u.carry.amt]:undefined})),
+      units:G.units.filter(u=>!u.dead).map(u=>({k:u.kind, o:u.owner, x:r1(u.x), z:r1(u.z), hp:Math.round(u.hp), c:u.carry&&u.carry.amt?[u.carry.type,u.carry.amt]:undefined, sx:u.sex, g:u.kind==='kid'?[u.stage,Math.round(u.grow)]:undefined})),
       cam:{x:r1(G.camS.x), z:r1(G.camS.z), d:r1(G.camS.dist), y:r1(G.camS.yaw)} };
     localStorage.setItem(SAVE_KEY, JSON.stringify(sv));
   }catch(e){ console.warn('Speichern fehlgeschlagen', e); }
@@ -140,7 +140,7 @@ function applySave(sv){
     b.hp = s.hp; b.slow = !!s.s; if(s.q) b.queue = s.q.slice();
   }
   WALL_ID = Math.max(WALL_ID, maxW+1);
-  for(const s of sv.units){ const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; }
+  for(const s of sv.units){ G.nextSex = s.sx; const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.g){ u.grow=s.g[1]; setStage(u,s.g[0]); } if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; }
   G.t = sv.t||0;
   if(sv.cam) G.loadCam = sv.cam;
   G.quiet = false;
@@ -235,7 +235,7 @@ function updateHUD(){
   for(const r of RES) $('#r-'+r+' b').textContent = Math.floor(p.res[r]);
   $('#r-pop b').textContent = p.pop+'/'+p.popCap;
   $('#r-pop').classList.toggle('full', p.pop>=p.popCap);
-  const idle = G.units.filter(u=>u.owner===0 && u.state==='idle').length;
+  const idle = G.units.filter(u=>u.owner===0 && u.state==='idle' && u.kind!=='kid' && !u.inside).length;
   $('#idleN').textContent = idle; $('#bIdle').classList.toggle('dim', idle===0);
 }
 
@@ -253,8 +253,12 @@ function drawPanel(){
   if(G.selB){
     const b = G.selB, d = BUILD[b.kind];
     let h = `<div class="info"><b>${d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):'Gegner ('+COLNAMES[b.owner]+')'}</small></div>`;
+    if(b.owner===0 && homeCap(b)) h += `<div class="info"><small>${residentsTxt(b)}</small></div>`;
     if(b.owner===0 && b.built>=1 && b.kind==='tc'){
-      const q = b.queue.length;
+      const q = b.queue.length, hn=helpers(b).length, tm=Math.round((trainMul(b)-1)*100);
+      h += `<div class="info"><small>Tempo ${tm?'+'+tm+' %':'normal'} · Hütten im Gebiet +5 % je Hütte · Helfer +10 %</small></div>`;
+      h += `<button class="ab" data-a="helpin"><span class="ai">${ICON.pop}</span>Helfer rein<span class="ac">${hn}/${HELP_MAX}</span></button>`;
+      if(hn) h += `<button class="ab" data-a="helpout"><span class="ai">${ICON.pop}</span>Helfer raus<span class="ac">${hn}</span></button>`;
       h += `<button class="ab" data-a="worker"><span class="ai">${ICON.pop}</span>Arbeiter<span class="ac">${costText(WORKER_COST)}</span>${q?'<i class="q">'+q+'</i>':''}</button>`;
       h += `<button class="ab" data-a="dip"><span class="ai">${dipSVG()}</span>Diplomatie<span class="ac">Bündnis · Handel</span></button>`;
       h += `<button class="ab lock" data-a="age"><span class="ai"><svg viewBox="0 0 24 24"><path d="M12 3l8 9h-5v9H9v-9H4z" fill="#e8b64a"/></svg></span>Bronzezeit<span class="ac">${costText({food:500,wood:300})}</span></button>`;
@@ -307,6 +311,100 @@ function unitPic(u){
     (u.kind==='spear'?'<path d="M20 26L21 3" stroke="#7a5230" stroke-width="1.4"/><path d="M21 1l-1.6 3.4h3.2z" fill="#9aa3ad"/>':u.kind==='club'?'<path d="M19 26l2-12" stroke="#7a5230" stroke-width="1.8"/><path d="M18 11l5 1.5-1 3-5-1.5z" fill="#8a8f96"/>':u.kind==='bow'?'<path d="M3 6q-3 9 0 18" stroke="#7a5230" stroke-width="1.5" fill="none"/><path d="M3 6v18" stroke="#ddd" stroke-width=".5"/>':'')+`</svg><i style="width:${Math.round(20*(u.hp==null?1:u.hp/(u.maxHp||1)))}px"></i>`;
 }
 /* ============================================================
+   VOLK: Familien, Kinder und Hütten
+   Leute wohnen in Hütten (4 Plätze) oder im Stadtzentrum (5). Wo Platz ist und Nahrung da ist,
+   kommen Babys zur Welt. Babys werden zu Kindern, Kinder zu Arbeitern – die müssen dann
+   in eine eigene Hütte ziehen. Ohne Platz in einer Hütte arbeiten sie nicht.
+   ============================================================ */
+const BABY_T = 60, CHILD_T = 120, BIRTH_T = 35, BIRTH_FOOD = 50;
+const homeCap = b => (b && !b.dead && b.built>=1 && (b.kind==='house'||b.kind==='tc')) ? BUILD[b.kind].pop : 0;
+function occupancy(){ const m=new Map(); for(const u of G.units) if(u.home && !u.dead) m.set(u.home,(m.get(u.home)||0)+1); return m; }
+function findHome(u, occ, avoid){
+  let best=null, bd=1e9;
+  for(const b of G.builds){ if(b.owner!==u.owner || b===avoid) continue; const c=homeCap(b); if(!c || (occ.get(b)||0)>=c) continue;
+    const d=Math.hypot(b.x-u.x,b.z-u.z); if(d<bd){ bd=d; best=b; } }
+  return best;
+}
+function residentsTxt(b){
+  let a=0,k=0,y=0; for(const u of G.units) if(u.home===b && !u.dead){ if(u.kind!=='kid') a++; else if(u.stage==='baby') y++; else k++; }
+  return `Bewohner: ${a} Erwachsene`+(k?`, ${k} Kind${k>1?'er':''}`:'')+(y?`, ${y} Baby${y>1?'s':''}`:'')+` (${a+k+y}/${homeCap(b)})`;
+}
+function setStage(u, st){
+  u.stage=st; const s = st==='baby' ? .42 : st==='child' ? .68 : 1;
+  u.mesh.scale.setScalar(s); u.speed = st==='baby' ? 1.1 : st==='child' ? 2.3 : UNIT.worker.speed;
+}
+function bornAt(b){
+  const p=G.players[b.owner]; p.res.food -= BIRTH_FOOD;
+  const a=G.rand()*6.28, r=b.size*.5+1;
+  G.nextSex = G.rand()<.5 ? 'm' : 'f';
+  const u = spawnWorker(b.owner, b.x+Math.cos(a)*r, b.z+Math.sin(a)*r, 'kid');
+  u.home=b; u.grow=0; setStage(u,'baby');
+  if(b.owner===0){ EE.toast(u.sex==='f' ? 'Ein Mädchen ist geboren!' : 'Ein Junge ist geboren!'); EE.sfx('trained',.5); updateHUD(); }
+}
+function growUp(u){
+  u.kind='worker'; u.hp=u.maxHp=UNIT.worker.hp; setStage(u,null); u.stage=null;
+  const old=u.home; u.home=null; u.moveOut=true; u.oldHome=old;
+  const nh = findHome(u, occupancy(), old);
+  if(nh){ u.home=nh; cmdMove(u, nh.x+(G.rand()-.5)*3, nh.z+nh.size*.5+1.2); }
+  if(u.owner===0){ EE.toast(nh ? 'Ein Kind ist erwachsen und zieht in eine eigene Hütte' : 'Ein Kind ist erwachsen – es braucht eine eigene Hütte!'); drawPanelSoon(); }
+}
+function updateKid(u,dt){
+  u.grow += dt;
+  if(u.stage==='baby' && u.grow>=BABY_T) setStage(u,'child');
+  if(u.grow>=BABY_T+CHILD_T){ growUp(u); return; }
+  if(u.state!=='idle' && u.state!=='move') u.state='idle';
+  u.wanderT=(u.wanderT||0)-dt;
+  if(u.state==='idle' && u.wanderT<=0){ u.wanderT = 4+G.rand()*6; const h=u.home||G.players[u.owner].tc; if(h){ const a=G.rand()*6.28, r=h.size*.5+1.5+G.rand()*(u.stage==='baby'?1.5:5); cmdMove(u, h.x+Math.cos(a)*r, h.z+Math.sin(a)*r); } }
+}
+// Tempo im Stadtzentrum: Hütten im selben Gebiet (+5 % je Hütte, höchstens 6) und Helfer drinnen (+10 % je Helfer, höchstens 3)
+const HELP_MAX = 3;
+function trainMul(b){
+  if(b.kind!=='tc') return 1;
+  const id=regionAt(b.x,b.z); let h=0; for(const o of G.builds) if(o.kind==='house' && o.owner===b.owner && o.built>=1 && regionAt(o.x,o.z)===id) h++;
+  return 1 + .05*Math.min(6,h) + .1*helpers(b).length;
+}
+const helpers = b => G.units.filter(u=>u.inside===b && !u.dead);
+function helperIn(b){
+  if(helpers(b).length>=HELP_MAX){ EE.toast('Höchstens '+HELP_MAX+' Helfer'); return; }
+  const w = G.units.filter(u=>u.owner===b.owner && u.kind==='worker' && !u.inside && !u.dead).sort((p,q)=>Math.hypot(p.x-b.x,p.z-b.z)-Math.hypot(q.x-b.x,q.z-b.z))[0];
+  if(!w){ EE.toast('Kein Arbeiter frei'); return; }
+  if(G.sel.includes(w)) G.sel=G.sel.filter(x=>x!==w);
+  w.inside=b; w.state='idle'; w.path=null; w.site=null; w.target=null; w.ring.visible=false; if(w.bar) w.bar.visible=false;
+}
+function helpersOut(b){ for(const u of helpers(b)){ u.inside=null; const a=G.rand()*6.28; u.x=b.x+Math.cos(a)*(b.size*.5+1); u.z=b.z+Math.sin(a)*(b.size*.5+1); autoJob(u); } }
+function updatePopulation(dt){
+  G.popT=(G.popT||0)-dt; if(G.popT>0) return; G.popT=1;
+  const occ=occupancy();
+  // ohne Zuhause: Hütte suchen
+  let homeless=0;
+  for(const u of G.units){ if(u.dead) continue;
+    if(u.home && (u.home.dead || !homeCap(u.home))) u.home=null;
+    if(!u.home){ const h=findHome(u, occ, u.oldHome && !u.oldHome.dead ? u.oldHome : null); if(h){ u.home=h; occ.set(h,(occ.get(h)||0)+1); if(u.homeless){ u.homeless=false; if(u.kind==='worker' && u.state==='idle') autoJob(u); } } else { u.homeless=true; if(u.owner===0) homeless++; } }
+    if(u.moveOut && u.state==='idle'){ u.moveOut=false; if(u.home) autoJob(u); }
+  }
+  if(homeless){ G.hlT=(G.hlT||0)-1; if(G.hlT<=0){ G.hlT=25; EE.toast(homeless+(homeless>1?' Leute haben':' Person hat')+' keine Hütte und arbeitet nicht – baue Hütten!'); } }
+  // Neue leere Hütte: ein Paar aus einem vollen Haus zieht ein
+  for(const h of G.builds){
+    if(h.kind!=='house' || !homeCap(h) || (occ.get(h)||0)>0) continue;
+    const src=G.builds.find(b=>b.owner===h.owner && b!==h && (occ.get(b)||0)>=3 && G.units.some(u=>u.home===b && u.sex==='m' && u.kind!=='kid') && G.units.some(u=>u.home===b && u.sex==='f' && u.kind!=='kid'));
+    if(!src) continue;
+    const pair=[G.units.find(u=>u.home===src && u.sex==='m' && u.kind!=='kid' && !u.dead), G.units.find(u=>u.home===src && u.sex==='f' && u.kind!=='kid' && !u.dead)];
+    for(const u of pair){ u.home=h; }
+    occ.set(src,(occ.get(src)||0)-2); occ.set(h,2);
+    if(h.owner===0) EE.toast('Ein Paar ist in die neue Hütte gezogen');
+  }
+  // Geburten
+  for(const b of G.builds){
+    const c=homeCap(b); if(!c) continue;
+    b.birthT = (b.birthT==null ? BIRTH_T*(.5+G.rand()) : b.birthT) - 1;
+    if(b.birthT>0) continue; b.birthT = BIRTH_T*(.8+G.rand()*.4);
+    const p=G.players[b.owner]; if((occ.get(b)||0)>=c || p.res.food<BIRTH_FOOD+20) continue;
+    let m=0,f=0, here=0; for(const u of G.units) if(u.owner===b.owner && u.kind!=='kid' && !u.dead){ if(u.sex==='f') f++; else m++; if(u.home===b) here++; }
+    if(!m || !f || !here) continue;
+    bornAt(b); occ.set(b,(occ.get(b)||0)+1);
+  }
+}
+/* ============================================================
    KRIEGER & KAMPF (Steinzeit): Krieger sind Höhlenmenschen mit Waffen
    ============================================================ */
 const UNIT = {
@@ -316,7 +414,8 @@ const UNIT = {
   bow:   {name:'Bogenschütze', hp:55, atk:6, range:9, cd:1.7, speed:3.0, bld:.25, cost:{food:40,wood:45}, time:14, weapon:'w_bow', wlen:1.25, ranged:true},
 };
 UNIT_DE.club='Axtkrieger'; UNIT_DE.spear='Speerträger'; UNIT_DE.bow='Bogenschützen';
-const isSoldier = u => u.kind!=='worker';
+const isSoldier = u => u.kind!=='worker' && u.kind!=='kid';
+UNIT.kid = {name:'Kind', hp:25, atk:0, range:.6, cd:2, speed:2.3, bld:0}; UNIT_DE.kid='Kinder';
 function attachWeapon(g, kind){
   const U=UNIT[kind], m=MODELS[U.weapon]; if(!m || !g.rig) return;
   const sk=g.children[0], s=sk.scale.x, bb=m.geo.boundingBox, L=bb.max.y-bb.min.y;
@@ -346,7 +445,7 @@ function updateBar(u){
   if(!u.bar){ u.bar=makeBar(); G.scene.add(u.bar); }
   const f=clamp(u.hp/u.maxHp,0,1), show=!G.farView && (u.ring.visible || f<.999);
   u.bar.visible=show; if(!show) return;
-  u.bar.position.set(u.x, u.mesh.position.y+2.05, u.z); u.bar.fg.scale.x=.86*f;
+  u.bar.position.set(u.x, u.mesh.position.y+2.05, u.z); u.bar.quaternion.copy(G.cam.quaternion); u.bar.fg.scale.x=.86*f;
   u.bar.fg.material.color.setHex(f>.5?0x5fe36a:f>.25?0xf2c230:0xe23b3b);
 }
 const alive = t => t && t.hp>0 && !t.dead;
@@ -401,7 +500,7 @@ function destroyBuilding(b){
   if(b===p.tc) p.tc=G.builds.find(o=>o.owner===b.owner && o.kind==='tc' && o.built>=1) || null;
   if(b.kind==='tc'){ releaseRegion(b); buildBorders(); }
   if(G.selB===b){ G.selB=null; drawPanelSoon(); }
-  b.ring.visible=false; sfxAt('build',b.x,b.z,1); EE.sfx('place',.5);
+  b.ring.visible=false; if(b.bar) G.scene.remove(b.bar); sfxAt('build',b.x,b.z,1); EE.sfx('place',.5);
   const m=b.mesh; let t=0; const sink=()=>{ if(!G) return; t+=.016; m.position.y-=.03; m.rotation.z=Math.sin(t*9)*.02; if(t<2.5) requestAnimationFrame(sink); else { G.scene.remove(m); G.scene.remove(b.ring); } }; sink();
   if(b.owner===0) EE.toast(d.name+' wurde zerstört');
   checkEnd();
@@ -467,10 +566,12 @@ function action(a){
     if(b.queue.length>=5){ EE.toast('Warteschlange voll'); return; }
     if(!canPay(p,c)){ EE.toast('Nicht genug Rohstoffe'); EE.sfx('error'); return; }
     pay(p,c); b.queue.push(k); EE.vib(15);
+  } else if(a==='helpin'){ helperIn(G.selB); drawPanel();
+  } else if(a==='helpout'){ helpersOut(G.selB); drawPanel();
   } else if(a==='togate'){ const w=G.selB; if(!canPay(p,BUILD.gate.cost)){ EE.sfx('error'); EE.toast('Tor: '+missingTxt(p,BUILD.gate.cost)); return; }
     pay(p,BUILD.gate.cost); destroyBuilding(w); w.mesh&&G.scene.remove(w.mesh); G.scene.remove(w.ring);
     const g=addWall(0, {...w.seg, gate:true}, w.seg.ang, w.wallId, false);
-    G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.dead).sort((a,b)=>Math.hypot(a.x-g.x,a.z-g.z)-Math.hypot(b.x-g.x,b.z-g.z)).slice(0,2).forEach(u=>cmdBuild(u,g));
+    G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.inside && !u.dead).sort((a,b)=>Math.hypot(a.x-g.x,a.z-g.z)-Math.hypot(b.x-g.x,b.z-g.z)).slice(0,2).forEach(u=>cmdBuild(u,g));
     G.selB=null; EE.toast('Tor wird gebaut'); EE.sfx('place');
   } else if(a==='b-tc'){ if(!canPay(p,BUILD.tc.cost)){ EE.sfx('error'); EE.toast('Stadtzentrum: '+missingTxt(p,BUILD.tc.cost)); return; } startPlace('tc');
   } else if(a==='b-wall'){ startWall('wall');
@@ -876,7 +977,7 @@ function genWorld(){
   G.players.forEach((p,i)=>{
     const b = G.bases[i];
     p.tc = addBuilding('tc', i, b.x, b.z, true);
-    for(let k=0;k<4;k++){ const a=k/4*Math.PI*2+.4; spawnWorker(i, b.x+Math.cos(a)*4.2, b.z+Math.sin(a)*4.2); }
+    for(let k=0;k<4;k++){ const a=k/4*Math.PI*2+.4; G.nextSex=k%2?'f':'m'; spawnWorker(i, b.x+Math.cos(a)*4.2, b.z+Math.sin(a)*4.2).home=p.tc; }
     const ang = R()*Math.PI*2;
     placeCluster('bush', b.x+Math.cos(ang)*8, b.z+Math.sin(ang)*8, 6, 2.6, 6.5);
     placeCluster('stone', b.x+Math.cos(ang+2)*10, b.z+Math.sin(ang+2)*10, 3, 1.6, 6.5);
@@ -1272,7 +1373,8 @@ function makeDeer(kind){
 }
 function makeWorker(color){
   geos();
-  const key = Math.random()<.5 ? 'cavem' : 'cavef';
+  const sx = G && G.nextSex; if(G) G.nextSex=null;
+  const key = sx==='f' ? 'cavef' : sx==='m' ? 'cavem' : Math.random()<.5 ? 'cavem' : 'cavef';
   if(MODELS[key]){ const g = makeRigged(key, 1.45, color); if(g){ g.rig.hips.userData.y0 = g.rig.hips.position.y; g.userData.key=key; return g; } }
   const g = new T.Group();
   const skin = mat(0xe0b088), fur = mat(0x7d4f2a), hair = mat(0x3a2414), team = mat(color);
@@ -1948,7 +2050,7 @@ function spawnDeer(x,z,kind){
 }
 function spawnWorker(owner,x,z,kind){
   kind = kind||'worker';
-  const m = kind==='worker' ? makeWorker(COLORS[owner]) : makeSoldier(kind, COLORS[owner]);
+  const m = (kind==='worker'||kind==='kid') ? makeWorker(COLORS[owner]) : makeSoldier(kind, COLORS[owner]);
   m.position.set(x,getH(x,z),z);
   G.scene.add(m);
   const ring = new T.Mesh(GEO.ring, new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.9, depthWrite:false}));
@@ -2137,6 +2239,9 @@ function updateWorker(u,dt){
   u.moving=false; u.working=false;
   const gatherRate = (u.owner===0 && G.civ[0]==='Chinesen') ? 1.15 : 1;
   if(isSoldier(u)){ u.scanT=(u.scanT||0)-dt; if(u.scanT<=0){ u.scanT=.5; if(u.state==='idle'){ const f=nearestFoe(u, UNIT[u.kind].ranged?10:7); if(f) cmdAttack(u,f); } } }
+  if(u.inside){ u.x=u.inside.x; u.z=u.inside.z; u.mesh.position.set(u.x,-100,u.z); u.ring.visible=false; if(u.inside.dead){ u.inside=null; } return; }
+  if(u.kind==='kid') updateKid(u,dt);
+  else if(u.homeless && u.kind==='worker' && u.state!=='idle' && u.state!=='move'){ u.state='idle'; u.path=null; }
   if(u.pfWait && performance.now() < G.pfDeadline){ const w=u.pfWait; u.pfWait=null; u.path=findPath(u.x,u.z,w.x,w.z); u.pi=0; }
   if(!u.pfWait) switch(u.state){
     case 'attack': {
@@ -2277,14 +2382,32 @@ function updateDeer(d,dt){
   m.legs[0].rotation.x=s; m.legs[3].rotation.x=s; m.legs[1].rotation.x=-s; m.legs[2].rotation.x=-s;
 }
 
+// Fortschrittsbalken über dem Gebäude: Bau (orange) oder Ausbildung (blau)
+function updateBBar(b){
+  let f=-1, col=0x4fb3ff;
+  if(b.built<1){ f=b.built; col=0xf2a630; }
+  else if(b.queue.length){ const qk=b.queue[0]; f=b.qT/(qk==='worker'?WORKER_TIME:UNIT[qk].time); }
+  const show = f>=0 && !G.farView && b.owner===0;
+  if(!show){ if(b.bar) b.bar.visible=false; return; }
+  const W=Math.max(2.2,b.size*.55);
+  if(!b.bar){ const g=new T.Group();
+    const bg=new T.Sprite(new T.SpriteMaterial({color:0x111111, depthTest:false, transparent:true, opacity:.85})); bg.scale.set(W+.12,.3,1);
+    const fg=new T.Sprite(new T.SpriteMaterial({color:0x4fb3ff, depthTest:false})); fg.center.set(0,.5); fg.scale.set(W,.2,1); fg.position.x=-W/2;
+    bg.renderOrder=8; fg.renderOrder=9; g.add(bg); g.add(fg); g.fg=fg; b.bar=g; G.scene.add(g); }
+  b.bar.visible=true; b.bar.position.set(b.x, b.mesh.position.y + (b.kind==='tc'?5.2:b.size*.9+1), b.z);
+  b.bar.quaternion.copy(G.cam.quaternion);
+  b.bar.fg.scale.x=Math.max(.001,W*clamp(f,0,1)); b.bar.fg.material.color.setHex(col);
+  if(G.selB===b){ const el=document.querySelector('#panel .bar div'); if(el) el.style.width=(clamp(f,0,1)*100).toFixed(1)+'%'; }
+}
 function updateBuilding(b,dt){
+  if(b.owner===0) updateBBar(b);
   if(b.kind==='tc' && b.mesh.fireFx && !G.farView) animateFire(b.mesh.fireFx, G.t+b.x, dt);
 
   if(b.built<1 || !b.queue.length) return;
   const p = G.players[b.owner];
   if(p.pop>=p.popCap){ if(b.owner===0 && !b.warned){ EE.toast('Zu wenig Platz – baue eine Hütte'); b.warned=true; } return; }
   b.warned=false;
-  b.qT += dt;
+  b.qT += dt*trainMul(b);
   const qk = b.queue[0], qtime = qk==='worker' ? WORKER_TIME : UNIT[qk].time;
   if(b.qT>=qtime){
     b.qT=0; b.queue.shift();
@@ -2306,10 +2429,10 @@ function updateAI(p,dt){
   updateAIWar(p, mine, tc);
   const want = ['food','wood','food','wood','stone','gold','wood','food'];
   mine.forEach((u,i)=>{ if(u.kind==='worker' && u.state==='idle'){ const r=nearestRes(want[i%want.length], u.x,u.z, 30, p.id); if(r) cmdGather(u,r); } });
-  if(mine.filter(u=>u.kind==='worker').length<10 && !tc.queue.length && p.res.food>=50 && p.pop<p.popCap){ p.res.food-=50; tc.queue.push('worker'); }
+  if(mine.filter(u=>u.kind==='worker').length<10 && !tc.queue.length && p.res.food>=WORKER_COST.food && p.pop<p.popCap){ p.res.food-=WORKER_COST.food; tc.queue.push('worker'); }
   if(p.pop>=p.popCap-1 && p.res.wood>=30 && !G.builds.some(b=>b.owner===p.id && b.built<1)){
     for(let t=0;t<20;t++){ const a=G.rand()*6.28, r=6+G.rand()*4; const x=tc.x+Math.cos(a)*r, z=tc.z+Math.sin(a)*r;
-      if(validPlace('house',x,z,p.id)){ p.res.wood-=30; const b=addBuilding('house',p.id,x,z,false); const w=mine.find(u=>u.state!=='build'); if(w) cmdBuild(w,b); break; } }
+      if(validPlace('house',x,z,p.id)){ p.res.wood-=30; const b=addBuilding('house',p.id,x,z,false); const w=mine.find(u=>u.kind==='worker' && u.state!=='build'); if(w) cmdBuild(w,b); break; } }
   }
 }
 
@@ -2320,6 +2443,7 @@ function update(dt){
   G.t += dt;
   if((G.saveT-=dt)<=0){ G.saveT=30; saveGame(); }
   for(const u of G.units.slice()) updateWorker(u,dt);
+  updatePopulation(dt);
   updateArrows(dt); if(G.alarmT) G.alarmT=Math.max(0,G.alarmT-dt);
   for(const d of G.deer) updateDeer(d,dt);
   for(const b of G.builds) updateBuilding(b,dt);
@@ -2573,6 +2697,7 @@ function boxSelect(x0,y0,x1,y1){
   select(us,null); if(us.length) EE.click();
 }
 function select(us,b){
+  us = us.filter(u=>!u.inside);
   for(const u of G.sel) u.ring.visible=false;
   if(G.selB) G.selB.ring.visible=false;
   G.sel = us; G.selB = b;
@@ -2581,7 +2706,7 @@ function select(us,b){
   drawPanel();
 }
 function selectIdle(){
-  const idle = G.units.filter(u=>u.owner===0 && u.state==='idle');
+  const idle = G.units.filter(u=>u.owner===0 && u.state==='idle' && u.kind!=='kid' && !u.inside);
   if(!idle.length){ EE.toast('Alle Arbeiter sind beschäftigt'); return; }
   G.idleI = ((G.idleI||0)+1) % idle.length;
   const u = idle[G.idleI]; select([u],null); centerCamOn(u.x,u.z-4);
@@ -2900,7 +3025,7 @@ function confirmPlace(){
   const pl=G.place, p=G.players[0];
   if(!pl.ok){ EE.toast(pl.why || 'Hier kann nicht gebaut werden'); EE.sfx('error'); return; }
   if(!canPay(p,BUILD[pl.kind].cost)){ EE.sfx('error'); return; }
-  if(!pl.workers.length){ const w=G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.dead).sort((a,b)=>Math.hypot(a.x-pl.x,a.z-pl.z)-Math.hypot(b.x-pl.x,b.z-pl.z)).slice(0,3); pl.workers=w; }
+  if(!pl.workers.length){ const w=G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.inside && !u.dead).sort((a,b)=>Math.hypot(a.x-pl.x,a.z-pl.z)-Math.hypot(b.x-pl.x,b.z-pl.z)).slice(0,3); pl.workers=w; }
   pay(p,BUILD[pl.kind].cost);
   const b = addBuilding(pl.kind,0,pl.x,pl.z,false);
   pl.workers.forEach(u=>cmdBuild(u,b));
