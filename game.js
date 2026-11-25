@@ -934,7 +934,7 @@ function makeTree(R){
 function makeBush(R){
   const F=flora(), g=new T.Group();
   const m=new T.Mesh(F.geo.bush[(R()*2)|0], F.mat); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=F.depth;
-  const sc=1.1+R()*.35; m.scale.set(sc,sc*(.9+R()*.2),sc); g.add(m);
+  const sc=.62+R()*.16; m.scale.set(sc,sc*(.9+R()*.2),sc); g.add(m);
   for(let i=0;i<14;i++){ const a=R()*6.28, y=(.45+R()*.6)*sc, r=(.45+R()*.3)*sc; const b=new T.Mesh(F.berryGeo, F.berryMat); b.position.set(Math.cos(a)*r, y, Math.sin(a)*r); g.add(b); }
   g.rotation.y = R()*6.28; return g;
 }
