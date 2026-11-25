@@ -241,6 +241,7 @@ function updateHUD(){
 
 function costText(c){ return Object.keys(c).map(k=>`<span class="c">${ICON[k]}${c[k]}</span>`).join(''); }
 function canPay(p,c){ return Object.keys(c).every(k=>p.res[k]>=c[k]); }
+const missingTxt = (p,c) => 'Es fehlen noch '+Object.keys(c).filter(k=>p.res[k]<c[k]).map(k=>Math.ceil(c[k]-p.res[k])+' '+RES_DE[k]).join(', ');
 function pay(p,c){ for(const k in c) p.res[k]-=c[k]; }
 
 function drawPanel(){
@@ -463,13 +464,13 @@ function action(a){
     if(b.queue.length>=5){ EE.toast('Warteschlange voll'); return; }
     if(!canPay(p,c)){ EE.toast('Nicht genug Rohstoffe'); EE.sfx('error'); return; }
     pay(p,c); b.queue.push(k); EE.vib(15);
-  } else if(a==='b-tc'){ startPlace('tc');
+  } else if(a==='b-tc'){ if(!canPay(p,BUILD.tc.cost)){ EE.sfx('error'); EE.toast('Stadtzentrum: '+missingTxt(p,BUILD.tc.cost)); return; } startPlace('tc');
   } else if(a==='b-wall'){ startWall('wall');
   } else if(a==='b-road'){ startWall('road');
   } else if(a==='dip'){ openDip('rel');
   } else if(a.startsWith('b-')){
     const kind = a.slice(2);
-    if(!canPay(p,BUILD[kind].cost)){ EE.sfx('error'); EE.toast('Nicht genug '+Object.keys(BUILD[kind].cost).map(k=>RES_DE[k]).join(' und ')); return; }
+    if(!canPay(p,BUILD[kind].cost)){ EE.sfx('error'); EE.toast(BUILD[kind].name+': '+missingTxt(p,BUILD[kind].cost)); return; }
     startPlace(kind);
   }
   updateHUD(); drawPanel();
@@ -2887,10 +2888,12 @@ function confirmPlace(){
   if(G.place && G.place.line) return confirmWall();
   const pl=G.place, p=G.players[0];
   if(!pl.ok){ EE.toast(pl.why || 'Hier kann nicht gebaut werden'); EE.sfx('error'); return; }
-  if(!canPay(p,BUILD[pl.kind].cost)){ EE.toast('Nicht genug Ressourcen'); cancelPlace(); return; }
+  if(!canPay(p,BUILD[pl.kind].cost)){ EE.toast(missingTxt(p,BUILD[pl.kind].cost)); EE.sfx('error'); return; }
+  if(!pl.workers.length){ const w=G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.dead).sort((a,b)=>Math.hypot(a.x-pl.x,a.z-pl.z)-Math.hypot(b.x-pl.x,b.z-pl.z)).slice(0,3); pl.workers=w; }
   pay(p,BUILD[pl.kind].cost);
   const b = addBuilding(pl.kind,0,pl.x,pl.z,false);
   pl.workers.forEach(u=>cmdBuild(u,b));
+  if(pl.kind==='tc') EE.toast('Stadtzentrum wird gebaut – deine Arbeiter sind unterwegs');
   EE.sfx('place'); EE.vib(20);
   endPlace(); updateHUD(); select(pl.workers,null);
 }
