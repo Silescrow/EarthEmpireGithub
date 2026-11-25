@@ -140,6 +140,55 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 #panel .bar{flex-basis:100%;height:6px;border-radius:3px;background:#0006;overflow:hidden}
 #panel .bar div{height:100%;background:linear-gradient(90deg,#fff3b0,#e8b64a)}
 #placebar{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:10px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:#0b1130e6;border:2px solid var(--gold)}
+/* Auswahl-Leiste (wie Age of Empires) */
+#panel .selx{display:flex;flex-direction:column;gap:4px;padding:0 4px;max-width:min(44vw,330px)}
+.selx .sh{display:flex;align-items:center;gap:8px;min-height:26px}
+.selx .sh b{font:800 14px "Cinzel",Georgia,serif;color:var(--gold)}
+.selx .sx{margin-left:auto;width:28px;height:28px;border-radius:8px;border:1.5px solid var(--gold);background:#4a1420;color:#ffe1e1;font:800 15px/1 sans-serif;cursor:pointer;flex:none}
+.selx .pics{display:flex;flex-wrap:wrap;gap:3px}
+.selx .pic{position:relative;width:30px;height:36px;padding:0;border-radius:6px;border:1.5px solid #e8b64a99;background:linear-gradient(180deg,#2e3f86,#121a40);cursor:pointer}
+.selx .pic svg{display:block;width:100%;height:31px}
+.selx .pic i{position:absolute;left:4px;bottom:2px;height:3px;border-radius:2px;background:#62e06a}
+.selx .more{align-self:center;color:var(--gold2);font:700 13px sans-serif;padding:0 3px}
+.selx small{font-size:13px;color:#ffe9b0}
+/* Diplomatie */
+#dip{position:absolute;inset:0;display:grid;place-items:center;background:#060a1aa8;z-index:4}
+#dip.hidden{display:none}
+#dip .dcard{width:min(94vw,640px);max-height:92vh;overflow:auto;border:2px solid var(--gold);border-radius:14px;background:linear-gradient(180deg,#141d44f4,#0a1030f4);padding:10px 12px;color:var(--ink)}
+#dip .dhead{display:flex;gap:6px;align-items:center;margin-bottom:8px}
+#dip .dtab{padding:7px 12px;border-radius:9px;border:1.5px solid #e8b64a88;background:#0b1130;color:var(--gold2);font:700 14px "Cinzel",Georgia,serif;cursor:pointer}
+#dip .dtab.on{background:var(--gold);color:#2b1a02}
+#dip .dx{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1.5px solid var(--gold);background:#4a1420;color:#fff;font:800 16px sans-serif;cursor:pointer}
+#dip .dnote{margin:0 0 6px;font-size:12.5px;color:#ffe9b0}
+#dip .drows{display:flex;flex-direction:column;gap:5px}
+#dip .drow{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:9px;background:#ffffff0d}
+#dip .drow>i,#dip .dciv i,#offer i{width:12px;height:30px;border-radius:3px;flex:none;display:inline-block}
+#dip .dn{flex:1;min-width:0;display:flex;flex-direction:column}
+#dip .dn b{font:800 14px "Cinzel",Georgia,serif;color:var(--gold2)}
+#dip .dn small{font-size:11.5px;color:#cfd7ff}
+#dip .mood{display:block;height:4px;border-radius:2px;background:#0006;margin-top:3px;max-width:150px;overflow:hidden}
+#dip .mood s{display:block;height:100%;background:linear-gradient(90deg,#e23b3b,#f2c230,#3fbf5a)}
+#dip .dst{display:flex;gap:3px}
+#dip .dst button{padding:6px 8px;border-radius:8px;border:1.5px solid #ffffff30;background:#0b1130;color:#cfd7ff;font:700 12.5px sans-serif;cursor:pointer}
+#dip .dst button.ally.on{background:#2f9e4a;border-color:#7dff9a;color:#fff}
+#dip .dst button.neutral.on{background:#9a7a22;border-color:#ffe08a;color:#fff}
+#dip .dst button.enemy.on{background:#a8262e;border-color:#ff8a8a;color:#fff}
+#dip .dlab{font:700 12px sans-serif;color:var(--gold);margin:7px 0 3px;text-transform:uppercase;letter-spacing:.05em}
+#dip .dline{display:flex;flex-wrap:wrap;gap:4px}
+#dip .dciv,#dip .dres,#dip .damt{display:flex;align-items:center;gap:5px;padding:5px 9px;border-radius:8px;border:1.5px solid #ffffff30;background:#0b1130;color:var(--ink);font:700 13px sans-serif;cursor:pointer}
+#dip .dciv i{height:14px;width:10px}
+#dip .dres svg{width:18px;height:18px}
+#dip .on.dciv,#dip .on.dres,#dip .on.damt{border-color:var(--gold);background:#3a2a08}
+#dip .dciv.off{opacity:.45}
+#dip .deal{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding:8px;border-radius:10px;background:#ffffff10;font-size:14px}
+#dip .deal b{color:var(--gold2)}
+#dip .deal .btn{width:auto;margin-left:auto}
+#dip .deal .btn + .btn{margin-left:0}
+#dip .btn[disabled]{opacity:.4}
+#offer{position:absolute;left:50%;top:62px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:#0b1130ee;border:2px solid var(--gold);z-index:3}
+#offer.hidden{display:none}
+#offer span{display:flex;align-items:center;gap:8px;color:var(--gold2);font-weight:700;font-size:14px}
+#offer i{height:18px}
 #placebar.hidden{display:none}
 #placebar span{color:#ffe9b0;font-weight:700;font-size:14px}
 .pb{width:54px;height:48px;border-radius:10px;font:800 24px sans-serif;cursor:pointer;border:2px solid #fff6}
@@ -170,7 +219,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.08</div>
+    <div class="ver2">Version 1.09</div>
     <div class="snd" id="soundHint">Tippe für Ton</div>
   </div>
 </section>
@@ -189,7 +238,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.08</div>
+  <div class="ver">Earth Empire · V1.09</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>

@@ -9,6 +9,7 @@ const T = window.THREE;
 
 /* ---------- kleine Helfer ---------- */
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const clamp = (v,a,b) => v<a?a:v>b?b:v;
 const lerp = (a,b,t) => a+(b-a)*t;
 function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
@@ -30,6 +31,7 @@ const BUILD = {
   wall:  {name:'Palisade', size:1, cost:{wood:4}, time:3, hp:250},
   gate:  {name:'Tor', size:1, cost:{wood:15}, time:8, hp:500},
   store: {name:'Lager', size:3, cost:{wood:50}, time:18, hp:500, drop:['wood','stone','gold','food']},
+  road:  {name:'Weg', size:1, cost:{}, time:2.2, hp:100},
 };
 const WORKER_COST = {food:50};
 const WORKER_TIME = 10;
@@ -48,7 +50,7 @@ async function start(){
   await Promise.all([loadModels(), loadWorldMask()]);
   EE.hideMenu();
   const S = EE.S;
-  const NX = [2000,3000,4000,5400][S.map|0] || 3000, HS = [4,5,5,6][S.map|0] || 5, NZ = Math.round(NX*(LAT0-LAT1)/360/HS)*HS;
+  const NX = [3840,5760,8320,12800][S.map|0] || 5760, HS = NX<=6000?8:16, NZ = Math.round(NX*(LAT0-LAT1)/360/TILE)*TILE;
   const civ = EE.CIVS[S.civ] || EE.CIVS[0];
   const foes = clamp(S.ai||3, 1, 17);
   // Gegner möglichst weit weg wählen (bei wenigen Gegnern nie Nachbarn)
@@ -65,6 +67,7 @@ async function start(){
         players:[], sel:[], selB:null, place:null, running:true, raf:0, msgT:0 };
   G.rand = rng(G.seed);
   [civ, ...others.slice(0,foes)].forEach((c,i)=>G.players.push({id:i, civ:c, res:{...START_RES}, pop:0, popCap:0, tc:null, color:COLORS[i]}));
+  initDip();
   buildUI();
   initRenderer();
   genWorld();
@@ -73,6 +76,7 @@ async function start(){
   initInput();
   updateHUD(); drawPanel();
   centerCamOn(G.players[0].tc.x, G.players[0].tc.z);
+  updateCam(); updateTiles(true);
   $('#game').classList.remove('hidden');
   let last = performance.now();
   const loop = now => {
@@ -131,6 +135,8 @@ function buildUI(){
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
   <div id="panel"></div>
   <div id="placebar" class="hidden"><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">Tor</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
+  <div id="offer" class="hidden"></div>
+  <div id="dip" class="hidden"><div class="dcard"><div class="dhead"><button class="dtab" data-t="rel">Beziehungen</button><button class="dtab" data-t="trade">Handel</button><button class="dtab" data-t="trib">Tribut</button><button class="dx" id="dClose" aria-label="Schließen">✕</button></div><div id="dipBody"></div></div></div>
   <div id="rotate"><div>Bitte das Handy quer halten</div></div>
   <div id="pause" class="hidden"><div class="pcard"><h2>Pause</h2>
     <button class="btn main small" id="pWeiter">Weiter</button>
@@ -143,6 +149,9 @@ function buildUI(){
   $('#pOk').onclick = confirmPlace;
   $('#pGate').onclick = ()=>{ if(G.place&&G.place.kind==='wall'){ G.place.gate=!G.place.gate; $('#pGate').classList.toggle('on',G.place.gate); EE.click(); } };
   $('#pNo').onclick = cancelPlace;
+  $('#dClose').onclick = closeDip;
+  $$('#dip .dtab').forEach(b=>b.onclick=()=>{ EE.click(); G.dipUI.tab=b.dataset.t; renderDip(); });
+  $('#dip').addEventListener('click', e=>{ if(e.target.id==='dip') closeDip(); });
 }
 
 function updateHUD(){
@@ -168,19 +177,29 @@ function drawPanel(){
     if(b.owner===0 && b.built>=1 && b.kind==='tc'){
       const q = b.queue.length;
       h += `<button class="ab" data-a="worker"><span class="ai">${ICON.pop}</span>Arbeiter<span class="ac">${costText(WORKER_COST)}</span>${q?'<i class="q">'+q+'</i>':''}</button>`;
+      h += `<button class="ab" data-a="dip"><span class="ai">${dipSVG()}</span>Diplomatie<span class="ac">Bündnis · Handel</span></button>`;
       h += `<button class="ab lock" data-a="age"><span class="ai"><svg viewBox="0 0 24 24"><path d="M12 3l8 9h-5v9H9v-9H4z" fill="#e8b64a"/></svg></span>Bronzezeit<span class="ac">${costText({food:500,wood:300})}</span></button>`;
       if(q) h += `<div class="bar"><div style="width:${(b.qT/WORKER_TIME*100)|0}%"></div></div>`;
     }
     el.innerHTML = h; el.className='';
   } else if(G.sel.length){
-    const ws = G.sel;
+    const ws = G.sel.slice();
     const carry = ws.length===1 && ws[0].carry.amt>=1 ? ' · trägt '+Math.floor(ws[0].carry.amt)+' '+RES_DE[ws[0].carry.type] : '';
     const job = ws.length===1 ? ({idle:'Wartet',move:'Läuft',gather:'Sammelt',drop:'Bringt Ressourcen',build:'Baut',hunt:'Jagt'})[ws[0].state] : '';
-    let h = `<div class="info"><b>${ws.length>1?ws.length+' Arbeiter':'Arbeiter'}</b><small>${job}${carry}</small></div>`;
+    // Auswahl-Leiste wie in Age of Empires: kleine Figuren je Sorte, Anzahl und X zum Abwählen
+    const MAXP = 16, groups = {};
+    ws.forEach((u,i)=>{ (groups[u.kind]||(groups[u.kind]={n:0,list:[]})).n++; groups[u.kind].list.push(i); });
+    let h = `<div class="selx"><div class="sh">`;
+    for(const k in groups) h += `<b>${groups[k].n}× ${UNIT_DE[k]||k}</b>`;
+    h += `<button class="sx" data-a="desel" aria-label="Auswahl aufheben">✕</button></div><div class="pics">`;
+    ws.slice(0,MAXP).forEach((u,i)=>{ h += `<button class="pic${u.owner!==0?' foe':''}" data-u="${i}">${unitPic(u)}</button>`; });
+    if(ws.length>MAXP) h += `<span class="more">+${ws.length-MAXP}</span>`;
+    h += `</div>${ws.length===1?`<small>${job}${carry}</small>`:''}</div>`;
     if(ws[0].owner===0){
       h += `<button class="ab" data-a="b-house"><span class="ai">${hutSVG()}</span>Hütte<span class="ac">${costText(BUILD.house.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-store"><span class="ai">${storeSVG()}</span>Lager<span class="ac">${costText(BUILD.store.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-wall"><span class="ai">${wallSVG()}</span>Palisade<span class="ac">${costText(BUILD.wall.cost)}/Stück</span></button>`;
+      h += `<button class="ab" data-a="b-road"><span class="ai">${roadSVG()}</span>Weg<span class="ac">kostenlos</span></button>`;
       h += `<button class="ab lock" data-a="b-barr"><span class="ai"><svg viewBox="0 0 24 24"><path d="M5 4l10 10M19 4L9 14M7 13l-3 3 2 2 3-3M17 13l3 3-2 2-3-3" stroke="#e8b64a" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></span>Kaserne<span class="ac">bald</span></button>`;
     }
     el.innerHTML = h; el.className='';
@@ -189,7 +208,18 @@ function drawPanel(){
     el.className='';
   }
   el.querySelectorAll('.ab').forEach(b=>b.onclick=()=>action(b.dataset.a));
+  el.querySelectorAll('.sx').forEach(b=>b.onclick=()=>{ EE.click(); select([],null); });
+  if(G.sel.length){ const ws=G.sel.slice(); el.querySelectorAll('.pic').forEach(b=>b.onclick=()=>{ EE.click(); const u=ws[+b.dataset.u]; if(u){ select([u],null); } }); }
 }
+const UNIT_DE = {worker:'Arbeiter'};
+function unitPic(u){
+  const col='#'+COLORS[u.owner].toString(16).padStart(6,'0'), f=u.sex==='f';
+  return `<svg viewBox="0 0 24 28"><path d="M5 27q0-11 7-11t7 11z" fill="#8a5a2b"/><path d="M6 21l12-3v3l-12 3z" fill="${col}"/>`+
+    (f?`<path d="M6.5 11q0-7 5.5-7t5.5 7v5h-2v-4h-7v4h-2z" fill="#3a2414"/>`:'')+
+    `<circle cx="12" cy="10" r="4.6" fill="#e0b088"/><path d="M7.4 9q.5-5.5 4.6-5.5t4.6 5.5q-2-2.6-4.6-2.6t-4.6 2.6z" fill="#3a2414"/>`+
+    `<circle cx="10.3" cy="10.3" r=".7" fill="#2a1a10"/><circle cx="13.7" cy="10.3" r=".7" fill="#2a1a10"/></svg><i style="width:${Math.round(20*(u.hp==null?1:u.hp/(u.maxHp||1)))}px"></i>`;
+}
+const roadSVG = () => '<svg viewBox="0 0 24 24"><path d="M8 22L11 2h2l3 20z" fill="#b08a58"/><path d="M12 4v3M12 10v3M12 16v3" stroke="#f3e2b8" stroke-width="1.4"/><circle cx="6" cy="18" r="1.3" fill="#9aa3ad"/><circle cx="18" cy="9" r="1" fill="#9aa3ad"/></svg>';
 const wallSVG = () => '<svg viewBox="0 0 24 24"><path d="M3 21V8l2-3 2 3v13M9 21V7l2-3 2 3v14M15 21V8l2-3 2 3v13" fill="#a86d36" stroke="#5a3818"/><path d="M2 12h20M2 17h20" stroke="#5a3818" stroke-width="1.6"/></svg>';
 const hutSVG = () => '<svg viewBox="0 0 24 24"><path d="M12 3L3 18h18z" fill="#c9a46a"/><path d="M12 3L8 18h8z" fill="#8a5a2b"/></svg>';
 const storeSVG = () => '<svg viewBox="0 0 24 24"><rect x="3" y="15" width="18" height="4" fill="#8a5a2b"/><rect x="4" y="10" width="7" height="5" rx="2" fill="#a86d36"/><rect x="12" y="11" width="8" height="4" rx="2" fill="#a86d36"/><path d="M8 10l2-4 3 3z" fill="#9aa3ad"/></svg>';
@@ -204,13 +234,139 @@ function action(a){
     pay(p,WORKER_COST); b.queue.push('worker'); EE.vib(15);
   } else if(a==='age'){ EE.toast('Die Bronzezeit kommt im nächsten Update');
   } else if(a==='b-barr'){ EE.toast('Die Kaserne kommt mit dem Kampf-Update');
-  } else if(a==='b-wall'){ startWall();
+  } else if(a==='b-wall'){ startWall('wall');
+  } else if(a==='b-road'){ startWall('road');
+  } else if(a==='dip'){ openDip('rel');
   } else if(a.startsWith('b-')){
     const kind = a.slice(2);
     if(!canPay(p,BUILD[kind].cost)){ EE.sfx('error'); EE.toast('Nicht genug '+Object.keys(BUILD[kind].cost).map(k=>RES_DE[k]).join(' und ')); return; }
     startPlace(kind);
   }
   updateHUD(); drawPanel();
+}
+
+/* ============================================================
+   DIPLOMATIE & HANDEL (wie in Empire Earth 2): Bündnis, Neutral, Krieg, Tribut, Rohstoffhandel
+   Neutrale und verbündete Völker greifen nicht an.
+   ============================================================ */
+const DIP_DE = {ally:'Verbündet', neutral:'Neutral', enemy:'Krieg'};
+const RES_VAL = {food:1, wood:1, stone:1.3, gold:2};
+const dipSVG = () => '<svg viewBox="0 0 24 24"><path d="M2 11l4-4 4 2 3-2 4 1 5 4-3 3-2-1-4 4q-1 1-2 0l-6-5z" fill="#e8b64a"/><path d="M9 13l2 2M11 11l3 3M13 10l3 3" stroke="#7a4a12" stroke-width="1.3" stroke-linecap="round"/></svg>';
+function initDip(){
+  G.dip = {};
+  for(let i=1;i<G.players.length;i++) G.dip[i] = {state:'enemy', mood:Math.round((G.rand()-.5)*40), ask:120+G.rand()*200};
+  G.dipUI = {tab:'rel', who:1, give:'wood', get:'gold', amt:100};
+}
+const hostile = (a,b) => { if(a===b) return false; const o=a===0?b:b===0?a:-1; if(o<0) return true; return G.dip[o].state==='enemy'; };
+function setDip(i, st, quiet){
+  const d=G.dip[i], p=G.players[i];
+  d.state=st;
+  if(!quiet){ EE.toast(p.civ[0]+': '+(st==='ally'?'Wir sind jetzt Verbündete!':st==='neutral'?'Frieden – wir lassen uns in Ruhe.':'Krieg!')); EE.sfx(st==='enemy'?'error':'done', .8); }
+  if(G.dipOpen) renderDip();
+}
+function propose(i, st){
+  const d=G.dip[i], p=G.players[i]; EE.click();
+  if(st===d.state) return;
+  if(st==='enemy'){ d.mood=Math.max(-100,d.mood-40); setDip(i,'enemy'); return; }
+  const need = st==='ally' ? 35 : -10;
+  const bonus = (G.rand()-.5)*14;
+  if(d.mood+bonus >= need){ d.mood=Math.min(100,d.mood+5); setDip(i,st); }
+  else { d.mood=Math.max(-100,d.mood-3); EE.toast(p.civ[0]+' lehnen ab'+(st==='ally'?' – ein Geschenk (Tribut) könnte helfen':' – vielleicht mit einem Tribut')); EE.sfx('error',.6); if(G.dipOpen) renderDip(); }
+}
+function sendTribute(i, res, amt){
+  const me=G.players[0], p=G.players[i], d=G.dip[i]; EE.click();
+  if(me.res[res]<amt){ EE.toast('Nicht genug '+RES_DE[res]); EE.sfx('error'); return; }
+  me.res[res]-=amt; p.res[res]+=amt;
+  d.mood = Math.min(100, d.mood + Math.round(amt*RES_VAL[res]/6));
+  EE.toast(amt+' '+RES_DE[res]+' an '+p.civ[0]+' geschickt – Stimmung steigt'); EE.sfx('confirm');
+  updateHUD(); renderDip();
+}
+function demandTribute(i, res, amt){
+  const me=G.players[0], p=G.players[i], d=G.dip[i]; EE.click();
+  const weaker = p.pop < me.pop*.9 || d.state==='ally';
+  if(weaker && d.mood > -25 && p.res[res]>=amt){ p.res[res]-=amt; me.res[res]+=amt; d.mood=Math.max(-100,d.mood-22); EE.toast(p.civ[0]+' zahlen '+amt+' '+RES_DE[res]+' – aber sie sind verärgert'); EE.sfx('confirm'); }
+  else { d.mood=Math.max(-100,d.mood-12); EE.toast(p.civ[0]+' weigern sich zu zahlen'); EE.sfx('error',.6); }
+  updateHUD(); renderDip();
+}
+function tradeQuote(i, give, get, amt){
+  const d=G.dip[i]; if(give===get) return 0;
+  const fair = amt*RES_VAL[give]/RES_VAL[get];
+  const rate = (d.state==='ally'?.9:.75) * (1 + d.mood/500);
+  return Math.max(0, Math.floor(fair*rate));
+}
+function doTrade(i, give, get, amt){
+  const me=G.players[0], p=G.players[i], d=G.dip[i]; EE.click();
+  if(d.state==='enemy'){ EE.toast('Mit Feinden kann man nicht handeln'); EE.sfx('error'); return; }
+  if(d.mood < -30){ EE.toast(p.civ[0]+' wollen gerade nicht mit dir handeln'); EE.sfx('error'); return; }
+  const q = tradeQuote(i,give,get,amt);
+  if(me.res[give]<amt){ EE.toast('Nicht genug '+RES_DE[give]); EE.sfx('error'); return; }
+  if(p.res[get]<q){ EE.toast(p.civ[0]+' haben nur '+Math.floor(p.res[get])+' '+RES_DE[get]); EE.sfx('error'); return; }
+  me.res[give]-=amt; p.res[give]+=amt; me.res[get]+=q; p.res[get]-=q; d.mood=Math.min(100,d.mood+2);
+  EE.toast('Handel: '+amt+' '+RES_DE[give]+' gegen '+q+' '+RES_DE[get]); EE.sfx('confirm');
+  updateHUD(); renderDip();
+}
+function openDip(tab){ G.dipOpen=true; G.dipUI.tab=tab||G.dipUI.tab; G.paused=true; $('#dip').classList.remove('hidden'); renderDip(); }
+function closeDip(){ G.dipOpen=false; G.paused=false; $('#dip').classList.add('hidden'); EE.click(); }
+function moodTxt(m){ return m>=50?'freundlich':m>=15?'wohlgesonnen':m>-15?'zurückhaltend':m>-50?'misstrauisch':'feindselig'; }
+function renderDip(){
+  const el=$('#dipBody'); if(!el || !G.dipOpen) return;
+  const U=G.dipUI, me=G.players[0];
+  $$('#dip .dtab').forEach(b=>b.classList.toggle('on', b.dataset.t===U.tab));
+  const col=i=>'#'+COLORS[i].toString(16).padStart(6,'0');
+  const civBtns = (onlyPeace)=> G.players.slice(1).map(p=>`<button class="dciv${U.who===p.id?' on':''}${onlyPeace&&G.dip[p.id].state==='enemy'?' off':''}" data-w="${p.id}"><i style="background:${col(p.id)}"></i>${p.civ[0]}</button>`).join('');
+  const resBtns = (k)=> RES.map(r=>`<button class="dres${U[k]===r?' on':''}" data-${k}="${r}">${ICON[r]}<span>${RES_DE[r]}</span></button>`).join('');
+  const amtBtns = [50,100,200,500].map(a=>`<button class="damt${U.amt===a?' on':''}" data-amt="${a}">${a}</button>`).join('');
+  let h='';
+  if(U.tab==='rel'){
+    h += `<p class="dnote">Neutrale und verbündete Völker greifen nicht an. Mit Tributen steigt die Stimmung.</p><div class="drows">`;
+    for(const p of G.players.slice(1)){ const d=G.dip[p.id];
+      h += `<div class="drow"><i style="background:${col(p.id)}"></i><div class="dn"><b>${p.civ[0]}</b><small>${moodTxt(d.mood)}</small><span class="mood"><s style="width:${(d.mood+100)/2}%"></s></span></div>
+        <div class="dst">${['ally','neutral','enemy'].map(s=>`<button class="${s}${d.state===s?' on':''}" data-p="${p.id}" data-s="${s}">${DIP_DE[s]}</button>`).join('')}</div></div>`; }
+    h += `</div>`;
+  } else if(U.tab==='trade'){
+    const q = tradeQuote(U.who,U.give,U.get,U.amt), p=G.players[U.who], d=G.dip[U.who];
+    h += `<div class="dlab">Handelspartner</div><div class="dline">${civBtns(true)}</div>
+      <div class="dlab">Du gibst</div><div class="dline">${resBtns('give')}</div>
+      <div class="dlab">Du bekommst</div><div class="dline">${resBtns('get')}</div>
+      <div class="dlab">Menge</div><div class="dline">${amtBtns}</div>
+      <div class="deal">${d.state==='enemy'?'Mit Feinden wird nicht gehandelt – schließe erst Frieden.':U.give===U.get?'Wähle zwei verschiedene Rohstoffe.':`${U.amt} ${RES_DE[U.give]} → <b>${q} ${RES_DE[U.get]}</b> <small>(${p.civ[0]} haben ${Math.floor(p.res[U.get])})</small>`}
+      <button class="btn main small" id="dTrade"${d.state==='enemy'||U.give===U.get?' disabled':''}>Handeln</button></div>`;
+  } else {
+    const p=G.players[U.who];
+    h += `<div class="dlab">Volk</div><div class="dline">${civBtns(false)}</div>
+      <div class="dlab">Rohstoff</div><div class="dline">${resBtns('give')}</div>
+      <div class="dlab">Menge</div><div class="dline">${amtBtns}</div>
+      <div class="deal">Du hast ${Math.floor(me.res[U.give])} ${RES_DE[U.give]} · Stimmung der ${p.civ[0]}: ${moodTxt(G.dip[U.who].mood)}
+      <button class="btn small" id="dDemand">Fordern</button><button class="btn main small" id="dSend">Schenken</button></div>`;
+  }
+  el.innerHTML=h;
+  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>propose(+b.dataset.p, b.dataset.s));
+  el.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{ EE.click(); U.who=+b.dataset.w; renderDip(); });
+  el.querySelectorAll('[data-give]').forEach(b=>b.onclick=()=>{ EE.click(); U.give=b.dataset.give; renderDip(); });
+  el.querySelectorAll('[data-get]').forEach(b=>b.onclick=()=>{ EE.click(); U.get=b.dataset.get; renderDip(); });
+  el.querySelectorAll('[data-amt]').forEach(b=>b.onclick=()=>{ EE.click(); U.amt=+b.dataset.amt; renderDip(); });
+  const t=$('#dTrade'); if(t) t.onclick=()=>doTrade(U.who,U.give,U.get,U.amt);
+  const s=$('#dSend'); if(s) s.onclick=()=>sendTribute(U.who,U.give,U.amt);
+  const dm=$('#dDemand'); if(dm) dm.onclick=()=>demandTribute(U.who,U.give,U.amt);
+}
+// Stimmung ändert sich langsam; freundliche Völker bieten von selbst ein Bündnis an
+function updateDip(dt){
+  if(!G.dip) return;
+  for(const k in G.dip){ const d=G.dip[k];
+    d.mood += dt*(d.state==='ally'?.08:d.state==='enemy'?-.04:.02) - d.mood*dt*.002;
+    d.mood = clamp(d.mood,-100,100);
+    d.ask -= dt;
+    if(d.ask<=0){ d.ask = 150+G.rand()*200;
+      if(!G.offer && d.state!=='ally' && d.mood>(d.state==='enemy'?5:30)) showOffer(+k, d.state==='enemy'?'neutral':'ally'); }
+  }
+}
+function showOffer(i, st){
+  const p=G.players[i]; G.offer={i,st};
+  const el=$('#offer'); el.innerHTML=`<span><i style="background:#${COLORS[i].toString(16).padStart(6,'0')}"></i>${p.civ[0]} bieten ${st==='ally'?'ein Bündnis':'Frieden'} an</span><button class="pb no" id="oNo">✕</button><button class="pb ok" id="oYes">✓</button>`;
+  el.classList.remove('hidden'); EE.sfx('fanfare',.5);
+  const done=(yes)=>{ el.classList.add('hidden'); G.offer=null; if(yes){ setDip(i,st); G.dip[i].mood=Math.min(100,G.dip[i].mood+10); } else { G.dip[i].mood-=8; EE.click(); } };
+  $('#oYes').onclick=()=>done(true); $('#oNo').onclick=()=>done(false);
+  clearTimeout(G.offerT); G.offerT=setTimeout(()=>{ if(G && G.offer) done(false); }, 25000);
 }
 
 /* ============================================================
@@ -259,7 +415,7 @@ function updateCam(){
   const y = Math.max(getH(s.x,s.z), WATER_Y);
   const hd = Math.cos(pitch)*s.dist, yaw = s.yaw*(1-far);
   G.cam.position.set(s.x+Math.sin(yaw)*hd, y+Math.sin(pitch)*s.dist, s.z+Math.cos(yaw)*hd);
-  G.cam.far = s.dist*4+200; G.cam.updateProjectionMatrix();
+  G.cam.far = s.dist*4+200; G.cam.near = clamp(s.dist*.02,.5,40); G.cam.updateProjectionMatrix();
   G.cam.lookAt(s.x, y, s.z);
   G.scene.fog.near = s.dist*1.6+20; G.scene.fog.far = s.dist*4+120;
   G.sun.position.set(s.x+30, y+55, s.z+18);
@@ -319,7 +475,7 @@ const fromLon = lon => (lon+180)/360*G.NX-G.NX/2;
 const fromLat = lat => (LAT0-lat)/(LAT0-LAT1)*G.NZ-G.NZ/2;
 function inBox(lon,lat,b,soft){ const cx=(b[0]+b[1])/2, cy=(b[2]+b[3])/2, rx=(b[1]-b[0])/2+soft, ry=(b[3]-b[2])/2+soft;
   const d=Math.max(Math.abs(lon-cx)/rx, Math.abs(lat-cy)/ry); return clamp((1-d)/(soft/Math.max(rx,ry)+.001),0,1); }
-function desertAt(lon,lat){ let v=0; for(const b of DESERTS){ v=Math.max(v, inBox(lon,lat,b,3)); } return v; }
+function desertAt(lon,lat){ let v=0; const w=(vnoise(lon*.09,lat*.09,77)-.5)*9+(vnoise(lon*.4,lat*.4,79)-.5)*2.5, w2=(vnoise(lon*.09+5,lat*.09,78)-.5)*6; for(const b of DESERTS){ v=Math.max(v, inBox(lon+w,lat+w2,b,3)); } return v; }
 function mountainAt(lon,lat){ let v=0; for(const m of MOUNTAINS){ const d=Math.hypot((lon-m[0])/m[2],(lat-m[1])/m[3]); if(d<1) v=Math.max(v,(1-d*d)*m[4]); } return v; }
 function coldAt(lat){ return clamp((Math.abs(lat)-55)/12,0,1); }
 
@@ -347,7 +503,17 @@ function rawH(x,z){
   if(e<3) h = Math.min(h, WATER_Y-1);
   return h;
 }
+function tileH(t,x,z){
+  const gx=clamp((x-t.x0)/HSF,0,TN-.0001), gz=clamp((z-t.z0)/HSF,0,TN-.0001), ix=gx|0, iz=gz|0, fx=gx-ix, fz=gz-iz, n=TN+1, a=t.h;
+  const k=iz*n+ix;
+  return lerp(lerp(a[k],a[k+1],fx), lerp(a[k+n],a[k+n+1],fx), fz);
+}
 function getH(x,z){
+  if(G.tiles){ const ti=Math.floor((x+G.NX/2)/TILE), tj=Math.floor((z+G.NZ/2)/TILE);
+    if(ti>=0&&tj>=0&&ti<G.tnx&&tj<G.tnz){ const t=G.tiles[tj*G.tnx+ti]; if(t) return tileH(t,x,z); } }
+  return coarseH(x,z);
+}
+function coarseH(x,z){
   const s=G.hs, gx=(x+G.NX/2)/s, gz=(z+G.NZ/2)/s, n=G.hnx;
   const ix=clamp(Math.floor(gx),0,G.hnx-2), iz=clamp(Math.floor(gz),0,G.hnz-2);
   const fx=clamp(gx-ix,0,1), fz=clamp(gz-iz,0,1), a=G.hm;
@@ -355,6 +521,33 @@ function getH(x,z){
   return lerp(lerp(h00,h10,fx), lerp(h01,h11,fx), fz);
 }
 const WATER_Y = -.55;
+/* ---------- Welt in Kacheln: feine Höhen (alle 2 Einheiten) entstehen erst, wenn sie gebraucht werden ---------- */
+const TILE = 64, HSF = 2, TN = TILE/HSF;
+function ensureTile(ti,tj){
+  if(ti<0||tj<0||ti>=G.tnx||tj>=G.tnz) return null;
+  const id=tj*G.tnx+ti; let t=G.tiles[id]; if(t) return t;
+  const n=TN+1, A=n+2, x0=ti*TILE-G.NX/2, z0=tj*TILE-G.NZ/2;
+  const ha=new Float32Array(A*A);
+  for(let j=0;j<A;j++) for(let i=0;i<A;i++) ha[j*A+i]=rawH(x0+(i-1)*HSF, z0+(j-1)*HSF);
+  const h=new Float32Array(n*n);
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++) h[j*n+i]=ha[(j+1)*A+i+1];
+  t={ti,tj,id,x0,z0,h,ha,mesh:null};
+  G.tiles[id]=t; G.tileCount=(G.tileCount||0)+1;
+  // Raster für Wegfindung (Wasser, Rand, steile Hänge)
+  const NX=G.NX, NZ=G.NZ, gi0=ti*TILE, gj0=tj*TILE;
+  for(let cj=0;cj<TILE;cj++) for(let ci=0;ci<TILE;ci++){
+    const gi=gi0+ci, gj=gj0+cj, x=x0+ci+.5, z=z0+cj+.5, hh=tileH(t,x,z);
+    const edge = gi<2||gj<2||gi>NX-3||gj>NZ-3;
+    const steep = Math.abs(tileH(t,x+.5,z)-tileH(t,x-.5,z))+Math.abs(tileH(t,x,z+.5)-tileH(t,x,z-.5)) > 2.2;
+    if(hh<WATER_Y+.15 || edge || steep) G.grid[gj*NX+gi]=1;
+  }
+  return t;
+}
+function ensureArea(x0,z0,x1,z1){
+  const a=Math.floor((Math.min(x0,x1)+G.NX/2)/TILE), b=Math.floor((Math.max(x0,x1)+G.NX/2)/TILE);
+  const c=Math.floor((Math.min(z0,z1)+G.NZ/2)/TILE), d=Math.floor((Math.max(z0,z1)+G.NZ/2)/TILE);
+  for(let j=c;j<=d;j++) for(let i=a;i<=b;i++) ensureTile(i,j);
+}
 
 function genChunk(ci,cj){
   const NX=G.NX, NZ=G.NZ, CH=G.CH;
@@ -366,7 +559,7 @@ function genChunk(ci,cj){
   let land=0; for(let k=0;k<9;k++){ if(rawLand(x0+((k%3)+.5)*CH/3, z0+(((k/3)|0)+.5)*CH/3)>.55) land++; }
   if(!land) return;
   const saveR=G.rand; G.rand=R;
-  const tries = Math.round(CH*CH/9);
+  const tries = Math.round(CH*CH/13);
   for(let i=0;i<tries;i++){
     const x=x0+R()*CH, z=z0+R()*CH;
     if(rawLand(x,z)<.7) continue;
@@ -375,13 +568,14 @@ function genChunk(ci,cj){
     const forest = fbm(x*.03,z*.03,H_SEED+40);
     const r = R();
     if(ds>.5){ if(r<.02) placeCluster('tree',x,z,3,1.5); else if(r<.05) placeCluster('stone',x,z,2,1); }
-    else if(forest>.53 && cold<.85 && mt<2.5 && r<.35) placeCluster('tree',x,z,5+(R()*9|0),2.2+R()*2.5);
+    else if(forest>.55 && cold<.85 && mt<2.5 && r<.22) placeCluster('tree',x,z,4+(R()*7|0),(2.2+R()*2.5)*1.9);
     else if(r<.045) placeCluster('bush',x,z,3,1.6);
     else if(r<.075 && mt>.4) placeCluster('stone',x,z,3,1.5);
     else if(r<.085) placeCluster('gold',x,z,2,1.2);
     else if(r<.13 && cold<.9) spawnDeer(x,z);
   }
   addDecorChunk(x0,z0,CH,R);
+  const dl=G.depo && G.depo[key]; if(dl){ for(const d of dl) placeCluster(d.type, d.x, d.z, d.type==='oil'?1:3, 1.6); delete G.depo[key]; }
   G.rand=saveR;
   if(G.farView){ for(const r of G.res) if(r.mesh && !r.mesh.inst && r.mesh.visible) r.mesh.visible=false; }
 }
@@ -398,7 +592,7 @@ function genWorld(){
   // Startorte der Zivilisationen (echte Orte, bei Platzmangel etwas verschoben)
   G.bases = [];
   const nP = G.players.length;
-  const minD = Math.max(14, Math.round(nP<=2 ? NX/11 : nP<=4 ? NX/12 : nP<=8 ? NX/14 : NX/22));
+  const minD = Math.max(40, Math.round(NX/360*(nP<=2 ? 12 : nP<=4 ? 9 : nP<=8 ? 7 : 5)));
   const landFrac=(x,z,r)=>{ let n=0; for(let i=0;i<24;i++){ const a=i/24*6.283, rr=r*(i%2?1:.55); if(rawLand(x+Math.cos(a)*rr, z+Math.sin(a)*rr)>.55) n++; } return n/24; };
   G.players.forEach(p=>{
     const ll = CIV_POS[p.civ[0]] || [0,30];
@@ -422,18 +616,11 @@ function genWorld(){
   G.hs = G.HS; G.hnx = NX/G.hs+1; G.hnz = NZ/G.hs+1;
   G.hm = new Float32Array(G.hnx*G.hnz);
   for(let j=0;j<G.hnz;j++) for(let i=0;i<G.hnx;i++) G.hm[j*G.hnx+i] = rawH(i*G.hs-NX/2, j*G.hs-NZ/2);
-  // Raster für Wegfindung
-  G.grid = new Uint8Array(NX*NZ);
+  // Raster für Wegfindung: wird kachelweise gefüllt, sobald eine Gegend gebraucht wird
+  G.grid = new Uint8Array(NX*NZ); G.road = new Uint8Array(NX*NZ);
+  G.tnx = NX/TILE; G.tnz = NZ/TILE; G.tiles = new Array(G.tnx*G.tnz); G.tileCount=0; G.tileMeshes=[];
   const PW=320; G.pfW=PW; G.pfG = new Float32Array(PW*PW); G.pfF = new Int32Array(PW*PW); G.pfS = new Uint32Array(PW*PW); G.pfC = new Uint32Array(PW*PW); G.pfStamp = 0;
-  // Höhe je Feld einmal berechnen (schneller bei großen Karten), Steilheit aus den Nachbarfeldern
-  const CHt = new Float32Array(NX*NZ);
-  for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++) CHt[j*NX+i] = getH(i-NX/2+.5, j-NZ/2+.5);
-  for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
-    const k=j*NX+i, h=CHt[k];
-    const edge = i<2||j<2||i>NX-3||j>NZ-3;
-    const steep = !edge && (Math.abs(CHt[k+1]-CHt[k-1])+Math.abs(CHt[k+NX]-CHt[k-NX]))*.5 > 2.2;
-    if(h<WATER_Y+.15 || edge || steep) G.grid[k]=1;
-  }
+  G.bases.forEach(b=>ensureArea(b.x-90,b.z-90,b.x+90,b.z+90));
   buildTerrain();
   buildWater();
   // Spieler: Stadtzentrum, Arbeiter, faire Startressourcen
@@ -445,21 +632,22 @@ function genWorld(){
     placeCluster('bush', b.x+Math.cos(ang)*8, b.z+Math.sin(ang)*8, 6, 2.6, 6.5);
     placeCluster('stone', b.x+Math.cos(ang+2)*10, b.z+Math.sin(ang+2)*10, 3, 1.6, 6.5);
     placeCluster('gold', b.x+Math.cos(ang+3.3)*11, b.z+Math.sin(ang+3.3)*11, 3, 1.6, 6.5);
-    placeCluster('tree', b.x+Math.cos(ang+4.6)*13, b.z+Math.sin(ang+4.6)*13, 22, 5, 6.5);
+    placeCluster('tree', b.x+Math.cos(ang+4.6)*17, b.z+Math.sin(ang+4.6)*17, 22, 9, 8.5);
     for(let k=0;k<4;k++) spawnDeer(b.x+Math.cos(ang+1)*15+R()*4, b.z+Math.sin(ang+1)*15+R()*4);
   });
   // Natur entsteht in Chunks (Stücken): zuerst rund um alle Städte, der Rest beim Hinschauen
-  G.chunks = new Set(); G.CH = 48;
-  G.bases.forEach(b=>{ const ci=Math.floor((b.x+NX/2)/G.CH), cj=Math.floor((b.z+NZ/2)/G.CH); for(let dj=-1;dj<=1;dj++) for(let di=-1;di<=1;di++) genChunk(ci+di,cj+dj); });
-  // Rohstoffe an echten Orten
+  G.chunks = new Set(); G.CH = TILE;
+  // Rohstoffe an echten Orten (werden gesetzt, sobald die Gegend entsteht)
+  G.depo = {};
   for(const d of DEPOSITS){
     const n = Math.max(1, Math.round(d[5]*Math.sqrt(NX/320)));
     for(let k=0;k<n;k++) for(let t=0;t<25;t++){
       const lon=d[1]+R()*(d[2]-d[1]), lat=d[3]+R()*(d[4]-d[3]), x=fromLon(lon), z=fromLat(lat);
       if(rawLand(x,z)<.7) continue;
-      placeCluster(d[0], x, z, d[0]==='oil'?1:3, 1.6); break;
+      const key=Math.floor((x+NX/2)/TILE)+','+Math.floor((z+NZ/2)/TILE); (G.depo[key]||(G.depo[key]=[])).push({type:d[0],x,z}); break;
     }
   }
+  G.bases.forEach(b=>{ const ci=Math.floor((b.x+NX/2)/G.CH), cj=Math.floor((b.z+NZ/2)/G.CH); for(let dj=-1;dj<=1;dj++) for(let di=-1;di<=1;di++) genChunk(ci+di,cj+dj); });
   buildMinimapBase();
 }
 
@@ -497,86 +685,211 @@ function makeGroundTex(kind){
   const t=new T.CanvasTexture(cv); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; t.generateMipmaps=true; t.minFilter=T.LinearMipmapLinearFilter;
   return t;
 }
-function buildTerrain(){
-  const NX=G.NX, NZ=G.NZ;
-  const geo = new T.PlaneGeometry(NX, NZ, G.hnx-1, G.hnz-1);
-  geo.rotateX(-Math.PI/2);
-  const pos = geo.attributes.position, wA = new Float32Array(pos.count*4), wB = new Float32Array(pos.count), tint = new Float32Array(pos.count*3);
-  for(let i=0;i<pos.count;i++){
-    const x=pos.getX(i), z=pos.getZ(i), h=G.hm[i]; pos.setY(i,h);
-    const lon=toLon(x), lat=toLat(z);
-    let grass=1, dirt=0, sand=0, rock=0, snow=0;
-    const n1 = fbm(x*.07,z*.07,H_SEED+3);
-    dirt = clamp((n1-.62)*3,0,.6);
-    const ds = desertAt(lon,lat); sand = Math.max(sand, ds);
-    for(const b of G.bases){ const d=Math.hypot(x-b.x,z-b.z); if(d<9) dirt=Math.max(dirt, clamp((9-d)/5,0,1)*.85); }
-    if(h<WATER_Y+.45) sand = Math.max(sand, clamp((WATER_Y+.45-h)/.4,0,1));
-    rock = clamp((h-(WATER_Y+3.1))/1.1,0,1);
-    const cold = coldAt(lat);
-    snow = Math.max(clamp((h-(WATER_Y+4.6))/.9,0,1), cold>.55 ? clamp((cold-.55)*2.5,0,1) : 0);
-    // Gewichte normalisieren (Reihenfolge: Schnee > Fels > Sand > Erde > Gras)
-    let rest = 1;
-    const ws = snow*rest; rest -= ws;
-    const wr = rock*rest; rest -= wr;
-    const wsa = sand*rest; rest -= wsa;
-    const wd = dirt*rest; rest -= wd;
-    wA[i*4]=rest; wA[i*4+1]=wd; wA[i*4+2]=wsa; wA[i*4+3]=wr; wB[i]=ws;
-    const v = .9+hash2(x,z,9)*.2, tn = cold*.25;
-    tint[i*3]=v*(1-tn*.4); tint[i*3+1]=v; tint[i*3+2]=v*(1+tn*.3);
-  }
-  geo.setAttribute('aW', new T.BufferAttribute(wA,4));
-  geo.setAttribute('aS', new T.BufferAttribute(wB,1));
-  geo.setAttribute('color', new T.BufferAttribute(tint,3));
-  geo.computeVertexNormals();
-  const tex = { grass:makeGroundTex('grass'), dirt:makeGroundTex('dirt'), sand:makeGroundTex('sand'), rock:makeGroundTex('rock'), snow:makeGroundTex('snow') };
-  G.groundTex = tex;
+function groundW(x,z,h,out,o){
+  const lon=toLon(x), lat=toLat(z);
+  let sand=0;
+  const n1 = fbm(x*.07,z*.07,H_SEED+3);
+  let dirt = clamp((n1-.62)*3,0,.6);
+  const ds = desertAt(lon,lat); sand = Math.max(sand, ds);
+  for(const b of G.bases){ const d=Math.hypot(x-b.x,z-b.z); if(d<9) dirt=Math.max(dirt, clamp((9-d)/5,0,1)*.85); }
+  if(h<WATER_Y+.45) sand = Math.max(sand, clamp((WATER_Y+.45-h)/.4,0,1));
+  const rock = clamp((h-(WATER_Y+3.1))/1.1,0,1);
+  const cold = coldAt(lat);
+  const snow = Math.max(clamp((h-(WATER_Y+4.6))/.9,0,1), cold>.55 ? clamp((cold-.55)*2.5,0,1) : 0);
+  let rest = 1;
+  const ws = snow*rest; rest -= ws;
+  const wr = rock*rest; rest -= wr;
+  const wsa = sand*rest; rest -= wsa;
+  const wd = dirt*rest; rest -= wd;
+  out.wA[o*4]=rest; out.wA[o*4+1]=wd; out.wA[o*4+2]=wsa; out.wA[o*4+3]=wr; out.wB[o]=ws;
+  const v = .9+hash2(x,z,9)*.2, tn = cold*.25;
+  out.tint[o*3]=v*(1-tn*.4); out.tint[o*3+1]=v; out.tint[o*3+2]=v*(1+tn*.3);
+}
+const TERRAIN_T = {value:0};
+function terrainMat(coarse){
+  const tex = G.groundTex;
   const mt = new T.MeshLambertMaterial({vertexColors:true});
+  mt.customProgramCacheKey = () => coarse ? 'terrainC' : 'terrainF';
   mt.onBeforeCompile = sh => {
     for(const k in tex) sh.uniforms['t_'+k] = {value:tex[k]};
-    sh.vertexShader = 'attribute vec4 aW;\nattribute float aS;\nvarying vec4 vW;\nvarying float vS;\nvarying vec2 vWP;\n' + sh.vertexShader
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vW=aW; vS=aS; vWP=position.xz;');
-    sh.fragmentShader = 'uniform sampler2D t_grass,t_dirt,t_sand,t_rock,t_snow;\nvarying vec4 vW;\nvarying float vS;\nvarying vec2 vWP;\n' + sh.fragmentShader
+    sh.uniforms.uTime = TERRAIN_T;
+    if(coarse){ sh.uniforms.tCov={value:G.covTex}; sh.uniforms.uCov={value:new T.Vector4(G.tnx,G.tnz,G.NX,G.NZ)}; }
+    sh.vertexShader = 'attribute vec4 aW;\nattribute float aS;\nvarying vec4 vW;\nvarying float vS;\nvarying vec3 vWP;\n' + sh.vertexShader
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vW=aW; vS=aS; vWP=position;');
+    sh.fragmentShader = 'uniform sampler2D t_grass,t_dirt,t_sand,t_rock,t_snow;\nuniform float uTime;\n'+(coarse?'uniform sampler2D tCov;\nuniform vec4 uCov;\n':'')+'varying vec4 vW;\nvarying float vS;\nvarying vec3 vWP;\n' + sh.fragmentShader
+      .replace('void main() {', 'void main() {\n'+(coarse?` vec2 tcv = floor((vWP.xz + uCov.zw*.5)/${TILE}.0);
+ if(texture2D(tCov, (tcv+.5)/uCov.xy).r > .5) discard;
+`:''))
       .replace('#include <map_fragment>', `
-        vec2 uv1 = vWP*.28, uv2 = vWP*.061 + vec2(.37,.11);
+        vec2 uv1 = vWP.xz*.28, uv2 = vWP.xz*.061 + vec2(.37,.11);
         vec3 cg = mix(texture2D(t_grass,uv1).rgb, texture2D(t_grass,uv2).rgb, .45);
         vec3 cd = mix(texture2D(t_dirt,uv1).rgb, texture2D(t_dirt,uv2).rgb, .4);
         vec3 cs = mix(texture2D(t_sand,uv1*.7).rgb, texture2D(t_sand,uv2).rgb, .4);
         vec3 cr = mix(texture2D(t_rock,uv1*.8).rgb, texture2D(t_rock,uv2).rgb, .4);
         vec3 cn = texture2D(t_snow,uv1*.6).rgb;
         vec3 ground = cg*vW.x + cd*vW.y + cs*vW.z + cr*vW.w + cn*vS;
+        // nasser Sand und Brandung an der Küste (scheint durch das Wasser)
+        float wl = vWP.y - (${WATER_Y.toFixed(2)});
+        ground *= mix(1.0, .72, (1.0-smoothstep(.02, .35, wl)) * step(-1.2, wl));
+        float nz = texture2D(t_grass, vWP.xz*.05 + uTime*.01).g;
+        float band = smoothstep(-.22, -.04, wl) * (1.0-smoothstep(-.01, .06, wl));
+        float wave = .5 + .5*sin(wl*26.0 - uTime*2.2 + nz*9.0);
+        ground = mix(ground, vec3(1.0,1.04,1.06), band * smoothstep(.6, .95, wave) * .7);
+        ground = mix(ground, ground*vec3(.55,.75,.85), 1.0-smoothstep(-1.4, -.05, wl));
         diffuseColor.rgb *= ground;`);
   };
-  const m = new T.Mesh(geo, mt);
+  return mt;
+}
+function buildTerrain(){
+  const NX=G.NX, NZ=G.NZ;
+  G.groundTex = { grass:makeGroundTex('grass'), dirt:makeGroundTex('dirt'), sand:makeGroundTex('sand'), rock:makeGroundTex('rock'), snow:makeGroundTex('snow') };
+  // Abdeckung: welche Kacheln schon fein gezeichnet werden
+  G.covData = new Uint8Array(G.tnx*G.tnz);
+  G.covTex = new T.DataTexture(G.covData, G.tnx, G.tnz, T.RedFormat, T.UnsignedByteType);
+  G.covTex.magFilter = G.covTex.minFilter = T.NearestFilter; G.covTex.needsUpdate = true;
+  // grobe Welt (für Weitsicht und alles, was noch nicht fein ist)
+  const geo = new T.PlaneGeometry(NX, NZ, G.hnx-1, G.hnz-1);
+  geo.rotateX(-Math.PI/2);
+  const pos = geo.attributes.position, A = {wA:new Float32Array(pos.count*4), wB:new Float32Array(pos.count), tint:new Float32Array(pos.count*3)};
+  for(let i=0;i<pos.count;i++){ const x=pos.getX(i), z=pos.getZ(i), h=G.hm[i]; pos.setY(i,h); groundW(x,z,h,A,i); }
+  geo.setAttribute('aW', new T.BufferAttribute(A.wA,4));
+  geo.setAttribute('aS', new T.BufferAttribute(A.wB,1));
+  geo.setAttribute('color', new T.BufferAttribute(A.tint,3));
+  geo.computeVertexNormals();
+  const m = new T.Mesh(geo, terrainMat(true));
   m.receiveShadow = true;
   G.scene.add(m); G.terrain = m;
-  const skirt = new T.Mesh(new T.PlaneGeometry(NX*6,NZ*6), new T.MeshLambertMaterial({color:0x123f66}));
-  skirt.rotation.x = -Math.PI/2; skirt.position.y = WATER_Y-2; G.scene.add(skirt);
+  G.tileMat = terrainMat(false);
+  const skirt = new T.Mesh(new T.PlaneGeometry(NX*6,NZ*6), new T.MeshLambertMaterial({color:0x0e3558}));
+  skirt.rotation.x = -Math.PI/2; skirt.position.y = WATER_Y-2.5; G.scene.add(skirt);
+}
+// feine Kachel als Mesh (mit Schürze nach unten, damit an den Rändern keine Ritzen entstehen)
+function tileMesh(t){
+  const n=TN+1, A=n+2, cnt=n*n+4*n;
+  const P=new Float32Array(cnt*3), N=new Float32Array(cnt*3), O={wA:new Float32Array(cnt*4), wB:new Float32Array(cnt), tint:new Float32Array(cnt*3)};
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++){
+    const k=j*n+i, x=t.x0+i*HSF, z=t.z0+j*HSF, h=t.h[k];
+    P[k*3]=x; P[k*3+1]=h; P[k*3+2]=z;
+    const hl=t.ha[(j+1)*A+i], hr=t.ha[(j+1)*A+i+2], hd=t.ha[j*A+i+1], hu=t.ha[(j+2)*A+i+1];
+    let nx=hl-hr, ny=2*HSF, nz=hd-hu; const L=Math.hypot(nx,ny,nz); N[k*3]=nx/L; N[k*3+1]=ny/L; N[k*3+2]=nz/L;
+    groundW(x,z,h,O,k);
+  }
+  const edges=[[],[],[],[]]; for(let i=0;i<n;i++){ edges[0].push(i); edges[1].push((n-1)*n+i); edges[2].push(i*n); edges[3].push(i*n+n-1); }
+  let v=n*n; const idx=[];
+  for(let j=0;j<n-1;j++) for(let i=0;i<n-1;i++){ const a=j*n+i, b=a+1, c=a+n, d=c+1; idx.push(a,c,b, b,c,d); }
+  edges.forEach((E,ei)=>{
+    const s0=v;
+    for(const k of E){ P[v*3]=P[k*3]; P[v*3+1]=P[k*3+1]-3; P[v*3+2]=P[k*3+2]; for(let q=0;q<3;q++){ N[v*3+q]=N[k*3+q]; O.tint[v*3+q]=O.tint[k*3+q]; } for(let q=0;q<4;q++) O.wA[v*4+q]=O.wA[k*4+q]; O.wB[v]=O.wB[k]; v++; }
+    for(let q=0;q<n-1;q++){ const a=E[q], b=E[q+1], c=s0+q, d=s0+q+1; idx.push(a,b,c, b,d,c, a,c,b, b,c,d); }
+  });
+  const geo=new T.BufferGeometry();
+  geo.setAttribute('position', new T.BufferAttribute(P,3)); geo.setAttribute('normal', new T.BufferAttribute(N,3));
+  geo.setAttribute('aW', new T.BufferAttribute(O.wA,4)); geo.setAttribute('aS', new T.BufferAttribute(O.wB,1)); geo.setAttribute('color', new T.BufferAttribute(O.tint,3));
+  geo.setIndex(idx); geo.computeBoundingSphere();
+  const m=new T.Mesh(geo, G.tileMat); m.receiveShadow=true;
+  return m;
+}
+function showTile(t){
+  if(t.mesh) return; t.mesh=tileMesh(t); G.scene.add(t.mesh); G.tileMeshes.push(t);
+  G.covData[t.id]=255; G.covTex.needsUpdate=true;
+}
+function hideTile(t){
+  if(!t.mesh) return; G.scene.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh=null;
+  G.covData[t.id]=0; G.covTex.needsUpdate=true;
+}
+function updateTiles(force){
+  const s=G.camS, R=clamp(s.dist*2.4+70, 110, 300);
+  const ci=(s.x+G.NX/2)/TILE, cj=(s.z+G.NZ/2)/TILE, r=Math.ceil(R/TILE);
+  const want=[];
+  for(let dj=-r;dj<=r;dj++) for(let di=-r;di<=r;di++){
+    const i=Math.floor(ci)+di, j=Math.floor(cj)+dj; if(i<0||j<0||i>=G.tnx||j>=G.tnz) continue;
+    const d=Math.hypot(i+.5-ci, j+.5-cj)*TILE; if(d>R+TILE*.7) continue;
+    const t=G.tiles[j*G.tnx+i]; if(t && t.mesh) continue;
+    want.push([d,i,j]);
+  }
+  want.sort((a,b)=>a[0]-b[0]);
+  const budget = force ? 1e9 : 3;
+  for(let k=0;k<want.length && k<budget;k++){ const t=ensureTile(want[k][1],want[k][2]); if(t) showTile(t); }
+  // weit entfernte Kacheln wieder freigeben (die Höhen bleiben gespeichert)
+  if(G.tileMeshes.length>260){
+    G.tileMeshes.sort((a,b)=>Math.hypot(b.ti+.5-ci,b.tj+.5-cj)-Math.hypot(a.ti+.5-ci,a.tj+.5-cj));
+    while(G.tileMeshes.length>200){ const t=G.tileMeshes.shift(); if(Math.hypot(t.ti+.5-ci,t.tj+.5-cj)*TILE < R+TILE){ G.tileMeshes.push(t); break; } hideTile(t); }
+  }
+}
+function waterNormalTex(){
+  const S=256, h=fbmTile(S, 313), h2=tileNoise(S,24,517), cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const x=cv.getContext('2d'), img=x.createImageData(S,S);
+  const H=(i,j)=>{ i=(i+S)%S; j=(j+S)%S; return h[j*S+i]*1.0 + h2[j*S+i]*.35; };
+  for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const dx=(H(i+1,j)-H(i-1,j))*6, dz=(H(i,j+1)-H(i,j-1))*6, L=Math.hypot(dx,1,dz), o=(j*S+i)*4;
+    img.data[o]=(-dx/L*.5+.5)*255; img.data[o+1]=(-dz/L*.5+.5)*255; img.data[o+2]=(1/L*.5+.5)*255; img.data[o+3]=255; }
+  x.putImageData(img,0,0);
+  const t=new T.CanvasTexture(cv); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.NoColorSpace; t.anisotropy=4;
+  return t;
+}
+function waterDepthTex(){
+  const W=G.hnx, H=G.hnz, d=new Uint8Array(W*H*4);
+  for(let i=0;i<W*H;i++){ const dep=clamp((WATER_Y-G.hm[i])/6,0,1); d[i*4]=dep*255; d[i*4+3]=255; }
+  const t=new T.DataTexture(d, W, H, T.RGBAFormat, T.UnsignedByteType);
+  t.magFilter=t.minFilter=T.LinearFilter; t.needsUpdate=true; return t;
 }
 function buildWater(){
   const NX=G.NX, NZ=G.NZ;
-  const geo = new T.PlaneGeometry(NX*1.4, NZ*1.6, Math.min(420,Math.round(NX/1.5)), Math.min(160,Math.round(NZ/1.5)));
+  const geo = new T.PlaneGeometry(NX*1.4, NZ*1.6, 96, 48);
   geo.rotateX(-Math.PI/2);
-  const mt = new T.MeshLambertMaterial({color:0x2f8fd8, transparent:true, opacity:.84});
-  mt.onBeforeCompile = sh => {
-    sh.uniforms.uTime = {value:0}; G.waterU = sh.uniforms.uTime;
-    sh.vertexShader = 'uniform float uTime;\nvarying float vWave;\n' + sh.vertexShader
-      .replace('#include <beginnormal_vertex>', `
-        float wx = position.x, wz = position.z;
-        float w1 = sin(wx*.55 + uTime*1.3) * .5 + sin(wz*.42 - uTime*1.05) * .5;
-        float w2 = sin((wx+wz)*.9 + uTime*2.1) * .35;
-        float dX = cos(wx*.55 + uTime*1.3)*.55*.5 + cos((wx+wz)*.9 + uTime*2.1)*.9*.35;
-        float dZ = -sin(wz*.42 - uTime*1.05)*0.0 + cos(wz*.42 - uTime*1.05)*.42*.5 + cos((wx+wz)*.9 + uTime*2.1)*.9*.35;
-        vec3 objectNormal = normalize(vec3(-dX*.12, 1.0, -dZ*.12));
-        #ifdef USE_TANGENT
-          vec3 objectTangent = vec3( tangent.xyz );
-        #endif`)
-      .replace('#include <begin_vertex>', `vec3 transformed = vec3(position); transformed.y += (w1+w2)*.07; vWave = w1+w2;`);
-    sh.fragmentShader = 'varying float vWave;\n' + sh.fragmentShader
-      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
-        gl_FragColor.rgb += vec3(.10,.14,.16) * smoothstep(.55, 1.1, vWave);`);
-  };
+  const U = T.UniformsUtils.merge([T.UniformsLib.fog, {
+    uTime:{value:0}, tN:{value:null}, tD:{value:null}, uWorld:{value:new T.Vector2(NX,NZ)},
+    uSun:{value:new T.Vector3(30,55,18).normalize()},
+    cShallow:{value:new T.Color(0x35c6c0)}, cDeep:{value:new T.Color(0x0b3f74)}, cSkyH:{value:new T.Color(0xcfeaff)}, cSkyZ:{value:new T.Color(0x5aa6e6)}, cSun:{value:new T.Color(0xfff1d6)} }]);
+  U.tN.value = waterNormalTex(); U.tD.value = waterDepthTex();
+  const mt = new T.ShaderMaterial({ uniforms:U, transparent:true, fog:true, depthWrite:false,
+    vertexShader:`
+      varying vec3 vW;
+      #include <fog_pars_vertex>
+      void main(){
+        vec4 wp = modelMatrix * vec4(position,1.0); vW = wp.xyz;
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader:`
+      uniform float uTime; uniform sampler2D tN, tD; uniform vec2 uWorld; uniform vec3 uSun;
+      uniform vec3 cShallow, cDeep, cSkyH, cSkyZ, cSun;
+      varying vec3 vW;
+      #include <fog_pars_fragment>
+      vec3 nmap(vec2 uv){ return texture2D(tN, uv).xyz*2.0-1.0; }
+      void main(){
+        vec2 p = vW.xz;
+        float depth = texture2D(tD, (p + uWorld*.5)/uWorld).r * 6.0;
+        // Wellen: zwei Normalen-Ebenen, die gegeneinander ziehen, dazu große Dünung
+        vec3 n1 = nmap(p*.045 + vec2(uTime*.018, uTime*.011));
+        vec3 n2 = nmap(p*.11 + vec2(-uTime*.025, uTime*.03));
+        vec3 n3 = nmap(p*.012 + vec2(uTime*.004, -uTime*.006));
+        vec3 N = normalize(vec3((n1.x+n2.x*.7+n3.x*1.2)*.55, 1.0, (n1.y+n2.y*.7+n3.y*1.2)*.55));
+        vec3 V = normalize(cameraPosition - vW);
+        float fres = .03 + .97*pow(1.0-max(dot(N,V),0.0), 5.0);
+        vec3 Rf = reflect(-V, N);
+        vec3 sky = mix(cSkyH, cSkyZ, clamp(Rf.y*1.6,0.0,1.0));
+        float dk = smoothstep(.15, 1.35, depth);
+        vec3 body = mix(cShallow, cDeep, dk);
+        float sss = max(dot(N, uSun),0.0);
+        vec3 col = body*(.55+.45*sss);
+        col = mix(col, sky, clamp(fres*1.15,0.0,.85));
+        float spec = pow(max(dot(Rf, uSun),0.0), 220.0)*3.0 + pow(max(dot(Rf, uSun),0.0), 28.0)*.18;
+        col += cSun*spec;
+        // Schaum auf flachem Wasser
+        float fn = texture2D(tN, p*.07 + vec2(uTime*.02,0.0)).z;
+        float foam = (1.0-smoothstep(.03, .3, depth)) * smoothstep(.62, .9, fn + .25*sin(uTime*1.5 + p.x*.3 + p.y*.2));
+        col = mix(col, vec3(1.0), foam*.4);
+        float a = mix(.48, .95, smoothstep(.0, 1.2, depth));
+        a = max(a, fres*.9);
+        gl_FragColor = vec4(col, a);
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`
+  });
+  G.waterU = U.uTime;
   const w = new T.Mesh(geo, mt);
-  w.position.y = WATER_Y; G.scene.add(w); G.water = w;
+  w.position.y = WATER_Y; w.renderOrder = 2; G.scene.add(w); G.water = w;
 }
 
 /* ---------- Materialien & Modelle ---------- */
@@ -619,14 +932,10 @@ function makeTree(R){
   return g;
 }
 function makeBush(R){
-  geos();
-  const g = new T.Group();
-  if(MODELS.bush){ const bm=modelMesh('bush', 1.5+R()*.3); g.add(bm);
-    for(let i=0;i<9;i++){ const a=R()*6.28, y=.35+R()*.55, r=.55+R()*.15; g.add(mesh(GEO.berry, mat(0xd8283a), Math.cos(a)*r, y, Math.sin(a)*r)); }
-    g.rotation.y = R()*6.28; return g; }
-  const b = mesh(GEO.bush, mat(0x3f8f3a), 0,.45,0); b.scale.set(1.1,.8,1.1); g.add(b);
-  for(let i=0;i<7;i++){ const a=R()*6.28, y=.35+R()*.4, r=.5+R()*.12;
-    g.add(mesh(GEO.berry, mat(0xd8283a), Math.cos(a)*r, y, Math.sin(a)*r)); }
+  const F=flora(), g=new T.Group();
+  const m=new T.Mesh(F.geo.bush[(R()*2)|0], F.mat); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=F.depth;
+  const sc=1.1+R()*.35; m.scale.set(sc,sc*(.9+R()*.2),sc); g.add(m);
+  for(let i=0;i<14;i++){ const a=R()*6.28, y=(.45+R()*.6)*sc, r=(.45+R()*.3)*sc; const b=new T.Mesh(F.berryGeo, F.berryMat); b.position.set(Math.cos(a)*r, y, Math.sin(a)*r); g.add(b); }
   g.rotation.y = R()*6.28; return g;
 }
 function makeRock(R, kind){
@@ -672,12 +981,13 @@ function makeDeer(){
   for(const [x,z] of [[-.11,.28],[.11,.28],[-.11,-.28],[.11,-.28]]){
     const l = mesh(GEO.limb, d, x,.5,z); l.scale.set(.8,1.15,.8); g.add(l); g.legs.push(l);
   }
+  g.scale.setScalar(1.3); // Rothirsch: Schulterhöhe etwa wie die Brust eines Menschen
   return g;
 }
 function makeWorker(color){
   geos();
   const key = Math.random()<.5 ? 'cavem' : 'cavef';
-  if(MODELS[key]){ const g = makeRigged(key, 1.45, color); if(g){ g.rig.hips.userData.y0 = g.rig.hips.position.y; return g; } }
+  if(MODELS[key]){ const g = makeRigged(key, 1.45, color); if(g){ g.rig.hips.userData.y0 = g.rig.hips.position.y; g.userData.key=key; return g; } }
   const g = new T.Group();
   const skin = mat(0xe0b088), fur = mat(0x7d4f2a), hair = mat(0x3a2414), team = mat(color);
   const body = mesh(GEO.body, fur, 0,.72,0); g.add(body);
@@ -857,7 +1167,7 @@ function makeStore(color){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
+const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -892,7 +1202,7 @@ function loadModels(){
   if(modelsReady) return modelsReady;
   const src = window.EE_MODELS || {};
   modelsReady = Promise.all(Object.entries(MODEL_FILES).map(([k,f]) =>
-    fetch(src[k] || f).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(parseGLB).then(m=>{ MODELS[k]=m; if(k==='tree'||k==='palm'||k==='bush'){ m.mat.color.setRGB(1.25,1.55,1.05); m.mat.emissive.setHex(0x14220a); } }).catch(()=>{})
+    fetch(src[k] || f).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(parseGLB).then(m=>{ MODELS[k]=m;  }).catch(()=>{})
   ));
   return modelsReady;
 }
@@ -902,18 +1212,199 @@ function modelMesh(k, width){
   const o = new T.Mesh(m.geo, m.mat); o.scale.setScalar(s); o.castShadow=true; o.receiveShadow=true;
   return o;
 }
-function treeInstance(x,z){
-  const R=G.rand, h=getH(x,z);
-  const palm = MODELS.palm && (h < WATER_Y+1.1 || R()<.08);
-  const key = (palm?'palm':'tree')+':'+Math.floor((x+G.NX/2)/48)+','+Math.floor((z+G.NZ/2)/48);
+/* ============================================================
+   PFLANZEN: Laubbaum, Nadelbaum, Palme, Beerenbusch (selbst gebaut, mit Blätter-Textur und Wind)
+   ============================================================ */
+let FLORA = null;
+function floraAtlas(){
+  const W=1024, H=512, cv=document.createElement('canvas'); cv.width=W; cv.height=H; const x=cv.getContext('2d');
+  const R=rng(4711);
+  // Rinde (0..256)
+  let gr=x.createLinearGradient(0,0,256,0); gr.addColorStop(0,'#4a3222'); gr.addColorStop(.5,'#6e4a30'); gr.addColorStop(1,'#4a3222');
+  x.fillStyle=gr; x.fillRect(0,0,256,512);
+  for(let i=0;i<260;i++){ const px=R()*256, w=1+R()*3; x.strokeStyle=`rgba(${30+R()*30|0},${20+R()*20|0},${12},${.35+R()*.4})`; x.lineWidth=w; x.beginPath(); x.moveTo(px,0); let yy=0; while(yy<512){ yy+=10+R()*30; x.lineTo(px+(R()-.5)*6,yy); } x.stroke(); }
+  for(let i=0;i<120;i++){ x.fillStyle=`rgba(${140+R()*40|0},${110+R()*30|0},${80},.18)`; x.fillRect(R()*256,R()*512,2+R()*5,6+R()*16); }
+  // Palmenstamm (256..512): Ringe
+  x.fillStyle='#8a6a44'; x.fillRect(256,0,256,512);
+  for(let y=0;y<512;y+=16){ const g=x.createLinearGradient(0,y,0,y+16); g.addColorStop(0,'#5a4128'); g.addColorStop(.35,'#9c7a50'); g.addColorStop(1,'#6e5233'); x.fillStyle=g; x.fillRect(256,y,256,16);
+    for(let k=0;k<14;k++){ x.fillStyle='rgba(50,34,20,.35)'; x.fillRect(256+R()*256, y+R()*4, 6+R()*14, 2); } }
+  // Laubbüschel (512..768, oben) und kleinblättriges Büschel (512..768, unten)
+  const clump=(ox,oy,S,cols,leafL,leafW,count)=>{
+    for(let i=0;i<count;i++){
+      const a=R()*6.283, rr=Math.pow(R(),.65)*S*.46, cx=ox+S/2+Math.cos(a)*rr, cy=oy+S/2+Math.sin(a)*rr*.95;
+      const c=cols[(R()*cols.length)|0], sh=.75+ (1-rr/(S*.46))*.35 + (R()-.5)*.15;
+      x.save(); x.translate(cx,cy); x.rotate(R()*6.283);
+      x.fillStyle=`rgb(${c[0]*sh|0},${c[1]*sh|0},${c[2]*sh|0})`;
+      const L=leafL*(.7+R()*.6), Wd=leafW*(.7+R()*.6);
+      x.beginPath(); x.moveTo(-L/2,0); x.quadraticCurveTo(0,-Wd,L/2,0); x.quadraticCurveTo(0,Wd,-L/2,0); x.fill();
+      x.strokeStyle='rgba(20,40,10,.35)'; x.lineWidth=.8; x.beginPath(); x.moveTo(-L/2,0); x.lineTo(L/2,0); x.stroke();
+      x.restore();
+    }
+  };
+  clump(512,0,256,[[62,120,40],[78,140,46],[52,104,36],[92,152,58],[70,128,44]],24,10,900);
+  clump(512,256,256,[[70,130,46],[88,150,56],[60,116,40],[104,160,66]],15,7,1300);
+  // Tannen-Nadeln (768..1024, oben): dichte Nadeln, unten gezackter Rand
+  { x.fillStyle='#24502c'; x.fillRect(768,0,256,200);
+    for(let i=0;i<2600;i++){ const px=768+R()*256, py=R()*200, L=5+R()*9, g=60+R()*60|0;
+      x.strokeStyle=`rgb(${20+R()*25|0},${g},${30+R()*20|0})`; x.lineWidth=1.5; x.beginPath(); x.moveTo(px,py); x.lineTo(px+(R()-.5)*4, py+L); x.stroke(); }
+    for(let k=0;k<16;k++){ const cx=768+k*16+8, d=200+18+R()*30; x.fillStyle='#2a5a30'; x.beginPath(); x.moveTo(cx-9,198); x.lineTo(cx,d); x.lineTo(cx+9,198); x.fill();
+      for(let i=0;i<30;i++){ const py=198+R()*(d-200), w=(1-(py-198)/(d-198))*8; x.strokeStyle=`rgb(${26+R()*20|0},${70+R()*50|0},${34})`; x.lineWidth=1.3; x.beginPath(); x.moveTo(cx+(R()-.5)*w*2,py); x.lineTo(cx+(R()-.5)*w*2,py+5); x.stroke(); } } }
+  // Palmwedel (768..1024, unten): Mittelrippe entlang u
+  { const oy=256+128; x.strokeStyle='#6a7a2a'; x.lineWidth=4; x.beginPath(); x.moveTo(770,oy); x.lineTo(1020,oy); x.stroke();
+    for(let i=0;i<70;i++){ const t=i/70, px=772+t*246, L=(1-Math.pow(t,1.4)*.8)*(60+R()*18);
+      for(const side of [-1,1]){ const g=110+R()*40|0; x.strokeStyle=`rgb(${50+R()*20|0},${g},${36})`; x.lineWidth=4.5*(1-t*.5);
+        x.beginPath(); x.moveTo(px,oy); x.quadraticCurveTo(px+L*.35, oy+side*L*.45, px+L*.55, oy+side*L*.95); x.stroke(); } } }
+  const t=new T.CanvasTexture(cv); t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; t.flipY=false;
+  return t;
+}
+// Geometrie-Baukasten
+function GB(){ return {p:[],n:[],u:[],c:[],i:[]}; }
+function gbAdd(g,p,n,u,c){ g.p.push(p[0],p[1],p[2]); g.n.push(n[0],n[1],n[2]); g.u.push(u[0],u[1]); g.c.push(c,c,c); return g.p.length/3-1; }
+function gbCyl(g, pts, rads, seg, u0, u1, vRep, shade){
+  const base=g.p.length/3;
+  for(let s=0;s<pts.length;s++){
+    const [px,py,pz]=pts[s], r=rads[s], v=s/(pts.length-1)*vRep;
+    for(let k=0;k<=seg;k++){ const a=k/seg*6.283, cx=Math.cos(a), cz=Math.sin(a);
+      gbAdd(g,[px+cx*r,py,pz+cz*r],[cx,.15,cz],[u0+(u1-u0)*k/seg, v], shade*(s===0?.7:1)); }
+  }
+  for(let s=0;s<pts.length-1;s++) for(let k=0;k<seg;k++){ const a=base+s*(seg+1)+k, b=a+1, c=a+seg+1, d=c+1; g.i.push(a,c,b, b,c,d); }
+}
+// Blätterkarte: Quadrat um Mittelpunkt, Normalen zeigen kugelig vom Kronenzentrum weg (weiches Licht)
+function gbCard(g, ctr, axU, axV, size, uv, crown, shade){
+  const [u0,v0,u1,v1]=uv, idx=[];
+  for(const [su,sv,uu,vv] of [[-1,-1,u0,v0],[1,-1,u1,v0],[1,1,u1,v1],[-1,1,u0,v1]]){
+    const p=[ctr[0]+(axU[0]*su+axV[0]*sv)*size/2, ctr[1]+(axU[1]*su+axV[1]*sv)*size/2, ctr[2]+(axU[2]*su+axV[2]*sv)*size/2];
+    let n=[p[0]-crown[0], (p[1]-crown[1])*1.3+.4, p[2]-crown[2]]; const L=Math.hypot(...n)||1; n=n.map(v=>v/L);
+    idx.push(gbAdd(g,p,n,[uu,vv],shade*(.82+.3*Math.max(0,(p[1]-crown[1])/size+.3))));
+  }
+  g.i.push(idx[0],idx[1],idx[2], idx[0],idx[2],idx[3]);
+}
+function randAxes(R){
+  const a=R()*6.283, b=(R()-.5)*2.2, n=[Math.cos(a)*Math.cos(b), Math.sin(b), Math.sin(a)*Math.cos(b)];
+  let u=[-n[2],0,n[0]]; let L=Math.hypot(...u)||1; u=u.map(v=>v/L);
+  const v=[n[1]*u[2]-n[2]*u[1], n[2]*u[0]-n[0]*u[2], n[0]*u[1]-n[1]*u[0]];
+  const r=R()*6.283, c=Math.cos(r), s=Math.sin(r);
+  return [[u[0]*c+v[0]*s,u[1]*c+v[1]*s,u[2]*c+v[2]*s],[v[0]*c-u[0]*s,v[1]*c-u[1]*s,v[2]*c-u[2]*s]];
+}
+function gbBlob(g, c, r, C){
+  const ico=new T.IcosahedronGeometry(1,1), p=ico.attributes.position, base=g.p.length/3, [u0,v0,u1,v1]=UV_LEAF;
+  for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i), k=.85+hash2(x*3,z*3,y*5)*.3;
+    const pp=[c[0]+x*r*k, c[1]+y*r*.85*k, c[2]+z*r*k]; let n=[pp[0]-C[0],(pp[1]-C[1])*1.3+.4,pp[2]-C[2]]; const L=Math.hypot(...n)||1;
+    gbAdd(g, pp, n.map(v=>v/L), [u0+(u1-u0)*(.35+.3*(x*.5+.5)), v0+(v1-v0)*(.35+.3*(z*.5+.5))], .62+.25*(y*.5+.5)); }
+  const ix=ico.index ? ico.index.array : [...Array(p.count).keys()];
+  for(let i=0;i<ix.length;i++) g.i.push(base+ix[i]);
+  ico.dispose();
+}
+function gbGeo(g){
+  const geo=new T.BufferGeometry();
+  geo.setAttribute('position', new T.Float32BufferAttribute(g.p,3)); geo.setAttribute('normal', new T.Float32BufferAttribute(g.n,3));
+  geo.setAttribute('uv', new T.Float32BufferAttribute(g.u,2)); geo.setAttribute('color', new T.Float32BufferAttribute(g.c,3));
+  geo.setIndex(g.i); geo.computeBoundingBox(); geo.computeBoundingSphere(); return geo;
+}
+const UV_BARK=[0,0,.25,1], UV_PALMT=[.25,0,.5,1], UV_LEAF=[.5,0,.75,.5], UV_LEAF2=[.5,.5,.75,1], UV_FIR=[.75,0,1,.5], UV_FROND=[.75,.5,1,1];
+function makeBroadleaf(R, small){
+  const g=GB(), H=small?2.4:3.4;
+  const tr=[[0,0,0],[.05,H*.35,.03],[-.04,H*.7,.06],[.08,H,0]];
+  gbCyl(g, tr, [.34,.26,.2,.15], 8, 0,.25, 1, .9);
+  const crowns=[[0,H+1.6,0,1.9]];
+  for(let b=0;b<4;b++){ const a=b/4*6.283+R()*.8, y=H*.75+R()*H*.25, L=1.3+R()*.5, ex=Math.cos(a)*L, ez=Math.sin(a)*L, ey=y+.9+R()*.6;
+    gbCyl(g, [[0,y,0],[ex*.5,y+.45,ez*.5],[ex,ey,ez]], [.13,.09,.05], 5, 0,.25, 1, .85);
+    crowns.push([ex*1.05, ey+.5, ez*1.05, 1.35+R()*.4]); }
+  const C=[0,H+1.2,0];
+  for(const [cx,cy,cz,r] of crowns){ const n=small?12:18;
+    for(let k=0;k<n;k++){ const [au,av]=randAxes(R); const a=R()*6.283, e=(R()-.3)*1.4, d=r*(.35+R()*.45);
+      const o=[cx+Math.cos(a)*Math.cos(e)*d, cy+Math.sin(e)*d*.8, cz+Math.sin(a)*Math.cos(e)*d];
+      gbCard(g, o, au, av, r*(.9+R()*.4), R()<.7?UV_LEAF:UV_LEAF2, C, .9+R()*.2); }
+    gbBlob(g, [cx,cy,cz], r*.78, C); }
+  return gbGeo(g);
+}
+function makeFir(R){
+  const g=GB(), H=8.8;
+  gbCyl(g, [[0,0,0],[0,H*.5,0],[0,H,0]], [.3,.18,.04], 7, 0,.25, 1, .85);
+  const tiers=7, seg=12, [u0,v0,u1,v1]=UV_FIR;
+  for(let t=0;t<tiers;t++){
+    const f=t/(tiers-1), yb=1.4+f*(H-2.6), r=2.6*(1-f)+.6, th=2.3-f*.9, yt=yb+th;
+    const base=g.p.length/3, rings=[[.06,yt,0],[.55,yt-th*.5,.45],[1,yb,1]];
+    for(let ri=0;ri<3;ri++){ const [rf,y,vv]=rings[ri];
+      for(let k=0;k<=seg;k++){ const a=k/seg*6.283+t*.5, ca=Math.cos(a), sa=Math.sin(a), wob=ri===2?(.85+R()*.3):1;
+        const rr=r*rf*wob, yy=y-(ri===2?R()*.25:0);
+        const n=[ca,.75,sa], L=Math.hypot(...n);
+        gbAdd(g,[ca*rr,yy,sa*rr],n.map(v=>v/L),[u0+(u1-u0)*(k/seg*2%1||(k?1:0)), v0+(v1-v0)*vv*.99], (.62+.38*ri/2)*(.8+.35*f)); } }
+    for(let ri=0;ri<2;ri++) for(let k=0;k<seg;k++){ const a=base+ri*(seg+1)+k, b=a+1, c=a+seg+1, d=c+1; g.i.push(a,b,c, b,d,c); }
+  }
+  return gbGeo(g);
+}
+function makePalm(R){
+  const g=GB(), H=6.4, lean=.9+R()*.8, pts=[], rads=[];
+  for(let s=0;s<=7;s++){ const t=s/7; pts.push([lean*t*t, H*t, 0]); rads.push(.24-.08*t); }
+  gbCyl(g, pts, rads, 7, .25,.5, 1, .95);
+  const top=pts[7], C=[top[0],top[1],top[2]];
+  const fr=9;
+  for(let f=0;f<fr;f++){ const a=f/fr*6.283+R()*.3, ca=Math.cos(a), sa=Math.sin(a), L=3+R()*.7, seg=6, ups=.5+R()*.5;
+    const base=g.p.length/3;
+    for(let s=0;s<=seg;s++){ const t=s/seg, d=L*t, y=top[1]+ups*Math.sin(t*2.2)*1.0 - t*t*1.9, w=.75*(1-t*.6)+.1;
+      const cx=top[0]+ca*d, cz=top[2]+sa*d, sx=-sa*w, sz=ca*w;
+      const [u0,v0,u1,v1]=UV_FROND, uu=u0+(u1-u0)*t;
+      gbAdd(g,[cx+sx,y-.08*t,cz+sz],[ca*.3,1,sa*.3],[uu,v0],1); gbAdd(g,[cx-sx,y-.08*t,cz-sz],[ca*.3,1,sa*.3],[uu,v1],1); }
+    for(let s=0;s<seg;s++){ const a0=base+s*2; g.i.push(a0,a0+1,a0+2, a0+1,a0+3,a0+2); }
+  }
+  return gbGeo(g);
+}
+function makeBushGeo(R){
+  const g=GB(), C=[0,.55,0];
+  for(let k=0;k<16;k++){ const [au,av]=randAxes(R); const a=R()*6.283, r=R()*.55;
+    gbCard(g,[Math.cos(a)*r, .5+R()*.45, Math.sin(a)*r], au, av, 1.05+R()*.4, UV_LEAF2, C, .95); }
+  return gbGeo(g);
+}
+function floraMat(tex){
+  const m=new T.MeshLambertMaterial({map:tex, vertexColors:true, alphaTest:.45, side:T.DoubleSide});
+  m.customProgramCacheKey=()=>'flora';
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uTime = TERRAIN_T;
+    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        vec2 ip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
+      #else
+        vec2 ip = vec2(modelMatrix[3][0], modelMatrix[3][2]);
+      #endif
+      float bend = max(0.0, position.y-1.2) * .018;
+      transformed.x += sin(uTime*1.7 + ip.x*.37 + ip.y*.21 + position.y*.4) * bend;
+      transformed.z += cos(uTime*1.3 + ip.x*.23 - ip.y*.3) * bend * .7;`);
+  };
+  return m;
+}
+function flora(){
+  if(FLORA) return FLORA;
+  const tex=floraAtlas(), R=rng(99);
+  const mat=floraMat(tex);
+  const depth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking, map:tex, alphaTest:.45, side:T.DoubleSide});
+  FLORA={tex, mat, depth,
+    geo:{ oak:[makeBroadleaf(R),makeBroadleaf(R),makeBroadleaf(R,true)], fir:[makeFir(R),makeFir(R)], palm:[makePalm(R),makePalm(R)], bush:[makeBushGeo(R),makeBushGeo(R)] },
+    berryGeo:new T.IcosahedronGeometry(.075,0), berryMat:new T.MeshLambertMaterial({color:0xd4202e, emissive:0x3a0000})};
+  return FLORA;
+}
+function treeKind(x,z,h,R){
+  const lon=toLon(x), lat=toLat(z), al=Math.abs(lat), cold=coldAt(lat), mt=mountainAt(lon,lat), ds=desertAt(lon,lat);
+  if(al<33 && (h<WATER_Y+1.2 || ds>.3) && R()<.85) return 'palm';
+  if(al<16 && R()<.25) return 'palm';
+  if(cold>.1 || mt>.5 || al>55) return R()<.9?'fir':'oak';
+  if(al>44) return R()<.45?'fir':'oak';
+  return R()<.12?'fir':'oak';
+}
+function treeInstance(x,z,force){
+  const R=G.rand, h=getH(x,z), F=flora();
+  const kind=force||treeKind(x,z,h,R), variants=F.geo[kind], vi=(R()*variants.length)|0;
+  const key = kind+vi+':'+Math.floor((x+G.NX/2)/TILE)+','+Math.floor((z+G.NZ/2)/TILE);
   if(!G.trees) G.trees={};
   let t = G.trees[key];
-  if(!t){ const m=MODELS[palm?'palm':'tree']; const im=new T.InstancedMesh(m.geo, m.mat, 700); im.count=0; im.castShadow=true; im.receiveShadow=true; G.scene.add(im); t=G.trees[key]={im}; }
-  const bb=MODELS[palm?'palm':'tree'].geo.boundingBox, hgt=bb.max.y-bb.min.y;
-  const sc=(palm?3.6:3.0)/hgt*(.8+R()*.45);
-  const o=new T.Object3D(); o.position.set(x,h-.05,z); o.rotation.y=R()*6.28; o.scale.setScalar(sc); o.updateMatrix();
-  const i=t.im.count; if(i>=700) return makeTree(R);
-  t.im.setMatrixAt(i,o.matrix); t.im.count++; t.im.instanceMatrix.needsUpdate=true; t.im.computeBoundingSphere();
+  if(!t){ const im=new T.InstancedMesh(variants[vi], F.mat, 400); im.count=0; im.castShadow=true; im.receiveShadow=true; im.customDepthMaterial=F.depth;
+    im.instanceColor=new T.InstancedBufferAttribute(new Float32Array(400*3),3); G.scene.add(im); t=G.trees[key]={im}; }
+  const i=t.im.count; if(i>=400) return makeTree(R);
+  const sc=(kind==='fir'?.72:kind==='palm'?.85:.8)+R()*.35;
+  const o=new T.Object3D(); o.position.set(x,h-.1,z); o.rotation.y=R()*6.28; o.scale.setScalar(sc); o.updateMatrix();
+  t.im.setMatrixAt(i,o.matrix);
+  const c=new T.Color(), v=.85+R()*.25; c.setRGB(v*(.95+R()*.12), v, v*(.9+R()*.1)); t.im.setColorAt(i,c);
+  t.im.count++; t.im.instanceMatrix.needsUpdate=true; t.im.instanceColor.needsUpdate=true; t.im.computeBoundingSphere();
   const d=new T.Object3D(); d.inst={im:t.im,i}; return d;
 }
 const civTexCache = {};
@@ -988,7 +1479,7 @@ function teamFlag(g, color, x, y, z, h){
 }
 
 /* ---------- Objekte anlegen ---------- */
-const cellIdx = (x,z) => { const i=Math.floor(x+G.NX/2), j=Math.floor(z+G.NZ/2); return (i<0||j<0||i>=G.NX||j>=G.NZ)?-1:j*G.NX+i; };
+const cellIdx = (x,z) => { const i=Math.floor(x+G.NX/2), j=Math.floor(z+G.NZ/2); if(i<0||j<0||i>=G.NX||j>=G.NZ) return -1; const ti=(i/TILE)|0, tj=(j/TILE)|0; if(!G.tiles[tj*G.tnx+ti]) ensureTile(ti,tj); return j*G.NX+i; };
 function freeCell(x,z){ const k=cellIdx(x,z); return k>=0 && !G.grid[k]; }
 
 function placeCluster(type, cx, cz, count, spread, minB){
@@ -1004,8 +1495,7 @@ function placeCluster(type, cx, cz, count, spread, minB){
 }
 function addRes(type,x,z){
   let m, kind, amt;
-  if(type==='tree' && MODELS.tree && G.gfx>=1){ m=treeInstance(x,z); kind='wood'; amt=100; }
-  else if(type==='tree'){ m=makeTree(G.rand); kind='wood'; amt=100; }
+  if(type.startsWith('tree')){ m=treeInstance(x,z,type.split(':')[1]); kind='wood'; amt=100; type='tree'; }
   else if(type==='bush'){ m=makeBush(G.rand); kind='food'; amt=125; }
   else if(type==='stone'){ m=makeRock(G.rand,'stone'); kind='stone'; amt=250; }
   else if(type==='gold'){ m=makeRock(G.rand,'gold'); kind='gold'; amt=250; }
@@ -1032,7 +1522,7 @@ function spawnWorker(owner,x,z){
   G.scene.add(m);
   const ring = new T.Mesh(GEO.ring, new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.9, depthWrite:false}));
   ring.visible=false; G.scene.add(ring);
-  const u = {kind:'worker', owner, x, z, mesh:m, ring, state:'idle', path:null, pi:0, carry:{type:null,amt:0},
+  const u = {kind:'worker', sex:(m.userData.key==='cavef'?'f':'m'), owner, x, z, mesh:m, ring, state:'idle', path:null, pi:0, carry:{type:null,amt:0},
              target:null, site:null, speed:3.1, phase:Math.random()*6, face:0, repath:0, gt:0, lastType:null};
   if(G.farView) m.visible=false;
   G.units.push(u);
@@ -1091,6 +1581,7 @@ function addDecorChunk(x0,z0,CH,R){
    ============================================================ */
 function nearestFree(i,j){
   const NX=G.NX, NZ=G.NZ;
+  ensureArea(i-NX/2-14, j-NZ/2-14, i-NX/2+14, j-NZ/2+14);
   for(let r=0;r<14;r++){
     let best=-1, bd=1e9;
     for(let dj=-r;dj<=r;dj++) for(let di=-r;di<=r;di++){
@@ -1115,6 +1606,7 @@ function findPath(x0,z0,x1,z1){
   if(s===t) return [[x1,z1]];
   const si=s%NX, sj=(s/NX)|0, ti=t%NX, tj=(t/NX)|0;
   const ox = clamp(Math.round((si+ti)/2)-PW/2, 0, Math.max(0,NX-PW)), oz = clamp(Math.round((sj+tj)/2)-PW/2, 0, Math.max(0,NZ-PW));
+  ensureArea(ox-NX/2, oz-NZ/2, ox+PW-1-NX/2, oz+PW-1-NZ/2);
   const L = (i,j)=> (j-oz)*PW+(i-ox);
   const st = ++G.pfStamp, g=G.pfG, from=G.pfF, seen=G.pfS, closed=G.pfC;
   const heap = [], hp = (k,f)=>{ heap.push([f,k]); let i=heap.length-1; while(i>0){ const p=(i-1)>>1; if(heap[p][0]<=heap[i][0]) break; [heap[p],heap[i]]=[heap[i],heap[p]]; i=p; } };
@@ -1132,7 +1624,7 @@ function findPath(x0,z0,x1,z1){
       if(G.grid[b*NX+a]) continue;
       if(di&&dj && (G.grid[kj*NX+a]||G.grid[b*NX+ki])) continue;
       const nl=L(a,b); if(closed[nl]===st) continue;
-      const ng = g[lk] + (di&&dj?1.414:1);
+      const ng = g[lk] + (di&&dj?1.414:1)*(G.road[b*NX+a]?.62:1);
       if(seen[nl]!==st || ng<g[nl]){ seen[nl]=st; g[nl]=ng; from[nl]=lk; const hh=hfun(a,b); hp(nl, ng+hh); if(hh<bestH){bestH=hh;best=nl;} }
     }
   }
@@ -1182,7 +1674,7 @@ function followPath(u,dt){
   if(!u.path || u.pi>=u.path.length) return true;
   const [tx,tz] = u.path[u.pi];
   const dx=tx-u.x, dz=tz-u.z, d=Math.hypot(dx,dz);
-  const step = u.speed*dt;
+  const ck = cellIdx(u.x,u.z), step = u.speed*dt*(ck>=0 && G.road[ck] ? 1.5 : 1);
   if(d<=step+.05){ u.x=tx; u.z=tz; u.pi++; return u.pi>=u.path.length; }
   u.x += dx/d*step; u.z += dz/d*step; u.face = Math.atan2(dx,dz); u.moving=true;
   return false;
@@ -1248,7 +1740,7 @@ function updateWorker(u,dt){
         u.hitT=(u.hitT||0)+dt; if(u.hitT>.9){ u.hitT=0; sfxAt('build',u.x,u.z,.8); }
         b.built = Math.min(1, b.built + dt/BUILD[b.kind].time);
         b.hp = Math.max(1, BUILD[b.kind].hp*b.built);
-        b.mesh.scale.y = .25 + .75*b.built;
+        if(b.kind==='road') b.mesh.children[0].material.opacity=.35+.6*b.built; else b.mesh.scale.y = .25 + .75*b.built;
         if(b.built>=1) finishBuilding(b);
         if(G.selB===b && u.owner===0) drawPanelSoon();
       } else {
@@ -1291,12 +1783,13 @@ function removeRes(r){
 function finishBuilding(b){
   const d = BUILD[b.kind];
   b.built=1; b.hp=d.hp; b.mesh.scale.y=1;
-  b.mesh.traverse(o=>{ if(o.isMesh && o.material && o.material.transparent && o.material.opacity<.6){ o.material.opacity=1; o.material.transparent=false; } });
+  if(b.kind==='road'){ for(const k of b.roadCells) G.road[k]=1; b.mesh.traverse(o=>{ if(o.isMesh) o.material.opacity=1; }); }
+  else b.mesh.traverse(o=>{ if(o.isMesh && o.material && o.material.transparent && o.material.opacity<.6){ o.material.opacity=1; o.material.transparent=false; } });
   if(d.pop) G.players[b.owner].popCap += d.pop;
   if(b.wallId){
     for(const u of G.units) if(u.site===b){ const next=G.builds.filter(o=>o.wallId===b.wallId && o.built<1).sort((p,q)=>Math.hypot(p.x-u.x,p.z-u.z)-Math.hypot(q.x-u.x,q.z-u.z))[0];
       if(next) cmdBuild(u,next); else { u.site=null; u.state='idle'; autoJob(u); } }
-    if(b.owner===0 && !G.builds.some(o=>o.wallId===b.wallId && o.built<1)){ EE.toast('Palisade fertig gebaut'); EE.vib(25); EE.sfx('done',.8); }
+    if(b.owner===0 && !G.builds.some(o=>o.wallId===b.wallId && o.built<1)){ EE.toast(b.kind==='road'?'Weg fertig – hier laufen alle schneller':'Palisade fertig gebaut'); EE.vib(25); EE.sfx('done',.8); }
     return;
   }
   if(b.owner===0){ EE.toast(d.name+' fertig gebaut'); EE.vib(25); EE.sfx('done',.8); updateHUD(); }
@@ -1366,13 +1859,16 @@ function update(dt){
   for(let i=1;i<G.players.length;i++) updateAI(G.players[i],dt);
   if(G.waterU) G.waterU.value = G.t;
   G.chunkT=(G.chunkT||0)-dt; if(G.chunkT<=0){ G.chunkT=.35; updateChunks(); }
+  G.tileT=(G.tileT||0)-dt; if(G.tileT<=0){ G.tileT=.12; updateTiles(); }
+  TERRAIN_T.value = G.t;
   G.ambT=(G.ambT||0)-dt; if(G.ambT<=0){ G.ambT=.5; updateAmbient(); }
   FLAG_T.value = G.t;
   updateOverview();
   if(panelT>0){ panelT-=dt; if(panelT<=0) drawPanel(); }
   G.hudT = (G.hudT||0)-dt; if(G.hudT<=0){ G.hudT=.5; updateHUD(); if(G.sel.length===1) drawPanel(); }
   G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=.25; drawMinimap(); }
-  if(G.place && G.place.kind!=='wall') updateGhost();
+  if(G.place && !G.place.line) updateGhost();
+  updateDip(dt);
 }
 function updateAmbient(){
   const cx=G.camS.x, cz=G.camS.z, far=G.farView;
@@ -1492,7 +1988,7 @@ function pMove(e){
   if(!gesture) return;
   if(gesture.type==='tap' && Math.hypot(p.x-p.sx,p.y-p.sy)>10){
     clearTimeout(longT);
-    if(G.place && G.place.kind==='wall'){ const g0=groundAt(p.sx,p.sy); if(g0){ G.place.ax=g0.x; G.place.az=g0.z; } gesture={type:'wall'}; }
+    if(G.place && G.place.line){ const g0=groundAt(p.sx,p.sy); if(g0){ G.place.ax=g0.x; G.place.az=g0.z; } gesture={type:'wall'}; }
     else gesture = G.place ? {type:'ghost'} : {type:'box', x0:p.sx, y0:p.sy};
   }
   if(gesture.type==='pan'){ panBy(p.x-px, p.y-py); }
@@ -1531,14 +2027,14 @@ function pickAt(sx,sy){
   for(const u of G.units){ const s=toScreen(u.x, getH(u.x,u.z)+.7, u.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<bd){bd=d;best={u};} }
   if(best) return best;
   bd = 1e9;
-  for(const b of G.builds){ const s=toScreen(b.x, b.mesh.position.y+1, b.z); const r = 26+b.size*14; const d=Math.hypot(s.x-sx,s.y-sy); if(d<r && d<bd){bd=d;best={b};} }
+  for(const b of G.builds){ if(b.kind==='road') continue; const s=toScreen(b.x, b.mesh.position.y+1, b.z); const r = 26+b.size*14; const d=Math.hypot(s.x-sx,s.y-sy); if(d<r && d<bd){bd=d;best={b};} }
   if(best) return best;
   bd = 30;
   for(const r of G.res){ if(!r.alive) continue; const s=toScreen(r.x, getH(r.x,r.z)+.6, r.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<bd){bd=d;best={r};} }
   return best;
 }
 function tapAt(sx,sy){
-  if(G.place){ const g=groundAt(sx,sy); if(g){ if(G.place.kind==='wall'){ G.place.bx=g.x; G.place.bz=g.z; updateWallGhost(); } else { G.place.x=g.x; G.place.z=g.z; } } return; }
+  if(G.place){ const g=groundAt(sx,sy); if(g){ if(G.place.line){ G.place.bx=g.x; G.place.bz=g.z; updateWallGhost(); } else { G.place.x=g.x; G.place.z=g.z; } } return; }
   const hit = pickAt(sx,sy);
   const mine = G.sel.filter(u=>u.owner===0);
   const now = performance.now();
@@ -1557,6 +2053,9 @@ function tapAt(sx,sy){
     if(hit && hit.b && hit.b.owner===0 && hit.b.built<1){ mine.forEach(u=>cmdBuild(u,hit.b)); marker(hit.b.x,hit.b.z,0xffd24a); EE.vib(10); drawPanel(); return; }
     if(hit && hit.b && hit.b.owner===0 && BUILD[hit.b.kind].drop){ mine.forEach(u=>{ if(u.carry.amt>0){u.state='drop';u.path=null;} }); marker(hit.b.x,hit.b.z,0xffffff); return; }
     if(hit && hit.b){ select([],hit.b); EE.click(); return; }
+    // Doppeltipp auf den Boden: Auswahl aufheben
+    if(now-lastTap.t<450 && lastTap.g && Math.hypot(sx-lastTap.x, sy-lastTap.y)<45){ lastTap={t:0,u:null}; select([],null); EE.click(); EE.toast('Auswahl aufgehoben'); return; }
+    lastTap={t:now,u:null,g:true,x:sx,y:sy};
     const g = groundAt(sx,sy);
     if(g){ formationMove(mine, g.x, g.z); marker(g.x,g.z,0x7cff7c); EE.vib(8); drawPanel(); }
     return;
@@ -1621,18 +2120,47 @@ function wallCells(x0,z0,x1,z1){
   for(let n=0;n<60;n++){ out.push([i0,j0]); if(i0===i1&&j0===j1) break; const e2=2*err; if(e2>-dj){err-=dj;i0+=si;} if(e2<di){err+=di;j0+=sj;} }
   return out;
 }
-function startWall(){
+/* ---------- Wege (Steinzeit: Trampelpfad) – darauf laufen alle 50 % schneller ---------- */
+let ROAD_TEX=null, ROAD_MAT=null;
+function roadMat(){
+  if(ROAD_MAT) return ROAD_MAT;
+  const S=128, cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d'), R=rng(77);
+  const img=x.createImageData(S,S), n=fbmTile(S,91);
+  for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const o=(j*S+i)*4, t=n[j*S+i], e=Math.abs(i/S-.5)*2, edge=clamp((1-e)*3.2 - (t-.5)*2.4,0,1);
+    img.data[o]=118+t*60; img.data[o+1]=92+t*46; img.data[o+2]=62+t*30; img.data[o+3]=edge*235; }
+  x.putImageData(img,0,0);
+  for(let i=0;i<70;i++){ const px=S*.2+R()*S*.6, py=R()*S; x.fillStyle=`rgba(${150+R()*50|0},${145+R()*45|0},${135+R()*40|0},.9)`; x.beginPath(); x.arc(px,py,.8+R()*1.8,0,7); x.fill(); }
+  for(let k=0;k<2;k++){ x.strokeStyle='rgba(70,50,30,.35)'; x.lineWidth=5; x.beginPath(); x.moveTo(S*(.36+k*.28),0); x.lineTo(S*(.36+k*.28),S); x.stroke(); }
+  ROAD_TEX=new T.CanvasTexture(cv); ROAD_TEX.wrapT=T.RepeatWrapping; ROAD_TEX.colorSpace=T.SRGBColorSpace;
+  ROAD_MAT=new T.MeshLambertMaterial({map:ROAD_TEX, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+  return ROAD_MAT;
+}
+function makeRoadPiece(cx,cz,len,ang){
+  const ux=Math.cos(ang), uz=Math.sin(ang), W=1.5, nL=Math.max(2,Math.ceil(len/.5)), h0=getH(cx,cz);
+  const P=[], U=[], I=[];
+  for(let a=0;a<=nL;a++) for(let b=0;b<=2;b++){
+    const t=(a/nL-.5)*(len+.35), s=(b/2-.5)*W, wx=cx+ux*t-uz*s, wz=cz+uz*t+ux*s;
+    P.push(ux*t-uz*s, getH(wx,wz)-h0+.05, uz*t+ux*s); U.push(b/2, (a/nL)*(len+.35)/1.6);
+  }
+  for(let a=0;a<nL;a++) for(let b=0;b<2;b++){ const i=a*3+b; I.push(i,i+1,i+3, i+1,i+4,i+3); }
+  const geo=new T.BufferGeometry(); geo.setAttribute('position',new T.Float32BufferAttribute(P,3)); geo.setAttribute('uv',new T.Float32BufferAttribute(U,2)); geo.setIndex(I); geo.computeVertexNormals();
+  const m=new T.Mesh(geo, roadMat().clone()); m.receiveShadow=true; m.renderOrder=1;
+  const g=new T.Group(); g.add(m); g.position.set(cx,h0,cz); g.isRoad=true; return g;
+}
+function startWall(kind){
+  kind = kind||'wall';
   const g = groundAtNDC(0,-.1) || {x:G.camS.x, z:G.camS.z};
-  G.place = {kind:'wall', ax:g.x, az:g.z, bx:g.x+4, bz:g.z, gate:false, ghosts:[], cells:[], ok:false, workers:G.sel.filter(u=>u.owner===0)};
+  G.place = {kind, line:true, ax:g.x, az:g.z, bx:g.x+4, bz:g.z, gate:false, ghosts:[], cells:[], ok:false, workers:G.sel.filter(u=>u.owner===0)};
   $('#pTxt').textContent='Mit dem Finger eine Linie ziehen';
-  $('#pGate').classList.remove('hidden'); $('#pGate').classList.remove('on');
+  $('#pGate').classList.toggle('hidden', kind!=='wall'); $('#pGate').classList.remove('on');
   $('#placebar').classList.remove('hidden');
   drawPanel(); updateWallGhost();
 }
 function updateWallGhost(){
   const pl=G.place, NX=G.NX, NZ=G.NZ;
   for(const gh of pl.ghosts) G.scene.remove(gh); pl.ghosts=[];
-  const dx=pl.bx-pl.ax, dz=pl.bz-pl.az, L=Math.min(Math.hypot(dx,dz), 50);
+  const road = pl.kind==='road';
+  const dx=pl.bx-pl.ax, dz=pl.bz-pl.az, L=Math.min(Math.hypot(dx,dz), road?80:50);
   const n = Math.max(1, Math.round(L/1.15)), seg = Math.max(.6, L/n);
   const ux = L>0.01?dx/Math.hypot(dx,dz):1, uz = L>0.01?dz/Math.hypot(dx,dz):0;
   const ang = Math.atan2(uz, ux), mid = Math.floor(n/2);
@@ -1643,43 +2171,45 @@ function updateWallGhost(){
     for(let t=-.45;t<=.45;t+=.15){ const k=cellIdx(x+ux*seg*t, z+uz*seg*t); ks.add(k); }
     const arr=[...ks];
     const ok = arr.every(k=>k>=0 && !G.grid[k]) && getH(x,z)>WATER_Y+.15 && !pl.cells.some(c=>c.ks.some(k=>arr.includes(k)) && false);
-    pl.cells.push({ks:arr, x, z, len:seg, ok, gate: pl.gate && n>=3 && i===mid});
+    pl.cells.push({ks:arr, x, z, len:seg, ok, gate: !road && pl.gate && n>=3 && i===mid});
   }
   let okCount=0;
   for(const c of pl.cells){
-    const gh = makeWallPiece(COLORS[0], c.gate, c.len);
-    gh.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; o.material.color.setHex(c.ok?0x66ff77:0xff5555); o.castShadow=false; } });
-    gh.position.set(c.x, getH(c.x,c.z), c.z); gh.rotation.y = -ang;
+    const gh = road ? makeRoadPiece(c.x,c.z,c.len,ang) : makeWallPiece(COLORS[0], c.gate, c.len);
+    gh.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=road?.8:.55; o.material.color.setHex(c.ok?0x66ff77:0xff5555); o.castShadow=false; } });
+    if(!road){ gh.position.set(c.x, getH(c.x,c.z), c.z); gh.rotation.y = -ang; }
     G.scene.add(gh); pl.ghosts.push(gh); if(c.ok) okCount++;
   }
   pl.ang = ang;
-  const cost = pl.cells.reduce((s,c)=>s+(c.ok?(c.gate?BUILD.gate.cost.wood:BUILD.wall.cost.wood):0),0);
+  const cost = road ? 0 : pl.cells.reduce((s,c)=>s+(c.ok?(c.gate?BUILD.gate.cost.wood:BUILD.wall.cost.wood):0),0);
   pl.cost = cost; pl.ok = okCount>0;
-  $('#pTxt').textContent = okCount ? okCount+' Stück · '+cost+' Holz' : 'Mit dem Finger eine Linie ziehen';
+  $('#pTxt').textContent = okCount ? (road ? 'Weg: '+Math.round(okCount*seg)+' m · kostenlos' : okCount+' Stück · '+cost+' Holz') : 'Mit dem Finger eine Linie ziehen';
   $('#pOk').classList.toggle('dim', !pl.ok);
 }
 function confirmWall(){
   const pl=G.place, p=G.players[0];
-  if(!pl.ok){ EE.toast('Hier kann keine Palisade stehen'); return; }
+  if(!pl.ok){ EE.toast(pl.kind==='road'?'Hier kann kein Weg entstehen':'Hier kann keine Palisade stehen'); return; }
+  if(pl.kind==='road' && !pl.workers.length){ EE.toast('Wähle zuerst Arbeiter aus, die den Weg anlegen'); return; }
   if(p.res.wood < pl.cost){ EE.toast('Nicht genug Holz ('+pl.cost+' nötig)'); return; }
   p.res.wood -= pl.cost;
   const id = WALL_ID++, ang = pl.ang||0, segs=[];
-  for(const c of pl.cells){ if(!c.ok) continue; segs.push(addWall(0, c, ang, id)); }
+  for(const c of pl.cells){ if(!c.ok) continue; segs.push(addWall(0, c, ang, id, pl.kind==='road')); }
   const ws = pl.workers;
   ws.forEach((u,i)=>{ const seg = segs[Math.floor(i*segs.length/Math.max(1,ws.length))]; if(seg) cmdBuild(u,seg); });
   EE.sfx('place'); EE.vib(20);
   endPlace(); updateHUD(); select(ws,null);
 }
-function addWall(owner, c, ang, id){
-  const kind = c.gate?'gate':'wall', d=BUILD[kind];
-  const m = makeWallPiece(COLORS[owner], c.gate, c.len);
-  m.position.set(c.x, getH(c.x,c.z)-.03, c.z); m.rotation.y = -ang;
+function addWall(owner, c, ang, id, road){
+  const kind = road?'road':c.gate?'gate':'wall', d=BUILD[kind];
+  const m = road ? makeRoadPiece(c.x,c.z,c.len,ang) : makeWallPiece(COLORS[owner], c.gate, c.len);
+  if(!road){ m.position.set(c.x, getH(c.x,c.z)-.03, c.z); m.rotation.y = -ang; }
   G.scene.add(m);
-  if(!c.gate) for(const k of c.ks) if(k>=0) G.grid[k]=1;
+  if(!c.gate && !road) for(const k of c.ks) if(k>=0) G.grid[k]=1;
   const ring = new T.Mesh(new T.RingGeometry(.55,.68,20), new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.85, depthWrite:false}));
   ring.rotation.x=-Math.PI/2; ring.position.set(c.x, m.position.y+.08, c.z); ring.visible=false; G.scene.add(ring);
-  const b = {kind, owner, x:c.x, z:c.z, size:1, mesh:m, ring, cells:c.gate?[]:c.ks.filter(k=>k>=0), built:0, hp:1, queue:[], qT:0, wallId:id};
-  m.scale.y=.25; m.traverse(o=>{ if(o.material && o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; } });
+  const b = {kind, owner, x:c.x, z:c.z, size:1, mesh:m, ring, cells:(c.gate||road)?[]:c.ks.filter(k=>k>=0), roadCells:road?c.ks.filter(k=>k>=0):null, built:0, hp:1, queue:[], qT:0, wallId:id};
+  if(!road) m.scale.y=.25;
+  m.traverse(o=>{ if(o.material && o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=road?.35:.55; } });
   G.builds.push(b);
   return b;
 }
@@ -1711,7 +2241,7 @@ function updateGhost(){
   $('#pOk').classList.toggle('dim', !pl.ok);
 }
 function confirmPlace(){
-  if(G.place && G.place.kind==='wall') return confirmWall();
+  if(G.place && G.place.line) return confirmWall();
   const pl=G.place, p=G.players[0];
   if(!pl.ok){ EE.toast('Hier kann nicht gebaut werden'); return; }
   if(!canPay(p,BUILD[pl.kind].cost)){ EE.toast('Nicht genug Ressourcen'); cancelPlace(); return; }
@@ -1729,5 +2259,5 @@ function endPlace(){
   G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start, stop, dbg:()=>G, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start, stop, dbg:()=>G, dev:{tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z)=>spawnDeer(x,z)}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
