@@ -83,6 +83,7 @@ async function start(){
   let last = performance.now();
   const loop = now => {
     if(!G || !G.running) return;
+    if(G.inMenu){ last = now; G.raf = requestAnimationFrame(loop); return; }
     const dt = clamp((now-last)/1000, 0, .05); fpsTick(now); last = now; G.pfDeadline = performance.now() + 4;
     if(!G.paused) update(dt);
     render();
@@ -93,6 +94,15 @@ async function start(){
   EE.music('calm');
 }
 
+function toMenu(){
+  if(!G) return;
+  G.inMenu=true; G.paused=true; $('#pause').classList.add('hidden');
+  $('#game').classList.add('hidden'); EE.ambient({wind:.3,waves:0,birds:0,fire:0}); EE.music('theme'); EE.showMenu(true);
+}
+function resume(){
+  if(!G) return;
+  EE.hideMenu(); $('#game').classList.remove('hidden'); G.inMenu=false; G.paused=false; onResize(); EE.music('calm'); EE.toast('Weiter geht’s');
+}
 function stop(){
   if(!G) return;
   G.running = false;
@@ -144,10 +154,13 @@ function buildUI(){
   <div id="pause" class="hidden"><div class="pcard"><h2>Pause</h2>
     <button class="btn main small" id="pWeiter">Weiter</button>
     <button class="btn small" id="pSet">Einstellungen</button>
+    <button class="btn small" id="pNeu">Neu starten</button>
     <button class="btn small" id="pMenu">Zum Hauptmenü</button></div></div>`;
   $('#bPause').onclick = () => { EE.click(); G.paused = true; $('#pause').classList.remove('hidden'); };
   $('#pWeiter').onclick = () => { EE.click(); G.paused = false; $('#pause').classList.add('hidden'); };
-  $('#pMenu').onclick = () => { EE.click(); stop(); };
+  // Hauptmenü: Spiel bleibt im Hintergrund erhalten – dort „Weiterspielen“ oder ein neues Spiel
+  $('#pMenu').onclick = () => { EE.click(); toMenu(); };
+  $('#pNeu').onclick = () => { EE.click(); start(); };
   // Einstellungen auch im Spiel (Grafik, Musik, FPS-Anzeige …)
   $('#pSet').onclick = () => { EE.click(); const d=document.getElementById('dSet'); d.style.zIndex=20; d.style.position='fixed'; document.body.appendChild(d); d.classList.remove('hidden');
     const done = () => { if(!d.classList.contains('hidden')) return; mo.disconnect(); if(G && (EE.S.gfx|0)!==G.gfx) applyGfx(EE.S.gfx|0); };
@@ -2654,5 +2667,5 @@ function endPlace(){
   G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start, stop, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k)}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k)}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
