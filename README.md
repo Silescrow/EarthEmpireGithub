@@ -1,6 +1,6 @@
 # EARTH EMPIRE – zum Spielen
 
-Hier liegt nur die spielbare Version von Earth Empire (aktuell V1.10).
+Hier liegt nur die spielbare Version von Earth Empire (aktuell V1.11).
 
 **Online spielen:** https://silescrow.github.io/EarthEmpireGithub/
 
@@ -8,7 +8,7 @@ Hier liegt nur die spielbare Version von Earth Empire (aktuell V1.10).
 |---|---|
 | `index.html` | Ladebildschirm und Hauptmenü |
 | `game.js` | das Spiel (Steinzeit: Karte, Arbeiter, Ressourcen, Gebäude) |
-| `models/` | 3D-Modelle der Steinzeit (Häuser, Zäune, Bäume, Busch, Felsen, Erz), fürs Handy verkleinert |
+| `models/` | 3D-Modelle der Steinzeit (Häuser, Zäune, Felsen, Erz, Antilope, Hase), fürs Handy verkleinert |
 | `weltkarte.png` | Umrisse der Kontinente für die Weltkarte |
 | `audio.js` | Musik (Hauptthema, ruhige Spielmusik) und Geräusche, im Browser erzeugt |
 | `musik_menue.mp3` | Menümusik „Where the Morning Breathes“ |

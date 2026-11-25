@@ -969,7 +969,9 @@ function makeOil(R){
   g.rotation.y = R()*6.28;
   return g;
 }
-function makeDeer(){
+function makeDeer(kind){
+  if(kind==='rabbit' && MODELS.rabbit){ const g=makeAnimal('rabbit',.32); if(g){ g.quad.hop=true; g.userData.deadY=.06; return g; } }
+  if(MODELS.antelope){ const g=makeAnimal('antelope',1.4); if(g){ g.userData.deadY=.14; return g; } }
   geos();
   const g = new T.Group(), c = mat(0xa0643a), d = mat(0x6a3e1e);
   const body = mesh(GEO.box, c, 0,.62,0); body.scale.set(.32,.3,.78); g.add(body);
@@ -1109,6 +1111,60 @@ function poseRig(g, mode, ph){
 }
 
 
+/* ---------- Tiere: automatisches Vierbeiner-Rig (Beine, Hals) für Meshy-Modelle ---------- */
+const QRIGS = {};
+function buildQuadRig(key){
+  const m = MODELS[key]; if(!m) return null;
+  const geo=m.geo, pos=geo.attributes.position, n=pos.count, bb=geo.boundingBox;
+  const H=bb.max.y-bb.min.y, L=bb.max.z-bb.min.z;
+  // Bauchhöhe: dort, wo die Zahl der Punkte pro Schicht stark ansteigt (über den Beinen beginnt der Körper)
+  const NB=24, cnt=new Array(NB).fill(0);
+  for(let i=0;i<n;i++){ const b=Math.min(NB-1, Math.floor(pos.getY(i)/H*NB)); cnt[b]++; }
+  let legTop=.42*H;
+  for(let b=3;b<NB*.65;b++){ const base=cnt.slice(1,b).sort((a,c)=>a-c)[Math.floor((b-1)/2)]||1; if(cnt[b]>base*1.9){ legTop=b/NB*H; break; } }
+  // Beine: vier Gruppen (vorne/hinten, links/rechts)
+  let zmin=1e9, zmax=-1e9; for(let i=0;i<n;i++){ if(pos.getY(i)<legTop*.7){ const z=pos.getZ(i); zmin=Math.min(zmin,z); zmax=Math.max(zmax,z); } }
+  const zMid=(zmin+zmax)/2, legs=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]; // FL FR BL BR: sx, sz, n
+  const legOf=(x,z)=>(z>zMid?0:2)+(x<0?0:1);
+  for(let i=0;i<n;i++){ const y=pos.getY(i); if(y<legTop*.7){ const x=pos.getX(i), z=pos.getZ(i), k=legOf(x,z); legs[k][0]+=x; legs[k][1]+=z; legs[k][2]++; } }
+  const hips=legs.map(l=>new T.Vector3(l[0]/Math.max(1,l[2]), legTop*1.05, l[1]/Math.max(1,l[2])));
+  // Körper vorne -> Halsansatz
+  let bzMax=-1e9; for(let i=0;i<n;i++){ const y=pos.getY(i); if(y>legTop && y<legTop+.2*H) bzMax=Math.max(bzMax,pos.getZ(i)); }
+  const neck=new T.Vector3(0, legTop+(H-legTop)*.32, bzMax-.12*L);
+  const skinI=new Uint16Array(n*4), skinW=new Float32Array(n*4);
+  for(let i=0;i<n;i++){
+    const x=pos.getX(i), y=pos.getY(i), z=pos.getZ(i);
+    let bone=0, w=0;
+    const wl=clamp((legTop*1.1-y)/(legTop*.35),0,1);
+    if(wl>0){ bone=1+legOf(x,z); w=wl; }
+    else { const wn=clamp((z-(neck.z-.04*L))/(.12*L),0,1)*clamp((y-(neck.y-.12*H))/(.12*H),0,1); if(wn>0){ bone=5; w=wn; } }
+    skinI[i*4]=bone; skinW[i*4]=w; skinI[i*4+1]=0; skinW[i*4+1]=1-w;
+  }
+  const g2=geo.clone(); g2.setAttribute('skinIndex',new T.Uint16BufferAttribute(skinI,4)); g2.setAttribute('skinWeight',new T.Float32BufferAttribute(skinW,4)); g2.computeBoundingSphere();
+  return QRIGS[key]={geo:g2, mat:m.mat, hips, neck, H, L, legTop};
+}
+function makeAnimal(key, height){
+  const r=QRIGS[key]||buildQuadRig(key); if(!r) return null;
+  const root=new T.Bone(); const bones=[root];
+  r.hips.forEach(h=>{ const b=new T.Bone(); b.position.copy(h); root.add(b); bones.push(b); });
+  const nb=new T.Bone(); nb.position.copy(r.neck); root.add(nb); bones.push(nb);
+  const sk=new T.SkinnedMesh(r.geo, r.mat); sk.add(root); sk.bind(new T.Skeleton(bones));
+  sk.castShadow=true; sk.receiveShadow=true; sk.frustumCulled=false;
+  const inner=new T.Group(); inner.scale.setScalar(height/r.H); inner.add(sk);
+  const g=new T.Group(); g.add(inner); g.quad={legs:bones.slice(1,5), neck:nb, inner}; g.userData.deadY=r.L*height/r.H*.0+.08;
+  return g;
+}
+function poseAnimal(m, mode, ph){
+  const q=m.quad; if(!q) return;
+  if(q.hop){ // Hase: hüpfen
+    const s=Math.abs(Math.sin(ph*.5)); q.inner.position.y = mode==='move' ? s*.12 : 0; q.inner.rotation.x = mode==='move' ? -Math.cos(ph*.5)*.25 : 0;
+    q.inner.scale.y = q.inner.scale.x*(mode==='move' ? 1+.08*Math.sin(ph) : 1+.03*Math.sin(ph*.3)); return; }
+  const s=Math.sin(ph), a=mode==='move'?.55:0;
+  q.legs[0].rotation.x= s*a; q.legs[3].rotation.x= s*a; q.legs[1].rotation.x=-s*a; q.legs[2].rotation.x=-s*a;
+  q.neck.rotation.x = mode==='graze' ? .85+Math.sin(ph*2)*.05 : mode==='move' ? -.05+Math.sin(ph*2)*.04 : Math.sin(ph*.4)*.06;
+  q.inner.position.y = mode==='move' ? Math.abs(Math.cos(ph))*.03 : 0;
+}
+
 function makeTC(color, civ){
   geos();
   const g = new T.Group();
@@ -1167,7 +1223,7 @@ function makeStore(color){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
+const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -1508,12 +1564,14 @@ function addRes(type,x,z){
   G.res.push(r);
   return r;
 }
-function spawnDeer(x,z){
+function spawnDeer(x,z,kind){
   if(!freeCell(x,z) || getH(x,z)<WATER_Y+.3) return;
-  const m = makeDeer(); m.position.set(x,getH(x,z),z); m.rotation.y = G.rand()*6.28;
+  kind = kind || (G.rand()<.4 ? 'rabbit' : 'antelope');
+  const m = makeDeer(kind); m.position.set(x,getH(x,z),z); m.rotation.y = G.rand()*6.28;
   G.scene.add(m);
-  const d = {type:'deer', kind:'food', amt:100, max:100, x, z, mesh:m, alive:true, dead:false, r:.5,
-             tx:x, tz:z, wait:G.rand()*4, phase:G.rand()*6, deer:true};
+  const rab = kind==='rabbit', amt = rab?35:120;
+  const d = {type:'deer', animal:kind, kind:'food', amt, max:amt, x, z, mesh:m, alive:true, dead:false, r:rab?.3:.5,
+             tx:x, tz:z, wait:G.rand()*4, phase:G.rand()*6, deer:true, speed:rab?2.4:1.5};
   G.deer.push(d); G.res.push(d);
 }
 function spawnWorker(owner,x,z){
@@ -1697,7 +1755,7 @@ function updateWorker(u,dt){
       u.repath -= dt;
       if(u.repath<=0){ u.repath=.8; moveTo(u,r.x,r.z); }
       followPath(u,dt);
-      if(near(u,r.x,r.z,1.5)){ sfxAt('deer',r.x,r.z); r.dead=true; r.mesh.rotation.z=Math.PI/2; r.mesh.position.y=getH(r.x,r.z)+.25; if(u.owner===0) EE.vib(20); u.state='gather'; }
+      if(near(u,r.x,r.z,1.5)){ sfxAt('deer',r.x,r.z); r.dead=true; r.mesh.rotation.z=Math.PI/2; r.mesh.position.y=getH(r.x,r.z)+(r.mesh.userData.deadY!=null?r.mesh.userData.deadY:.25); if(r.mesh.quad) poseAnimal(r.mesh,'idle',0); if(u.owner===0) EE.vib(20); u.state='gather'; }
       break; }
     case 'gather': {
       let r = u.target;
@@ -1806,10 +1864,11 @@ function updateDeer(d,dt){
   if(d.wait<=0){
     const dx=d.tx-d.x, dz=d.tz-d.z, dist=Math.hypot(dx,dz);
     if(dist<.2){ d.wait = 2+G.rand()*5; const a=G.rand()*6.28, r=2+G.rand()*4; const nx=d.x+Math.cos(a)*r, nz=d.z+Math.sin(a)*r; if(freeCell(nx,nz) && lineFree(d.x,d.z,nx,nz)){ d.tx=nx; d.tz=nz; } }
-    else { const sp=(d.hunted>0?1.2:1.5)*dt; d.x+=dx/dist*Math.min(sp,dist); d.z+=dz/dist*Math.min(sp,dist); m.rotation.y=Math.atan2(dx,dz); moving=true; }
+    else { const sp=(d.speed||1.5)*(d.hunted>0?.8:1)*dt; d.x+=dx/dist*Math.min(sp,dist); d.z+=dz/dist*Math.min(sp,dist); m.rotation.y=Math.atan2(dx,dz); moving=true; }
   }
   d.phase += dt*(moving?10:1);
   m.position.set(d.x, getH(d.x,d.z), d.z);
+  if(m.quad){ if(!moving && d.wait>0) d.graze = d.graze ?? (G.rand()<.6); if(moving) d.graze=null; poseAnimal(m, moving?'move':(d.graze?'graze':'idle'), d.phase); return; }
   const s = moving?Math.sin(d.phase)*.5:0;
   m.legs[0].rotation.x=s; m.legs[3].rotation.x=s; m.legs[1].rotation.x=-s; m.legs[2].rotation.x=-s;
 }
@@ -2259,5 +2318,5 @@ function endPlace(){
   G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start, stop, dbg:()=>G, dev:{tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z)=>spawnDeer(x,z)}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start, stop, dbg:()=>G, dev:{tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k)}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
