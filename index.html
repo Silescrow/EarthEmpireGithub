@@ -77,6 +77,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .step button{min-width:40px;min-height:36px;border:1.5px solid #e8b64a80;border-radius:8px;background:#0b1130;color:#fff7e2;font:700 18px "Barlow Semi Condensed",sans-serif;cursor:pointer}
 .step button.all{font-size:14px;padding:0 10px}.step button.on{background:var(--gold);color:#2b1a02}
 .step b{min-width:74px;text-align:center;font:700 17px "Barlow Semi Condensed",sans-serif;color:var(--gold2)}
+.snd{position:absolute;left:1.2%;bottom:1.2%;font:700 clamp(9px,1.8vh,13px) "Barlow Semi Condensed",sans-serif;color:#ffe9b0;text-shadow:0 1px 3px #000;animation:pulse 1.4s ease-in-out infinite}
 .ver2{position:absolute;right:1.2%;bottom:1.2%;font:700 clamp(9px,1.8vh,13px) "Barlow Semi Condensed",sans-serif;color:#ffe9b0;text-shadow:0 1px 3px #000}
 .card.wide{width:min(860px,96vw)}
 .cols{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
@@ -142,7 +143,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 #placebar.hidden{display:none}
 #placebar span{color:#ffe9b0;font-weight:700;font-size:14px}
 .pb{width:54px;height:48px;border-radius:10px;font:800 24px sans-serif;cursor:pointer;border:2px solid #fff6}
-.pb.ok{background:#2e9b47;color:#fff}.pb.no{background:#a8323a;color:#fff}.pb.dim{opacity:.45}
+.pb.ok{background:#2e9b47;color:#fff}.pb.gate{width:auto;padding:0 12px;font-size:16px;background:#3a2a08;color:#ffe9b0}.pb.gate.on{background:var(--gold);color:#2b1a02}.pb.hidden{display:none}.pb.no{background:#a8323a;color:#fff}.pb.dim{opacity:.45}
 #pause{position:absolute;inset:0;display:grid;place-items:center;background:#02040cb8}
 #pause.hidden{display:none}
 .pcard{width:min(320px,86vw);display:flex;flex-direction:column;gap:12px;padding:18px;border:2px solid var(--gold);border-radius:14px;background:linear-gradient(180deg,#18224a,#0a0f26)}
@@ -169,7 +170,8 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.04</div>
+    <div class="ver2">Version 1.05</div>
+    <div class="snd" id="soundHint">Tippe für Ton</div>
   </div>
 </section>
 
@@ -187,7 +189,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.04</div>
+  <div class="ver">Earth Empire · V1.05</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -220,6 +222,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="toast hidden" id="toast"></div>
 </section>
 
+<script src="audio.js"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -230,48 +233,12 @@ let S={...DEF};
 try{Object.assign(S,JSON.parse(localStorage.getItem('ee_settings')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('ee_settings',JSON.stringify(S))}catch(e){}};
 
-/* ---------- Ton (Web Audio, keine Dateien) ---------- */
-let AC=null,musicGain=null,sfxGain=null;
-function initAudio(){
-  if(AC) return;
-  try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return}
-  musicGain=AC.createGain();sfxGain=AC.createGain();
-  musicGain.connect(AC.destination);sfxGain.connect(AC.destination);
-  applyVol();startMusic();
-}
-function applyVol(){
-  if(!AC) return;
-  const m=S.mute?0:1;
-  musicGain.gain.setTargetAtTime(S.music/100*0.22*m,AC.currentTime,.2);
-  sfxGain.gain.setTargetAtTime(S.sfx/100*0.5*m,AC.currentTime,.05);
-}
-function tone(f,t0,dur,type='sine',vol=.3,dest=sfxGain){
-  const o=AC.createOscillator(),g=AC.createGain();
-  o.type=type;o.frequency.value=f;
-  g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+.02);g.gain.exponentialRampToValueAtTime(.001,t0+dur);
-  o.connect(g);g.connect(dest);o.start(t0);o.stop(t0+dur+.05);
-}
-function click(){if(!AC)return;const t=AC.currentTime;tone(660,t,.08,'triangle',.25);tone(990,t+.03,.08,'triangle',.15)}
-function fanfare(){if(!AC)return;const t=AC.currentTime;[392,523,659,784].forEach((f,i)=>{tone(f,t+i*.13,.5,'sawtooth',.09);tone(f/2,t+i*.13,.5,'triangle',.12)})}
-function startMusic(){
-  // ruhige, epische Akkordfläche mit Tiefpass
-  const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=900;lp.connect(musicGain);
-  const chords=[[110,165,220,277],[98,147,196,247],[87,131,175,220],[98,147,196,294]];
-  let i=0;
-  const play=()=>{
-    const t=AC.currentTime;
-    chords[i%4].forEach((f,k)=>{
-      const o=AC.createOscillator(),g=AC.createGain();
-      o.type=k?'sawtooth':'triangle';o.frequency.value=f;o.detune.value=(k%2?6:-6);
-      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(k?.05:.14,t+1.5);g.gain.linearRampToValueAtTime(0,t+6.2);
-      o.connect(g);g.connect(lp);o.start(t);o.stop(t+6.4);
-    });
-    // Trommelschlag
-    [0,1.5,3,4.5].forEach(d=>tone(55,t+d,.5,'sine',.35,musicGain));
-    i++;
-  };
-  play();setInterval(play,6000);
-}
+/* ---------- Ton: Musik und Geräusche kommen aus audio.js ---------- */
+let audioOn=false;
+function initAudio(){ if(!window.EEAudio) return; EEAudio.init(); audioOn=true; applyVol(); }
+function applyVol(){ if(window.EEAudio) EEAudio.setVol(S.music/100, S.sfx/100, S.mute); }
+function click(){ if(audioOn) EEAudio.sfx('click'); }
+function fanfare(){ if(audioOn) EEAudio.sfx('fanfare'); }
 const vib=ms=>{if(S.vib&&navigator.vibrate)try{navigator.vibrate(ms)}catch(e){}};
 
 /* ---------- Ladebildschirm ---------- */
@@ -301,15 +268,19 @@ const tick=setInterval(()=>{
   if(p>=100){clearInterval(tick);ready()}
 },60);
 
+// Erster Tipp irgendwo im Ladebildschirm startet die Musik (Browser erlauben Ton erst nach einem Tipp)
+$('#load').addEventListener('pointerdown',()=>{ if(!audioOn){ initAudio(); EEAudio.play('theme'); $('#soundHint').style.display='none'; } });
 function ready(){
   clearInterval(tipTimer);
+  if(audioOn){ setTimeout(enter, 600); return; }
   $('#stage').classList.add('tap');
   btxt.textContent='Tippe zum Starten';
   tip.textContent='Für das beste Erlebnis: Handy quer halten';
   $('#load').addEventListener('pointerup',enter,{once:true});
 }
 function enter(){
-  initAudio();fanfare();vib(30);
+  if(!audioOn){ initAudio(); EEAudio.play('theme'); }
+  vib(30);
   $('#load').classList.add('hidden');$('#menu').classList.remove('hidden');
 }
 
@@ -383,7 +354,7 @@ $('#mlist').addEventListener('click',e=>{const m=e.target.closest('.mis');if(!m)
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={S,CIVS,click,vib,toast,save,fanfare,showMenu:()=>{$('#menu').classList.remove('hidden')},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:()=>{$('#menu').classList.remove('hidden')},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bTut').addEventListener('click',()=>{click();toast('Tutorial kommt mit dem Schlachtfeld')});
 
 // Ton & Vollbild

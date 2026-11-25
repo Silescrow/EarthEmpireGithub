@@ -27,6 +27,8 @@ const RES_DE = {food:'Nahrung',wood:'Holz',stone:'Stein',gold:'Gold',metal:'Meta
 const BUILD = {
   tc:    {name:'Stadtzentrum', size:6, cost:{}, time:60, hp:1200, drop:['food','wood','stone','gold'], pop:5},
   house: {name:'Hütte', size:3, cost:{wood:30}, time:14, hp:300, pop:5},
+  wall:  {name:'Palisade', size:1, cost:{wood:4}, time:3, hp:250},
+  gate:  {name:'Tor', size:1, cost:{wood:15}, time:8, hp:500},
   store: {name:'Lager', size:3, cost:{wood:50}, time:18, hp:500, drop:['wood','stone','gold','food']},
 };
 const WORKER_COST = {food:50};
@@ -48,9 +50,16 @@ async function start(){
   const S = EE.S;
   const NX = [240,320,420,520][S.map|0] || 320, NZ = Math.round(NX*(LAT0-LAT1)/360);
   const civ = EE.CIVS[S.civ] || EE.CIVS[0];
-  const others = EE.CIVS.filter(c=>c!==civ);
-  for(let i=others.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [others[i],others[j]]=[others[j],others[i]]; }
   const foes = clamp(S.ai||3, 1, 17);
+  // Gegner möglichst weit weg wählen (bei wenigen Gegnern nie Nachbarn)
+  const dist = (a,b)=>{ const p=CIV_POS[a[0]]||[0,0], q=CIV_POS[b[0]]||[0,0]; let dl=Math.abs(p[0]-q[0]); return Math.hypot(dl, (p[1]-q[1])*1.3); };
+  const chosen=[civ], pool=EE.CIVS.filter(c=>c!==civ);
+  while(chosen.length<=foes && pool.length){
+    const sc = pool.map(c=>[c, Math.min(...chosen.map(o=>dist(c,o)))]).sort((a,b)=>b[1]-a[1]);
+    const pick = pool[(Math.random()*pool.length)|0];
+    chosen.push(pick); pool.splice(pool.indexOf(pick),1);
+  }
+  const others = chosen.slice(1);
   const gfx = S.gfx|0;
   G = { NX, NZ, foes, civ, gfx, seed:(Math.random()*1e9)|0, t:0, units:[], builds:[], res:[], deer:[],
         players:[], sel:[], selB:null, place:null, running:true, raf:0, msgT:0 };
@@ -74,6 +83,7 @@ async function start(){
   };
   G.raf = requestAnimationFrame(loop);
   EE.toast('Die '+civ[0]+' erwachen in der Steinzeit');
+  EE.music('calm');
 }
 
 function stop(){
@@ -85,6 +95,8 @@ function stop(){
   $('#game').innerHTML = '';
   $('#game').classList.add('hidden');
   G = null;
+  EE.ambient({wind:.3,waves:0,birds:0,fire:0});
+  EE.music('theme');
   EE.showMenu();
 }
 
@@ -117,7 +129,7 @@ function buildUI(){
   <button class="hb" id="bIdle" aria-label="Untätige Arbeiter"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="#f0d3a8"/><path d="M4 21q1-8 8-8t8 8z" fill="#8a5a2b"/><text x="18" y="9" font-size="9" fill="#ffd24a" font-weight="700">z</text></svg><i id="idleN">0</i></button>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
   <div id="panel"></div>
-  <div id="placebar" class="hidden"><span>Gebäude mit dem Finger platzieren</span><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
+  <div id="placebar" class="hidden"><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">Tor</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
   <div id="rotate"><div>Bitte das Handy quer halten</div></div>
   <div id="pause" class="hidden"><div class="pcard"><h2>Pause</h2>
     <button class="btn main small" id="pWeiter">Weiter</button>
@@ -128,6 +140,7 @@ function buildUI(){
   $('#bIdle').onclick = () => { EE.click(); selectIdle(); };
   $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); select([],tc); } };
   $('#pOk').onclick = confirmPlace;
+  $('#pGate').onclick = ()=>{ if(G.place&&G.place.kind==='wall'){ G.place.gate=!G.place.gate; $('#pGate').classList.toggle('on',G.place.gate); EE.click(); } };
   $('#pNo').onclick = cancelPlace;
 }
 
@@ -166,6 +179,7 @@ function drawPanel(){
     if(ws[0].owner===0){
       h += `<button class="ab" data-a="b-house"><span class="ai">${hutSVG()}</span>Hütte<span class="ac">${costText(BUILD.house.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-store"><span class="ai">${storeSVG()}</span>Lager<span class="ac">${costText(BUILD.store.cost)}</span></button>`;
+      h += `<button class="ab" data-a="b-wall"><span class="ai">${wallSVG()}</span>Palisade<span class="ac">${costText(BUILD.wall.cost)}/Stück</span></button>`;
       h += `<button class="ab lock" data-a="b-barr"><span class="ai"><svg viewBox="0 0 24 24"><path d="M5 4l10 10M19 4L9 14M7 13l-3 3 2 2 3-3M17 13l3 3-2 2-3-3" stroke="#e8b64a" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></span>Kaserne<span class="ac">bald</span></button>`;
     }
     el.innerHTML = h; el.className='';
@@ -175,6 +189,7 @@ function drawPanel(){
   }
   el.querySelectorAll('.ab').forEach(b=>b.onclick=()=>action(b.dataset.a));
 }
+const wallSVG = () => '<svg viewBox="0 0 24 24"><path d="M3 21V8l2-3 2 3v13M9 21V7l2-3 2 3v14M15 21V8l2-3 2 3v13" fill="#a86d36" stroke="#5a3818"/><path d="M2 12h20M2 17h20" stroke="#5a3818" stroke-width="1.6"/></svg>';
 const hutSVG = () => '<svg viewBox="0 0 24 24"><path d="M12 3L3 18h18z" fill="#c9a46a"/><path d="M12 3L8 18h8z" fill="#8a5a2b"/></svg>';
 const storeSVG = () => '<svg viewBox="0 0 24 24"><rect x="3" y="15" width="18" height="4" fill="#8a5a2b"/><rect x="4" y="10" width="7" height="5" rx="2" fill="#a86d36"/><rect x="12" y="11" width="8" height="4" rx="2" fill="#a86d36"/><path d="M8 10l2-4 3 3z" fill="#9aa3ad"/></svg>';
 
@@ -184,13 +199,14 @@ function action(a){
   if(a==='worker'){
     const b = G.selB;
     if(b.queue.length>=5){ EE.toast('Warteschlange voll'); return; }
-    if(!canPay(p,WORKER_COST)){ EE.toast('Nicht genug Nahrung'); return; }
+    if(!canPay(p,WORKER_COST)){ EE.toast('Nicht genug Nahrung'); EE.sfx('error'); return; }
     pay(p,WORKER_COST); b.queue.push('worker'); EE.vib(15);
   } else if(a==='age'){ EE.toast('Die Bronzezeit kommt im nächsten Update');
   } else if(a==='b-barr'){ EE.toast('Die Kaserne kommt mit dem Kampf-Update');
+  } else if(a==='b-wall'){ startWall();
   } else if(a.startsWith('b-')){
     const kind = a.slice(2);
-    if(!canPay(p,BUILD[kind].cost)){ EE.toast('Nicht genug '+Object.keys(BUILD[kind].cost).map(k=>RES_DE[k]).join(' und ')); return; }
+    if(!canPay(p,BUILD[kind].cost)){ EE.sfx('error'); EE.toast('Nicht genug '+Object.keys(BUILD[kind].cost).map(k=>RES_DE[k]).join(' und ')); return; }
     startPlace(kind);
   }
   updateHUD(); drawPanel();
@@ -344,11 +360,12 @@ function genWorld(){
   const NX=G.NX, NZ=G.NZ, R=G.rand; H_SEED=(G.seed%997)+1;
   // Startorte der Zivilisationen (echte Orte, bei Platzmangel etwas verschoben)
   G.bases = [];
-  const minD = Math.max(10, Math.round(NX/30));
+  const nP = G.players.length;
+  const minD = Math.max(10, Math.round(nP<=2 ? NX/13 : nP<=4 ? NX/15 : nP<=8 ? NX/20 : NX/30));
   G.players.forEach(p=>{
     const ll = CIV_POS[p.civ[0]] || [0,30];
     let bx=fromLon(ll[0]), bz=fromLat(ll[1]), found=false;
-    for(let r=0;r<60 && !found;r+=2){
+    for(let r=0;r<Math.max(60,minD*2.5) && !found;r+=2){
       for(let k=0;k<Math.max(1,r*3);k++){
         const a=k/Math.max(1,r*3)*Math.PI*2, x=bx+Math.cos(a)*r, z=bz+Math.sin(a)*r;
         if(rawLand(x,z)<(r<6?.5:.7)) continue;
@@ -760,8 +777,6 @@ function makeTC(color, civ){
   const g = new T.Group();
   if(MODELS.tc){
     g.add(modelMesh('tc', 5.6));
-    if(MODELS.fence){ const n=9; for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+Math.PI/2+.35; if(i===0) continue;
-      const f=modelMesh('fence', 2.2); f.position.set(Math.cos(a)*3.05,0,Math.sin(a)*3.05); f.rotation.y=-a+Math.PI/2; g.add(f); } }
     g.flag = civ ? civFlag(g, civ, color, 2.2, 0, 2.0, 4.2) : teamFlag(g, color, 2.2, 0, 2.0, 3.6);
     const fire = new T.Group(); fire.position.set(0,0,3.7);
     for(let i=0;i<5;i++){ const s2=mesh(GEO.rock, mat(0x777777), Math.cos(i*1.26)*.42,.06,Math.sin(i*1.26)*.42); s2.scale.set(.16,.12,.16); fire.add(s2); }
@@ -818,7 +833,7 @@ function makeStore(color){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb' };
+const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/palisade.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -889,15 +904,37 @@ function civFlagTex(civ, color){
   img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
   return t;
 }
+const FLAG_T = {value:0};
+function clothMat(opts){
+  const m = new T.MeshLambertMaterial(Object.assign({side:T.DoubleSide}, opts));
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uTime = FLAG_T;
+    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader
+      .replace('#include <beginnormal_vertex>', `
+        float fx = uv.x;                                  // 0 = am Mast, 1 = frei
+        float ph = position.x*4.2 - uTime*6.0 + position.y*1.3;
+        float amp = .16*fx*fx + .03*fx;
+        float dz = cos(ph)*4.2*amp;
+        vec3 objectNormal = normalize(vec3(-dz, 0.0, 1.0));
+        #ifdef USE_TANGENT
+          vec3 objectTangent = vec3( tangent.xyz );
+        #endif`)
+      .replace('#include <begin_vertex>', `vec3 transformed = vec3(position);
+        transformed.z += sin(ph)*amp + sin(position.x*9.0 - uTime*11.0)*.025*fx;
+        transformed.y -= fx*fx*.06*(1.0+.5*sin(uTime*2.3));`);
+  };
+  return m;
+}
+function clothGeo(w,h){ const g=new T.PlaneGeometry(w,h,14,8); g.translate(w/2,0,0); return g; }
 function civFlag(g, civ, color, x, y, z, h){
   const pole = mesh(GEO.box, mat(0x5a3818), x, y+h/2, z); pole.scale.set(.1,h,.1); g.add(pole);
-  const fl = new T.Mesh(new T.PlaneGeometry(1.5,1.1), new T.MeshLambertMaterial({map:civFlagTex(civ,color), side:T.DoubleSide}));
-  fl.position.set(x+.78, y+h-.6, z); fl.castShadow=true; g.add(fl);
+  const fl = new T.Mesh(clothGeo(1.6,1.15), clothMat({map:civFlagTex(civ,color)}));
+  fl.position.set(x+.05, y+h-.62, z); fl.castShadow=true; g.add(fl);
   return fl;
 }
 function teamFlag(g, color, x, y, z, h){
   const pole = mesh(GEO.box, mat(0x5a3818), x, y+h/2, z); pole.scale.set(.08,h,.08); g.add(pole);
-  const flag = mesh(GEO.box, mat(color), x+.35, y+h-.3, z); flag.scale.set(.7,.45,.04); g.add(flag);
+  const flag = new T.Mesh(clothGeo(.75,.45), clothMat({color})); flag.position.set(x+.04, y+h-.27, z); flag.castShadow=true; g.add(flag);
   return flag;
 }
 
@@ -1112,7 +1149,7 @@ function updateWorker(u,dt){
       u.repath -= dt;
       if(u.repath<=0){ u.repath=.8; moveTo(u,r.x,r.z); }
       followPath(u,dt);
-      if(near(u,r.x,r.z,1.5)){ r.dead=true; r.mesh.rotation.z=Math.PI/2; r.mesh.position.y=getH(r.x,r.z)+.25; if(u.owner===0) EE.vib(20); u.state='gather'; }
+      if(near(u,r.x,r.z,1.5)){ sfxAt('deer',r.x,r.z); r.dead=true; r.mesh.rotation.z=Math.PI/2; r.mesh.position.y=getH(r.x,r.z)+.25; if(u.owner===0) EE.vib(20); u.state='gather'; }
       break; }
     case 'gather': {
       let r = u.target;
@@ -1123,6 +1160,7 @@ function updateWorker(u,dt){
       }
       if(near(u,r.x,r.z,r.r+.85)){
         u.path=null; u.working=true; u.face=Math.atan2(r.x-u.x,r.z-u.z);
+        u.hitT=(u.hitT||0)+dt; if(u.hitT>1.05){ u.hitT=0; sfxAt(r.kind==='wood'?'chop':r.kind==='stone'?'stone':r.kind==='gold'?'gold':'berry', u.x,u.z,.8); }
         const amount = Math.min(r.amt, dt*(r.kind==='wood'?1:r.kind==='food'?1.15:.8)*gatherRate);
         r.amt -= amount; u.carry.type=r.kind; u.carry.amt += amount;
         if(r.deer) r.mesh.scale.setScalar(.5+.5*r.amt/r.max);
@@ -1151,6 +1189,7 @@ function updateWorker(u,dt){
       if(!b || b.built>=1 || b.dead){ u.state='idle'; autoJob(u); break; }
       if(near(u,b.x,b.z,b.size*.5+1.1)){
         u.path=null; u.working=true; u.face=Math.atan2(b.x-u.x,b.z-u.z);
+        u.hitT=(u.hitT||0)+dt; if(u.hitT>.9){ u.hitT=0; sfxAt('build',u.x,u.z,.8); }
         b.built = Math.min(1, b.built + dt/BUILD[b.kind].time);
         b.hp = Math.max(1, BUILD[b.kind].hp*b.built);
         b.mesh.scale.y = .25 + .75*b.built;
@@ -1182,6 +1221,7 @@ function updateWorker(u,dt){
   u.ring.position.set(u.x, m.position.y+.06, u.z); u.ring.scale.setScalar(1.3);
 }
 let panelT = 0; function drawPanelSoon(){ panelT = .25; }
+function sfxAt(name, x, z, v){ if(!G || G.farView) return; const d=Math.hypot(x-G.camS.x, z-G.camS.z); const k=clamp(1-d/(G.camS.dist*.9+6),0,1); if(k>0) EE.sfx(name, (v||1)*k*k); }
 
 function autoJob(u){
   const r = nearestRes(u.lastType||'food', u.x,u.z, 14, u.owner) || nearestRes('wood', u.x,u.z, 20, u.owner);
@@ -1197,7 +1237,13 @@ function finishBuilding(b){
   b.built=1; b.hp=d.hp; b.mesh.scale.y=1;
   b.mesh.traverse(o=>{ if(o.isMesh && o.material && o.material.transparent && o.material.opacity<.6){ o.material.opacity=1; o.material.transparent=false; } });
   if(d.pop) G.players[b.owner].popCap += d.pop;
-  if(b.owner===0){ EE.toast(d.name+' fertig gebaut'); EE.vib(25); updateHUD(); }
+  if(b.wallId){
+    for(const u of G.units) if(u.site===b){ const next=G.builds.filter(o=>o.wallId===b.wallId && o.built<1).sort((p,q)=>Math.hypot(p.x-u.x,p.z-u.z)-Math.hypot(q.x-u.x,q.z-u.z))[0];
+      if(next) cmdBuild(u,next); else { u.site=null; u.state='idle'; autoJob(u); } }
+    if(b.owner===0 && !G.builds.some(o=>o.wallId===b.wallId && o.built<1)){ EE.toast('Palisade fertig gebaut'); EE.vib(25); EE.sfx('done',.8); }
+    return;
+  }
+  if(b.owner===0){ EE.toast(d.name+' fertig gebaut'); EE.vib(25); EE.sfx('done',.8); updateHUD(); }
   for(const u of G.units) if(u.site===b){ u.site=null; u.state='idle'; autoJob(u); }
 }
 
@@ -1221,7 +1267,7 @@ function updateDeer(d,dt){
 
 function updateBuilding(b,dt){
   if(b.kind==='tc' && b.mesh.fire){ const t=G.t*12+b.x; b.mesh.fire[0].scale.set(1+Math.sin(t)*.15,1+Math.sin(t*1.3)*.25,1+Math.cos(t)*.15); b.mesh.fire[1].scale.set(.55,.6+Math.sin(t*1.7)*.15,.55); }
-  if(b.kind==='tc' && b.mesh.flag) b.mesh.flag.rotation.y = Math.sin(G.t*2+b.x)*.25;
+
   if(b.built<1 || !b.queue.length) return;
   const p = G.players[b.owner];
   if(p.pop>=p.popCap){ if(b.owner===0 && !b.warned){ EE.toast('Zu wenig Platz – baue eine Hütte'); b.warned=true; } return; }
@@ -1233,7 +1279,7 @@ function updateBuilding(b,dt){
     const k = cellIdx(x,z); const NX=G.NX, NZ=G.NZ;
     let sx=x, sz=z; if(k<0||G.grid[k]){ const f=nearestFree(Math.floor(x+NX/2),Math.floor(z+NZ/2)); if(f>=0){ sx=f%NX-NX/2+.5; sz=((f/NX)|0)-NZ/2+.5; } }
     const u = spawnWorker(b.owner, sx, sz);
-    if(b.owner===0){ updateHUD(); EE.vib(15); }
+    if(b.owner===0){ updateHUD(); EE.vib(15); EE.sfx('trained',.8); }
     autoJob(u);
   }
   if(G.selB===b) drawPanelSoon();
@@ -1263,11 +1309,21 @@ function update(dt){
   for(const b of G.builds) updateBuilding(b,dt);
   for(let i=1;i<G.players.length;i++) updateAI(G.players[i],dt);
   if(G.waterU) G.waterU.value = G.t;
+  G.ambT=(G.ambT||0)-dt; if(G.ambT<=0){ G.ambT=.5; updateAmbient(); }
+  FLAG_T.value = G.t;
   updateOverview();
   if(panelT>0){ panelT-=dt; if(panelT<=0) drawPanel(); }
   G.hudT = (G.hudT||0)-dt; if(G.hudT<=0){ G.hudT=.5; updateHUD(); if(G.sel.length===1) drawPanel(); }
   G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=.25; drawMinimap(); }
-  if(G.place) updateGhost();
+  if(G.place && G.place.kind!=='wall') updateGhost();
+}
+function updateAmbient(){
+  const cx=G.camS.x, cz=G.camS.z, far=G.farView;
+  let water=0; for(let i=0;i<12;i++){ const a=i/12*6.28; if(getH(cx+Math.cos(a)*10, cz+Math.sin(a)*10)<WATER_Y) water++; }
+  let trees=0; for(const r of G.res){ if(r.kind==='wood' && r.alive && Math.abs(r.x-cx)<14 && Math.abs(r.z-cz)<14) trees++; if(trees>25) break; }
+  let fire=0; for(const p of G.players){ if(p.tc){ const d=Math.hypot(p.tc.x-cx,p.tc.z-cz); fire=Math.max(fire, clamp(1-d/14,0,1)); } }
+  const zoom=clamp(G.camS.dist/80,0,1);
+  EE.ambient({ wind:.25+zoom*.75, waves: far?0:water/12, birds: far?0:clamp(trees/18,0,1)*(1-zoom), fire: far?0:fire*(1-zoom) });
 }
 function render(){ updateCam(); G.renderer.render(G.scene, G.cam); }
 
@@ -1378,10 +1434,12 @@ function pMove(e){
   if(!gesture) return;
   if(gesture.type==='tap' && Math.hypot(p.x-p.sx,p.y-p.sy)>10){
     clearTimeout(longT);
-    gesture = G.place ? {type:'ghost'} : {type:'box', x0:p.sx, y0:p.sy};
+    if(G.place && G.place.kind==='wall'){ const g0=groundAt(p.sx,p.sy); if(g0){ G.place.ax=g0.x; G.place.az=g0.z; } gesture={type:'wall'}; }
+    else gesture = G.place ? {type:'ghost'} : {type:'box', x0:p.sx, y0:p.sy};
   }
   if(gesture.type==='pan'){ panBy(p.x-px, p.y-py); }
   else if(gesture.type==='ghost'){ const g=groundAt(p.x,p.y); if(g){ G.place.x=g.x; G.place.z=g.z; } }
+  else if(gesture.type==='wall'){ const g=groundAt(p.x,p.y); if(g){ G.place.bx=g.x; G.place.bz=g.z; updateWallGhost(); } }
   else if(gesture.type==='box'){ showBox(gesture.x0,gesture.y0,p.x,p.y); }
   else if(gesture.type==='two' && P.size===2){
     const [a,b]=[...P.values()];
@@ -1422,7 +1480,7 @@ function pickAt(sx,sy){
   return best;
 }
 function tapAt(sx,sy){
-  if(G.place){ const g=groundAt(sx,sy); if(g){ G.place.x=g.x; G.place.z=g.z; } return; }
+  if(G.place){ const g=groundAt(sx,sy); if(g){ if(G.place.kind==='wall'){ G.place.bx=g.x; G.place.bz=g.z; updateWallGhost(); } else { G.place.x=g.x; G.place.z=g.z; } } return; }
   const hit = pickAt(sx,sy);
   const mine = G.sel.filter(u=>u.owner===0);
   const now = performance.now();
@@ -1479,6 +1537,85 @@ function marker(x,z,col){
   let t=0; const step=()=>{ if(!G) return; t+=.03; m.scale.setScalar(1+t*3); m.material.opacity=1-t; if(t<1) requestAnimationFrame(step); else { G.scene.remove(m); m.geometry.dispose(); } }; step();
 }
 
+
+/* ============================================================
+   PALISADE (selbst bauen: Linie ziehen, optional Tor)
+   ============================================================ */
+let WALL_ID = 1;
+function makeWallPiece(color, gate){
+  geos();
+  const g = new T.Group();
+  if(gate){
+    for(const x of [-.5,.5]){ const p=mesh(GEO.box, mat(0x5a3818), x, 1.1, 0); p.scale.set(.24,2.2,.24); g.add(p); }
+    const top=mesh(GEO.box, mat(0x6a4422), 0, 2.15, 0); top.scale.set(1.35,.2,.28); g.add(top);
+    const fl=mesh(GEO.box, mat(color), 0, 1.85, .16); fl.scale.set(.45,.28,.03); g.add(fl);
+    return g;
+  }
+  if(MODELS.palisade){ const m=modelMesh('palisade', 1.12); const bb=MODELS.palisade.geo.boundingBox; m.scale.y = 1.95/(bb.max.y-bb.min.y); m.scale.z*=1.6; g.add(m); }
+  else { for(let i=0;i<4;i++){ const p=mesh(GEO.box, mat(0x7a4d28), -.38+i*.25, .65+((i*7)%3)*.06, 0); p.scale.set(.16,1.3,.16); g.add(p); } }
+  return g;
+}
+function wallCells(x0,z0,x1,z1){
+  const NX=G.NX; const out=[];
+  let i0=Math.floor(x0+NX/2), j0=Math.floor(z0+G.NZ/2), i1=Math.floor(x1+NX/2), j1=Math.floor(z1+G.NZ/2);
+  const di=Math.abs(i1-i0), dj=Math.abs(j1-j0), si=i0<i1?1:-1, sj=j0<j1?1:-1; let err=di-dj;
+  for(let n=0;n<60;n++){ out.push([i0,j0]); if(i0===i1&&j0===j1) break; const e2=2*err; if(e2>-dj){err-=dj;i0+=si;} if(e2<di){err+=di;j0+=sj;} }
+  return out;
+}
+function startWall(){
+  const g = groundAtNDC(0,-.1) || {x:G.camS.x, z:G.camS.z};
+  G.place = {kind:'wall', ax:g.x, az:g.z, bx:g.x+4, bz:g.z, gate:false, ghosts:[], cells:[], ok:false, workers:G.sel.filter(u=>u.owner===0)};
+  $('#pTxt').textContent='Mit dem Finger eine Linie ziehen';
+  $('#pGate').classList.remove('hidden'); $('#pGate').classList.remove('on');
+  $('#placebar').classList.remove('hidden');
+  drawPanel(); updateWallGhost();
+}
+function updateWallGhost(){
+  const pl=G.place, NX=G.NX, NZ=G.NZ;
+  for(const gh of pl.ghosts) G.scene.remove(gh); pl.ghosts=[];
+  const cells = wallCells(pl.ax,pl.az,pl.bx,pl.bz);
+  const ang = Math.atan2(pl.bz-pl.az, pl.bx-pl.ax);
+  const mid = Math.floor(cells.length/2);
+  pl.cells = cells.map(([i,j],n)=>{ const k=j*NX+i, x=i-NX/2+.5, z=j-NZ/2+.5; const ok = i>=0&&j>=0&&i<NX&&j<NZ && !G.grid[k] && getH(x,z)>WATER_Y+.15;
+    return {k, x, z, ok, gate: pl.gate && cells.length>=3 && n===mid}; });
+  let okCount=0;
+  for(const c of pl.cells){
+    const gh = makeWallPiece(COLORS[0], c.gate);
+    gh.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; o.material.color.setHex(c.ok?0x66ff77:0xff5555); o.castShadow=false; } });
+    gh.position.set(c.x, getH(c.x,c.z), c.z); gh.rotation.y = -ang;
+    G.scene.add(gh); pl.ghosts.push(gh); if(c.ok) okCount++;
+  }
+  const cost = pl.cells.reduce((s,c)=>s+(c.ok?(c.gate?BUILD.gate.cost.wood:BUILD.wall.cost.wood):0),0);
+  pl.cost = cost; pl.ok = okCount>0;
+  $('#pTxt').textContent = okCount ? okCount+' Stück · '+cost+' Holz' : 'Mit dem Finger eine Linie ziehen';
+  $('#pOk').classList.toggle('dim', !pl.ok);
+}
+function confirmWall(){
+  const pl=G.place, p=G.players[0];
+  if(!pl.ok){ EE.toast('Hier kann keine Palisade stehen'); return; }
+  if(p.res.wood < pl.cost){ EE.toast('Nicht genug Holz ('+pl.cost+' nötig)'); return; }
+  p.res.wood -= pl.cost;
+  const id = WALL_ID++, ang = Math.atan2(pl.bz-pl.az, pl.bx-pl.ax), segs=[];
+  for(const c of pl.cells){ if(!c.ok) continue; segs.push(addWall(0, c, ang, id)); }
+  const ws = pl.workers;
+  ws.forEach((u,i)=>{ const seg = segs[Math.floor(i*segs.length/Math.max(1,ws.length))]; if(seg) cmdBuild(u,seg); });
+  EE.sfx('place'); EE.vib(20);
+  endPlace(); updateHUD(); select(ws,null);
+}
+function addWall(owner, c, ang, id){
+  const kind = c.gate?'gate':'wall', d=BUILD[kind];
+  const m = makeWallPiece(COLORS[owner], c.gate);
+  m.position.set(c.x, getH(c.x,c.z)-.03, c.z); m.rotation.y = -ang;
+  G.scene.add(m);
+  if(!c.gate) G.grid[c.k]=1;
+  const ring = new T.Mesh(new T.RingGeometry(.55,.68,20), new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.85, depthWrite:false}));
+  ring.rotation.x=-Math.PI/2; ring.position.set(c.x, m.position.y+.08, c.z); ring.visible=false; G.scene.add(ring);
+  const b = {kind, owner, x:c.x, z:c.z, size:1, mesh:m, ring, cells:c.gate?[]:[c.k], built:0, hp:1, queue:[], qT:0, wallId:id};
+  m.scale.y=.25; m.traverse(o=>{ if(o.material && o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; } });
+  G.builds.push(b);
+  return b;
+}
+
 /* ---------- Gebäude platzieren ---------- */
 function validPlace(kind,x,z){
   const fp = footprint(kind,x,z);
@@ -1506,20 +1643,22 @@ function updateGhost(){
   $('#pOk').classList.toggle('dim', !pl.ok);
 }
 function confirmPlace(){
+  if(G.place && G.place.kind==='wall') return confirmWall();
   const pl=G.place, p=G.players[0];
   if(!pl.ok){ EE.toast('Hier kann nicht gebaut werden'); return; }
   if(!canPay(p,BUILD[pl.kind].cost)){ EE.toast('Nicht genug Ressourcen'); cancelPlace(); return; }
   pay(p,BUILD[pl.kind].cost);
   const b = addBuilding(pl.kind,0,pl.x,pl.z,false);
   pl.workers.forEach(u=>cmdBuild(u,b));
-  EE.click(); EE.vib(20);
+  EE.sfx('place'); EE.vib(20);
   endPlace(); updateHUD(); select(pl.workers,null);
 }
 function cancelPlace(){ EE.click(); endPlace(); drawPanel(); }
 function endPlace(){
   const pl=G.place; if(!pl) return;
-  G.scene.remove(pl.ghost); G.scene.remove(pl.pad);
-  G.place=null; $('#placebar').classList.add('hidden');
+  if(pl.ghost) G.scene.remove(pl.ghost); if(pl.pad) G.scene.remove(pl.pad);
+  if(pl.ghosts) for(const gh of pl.ghosts) G.scene.remove(gh);
+  G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
 window.EEGame = { start, stop, dbg:()=>G, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
