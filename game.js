@@ -20,10 +20,10 @@ function vnoise(x,y,s){ const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
 function fbm(x,y,s){ let f=0,a=.5,fr=1; for(let i=0;i<4;i++){ f+=a*vnoise(x*fr,y*fr,s+i*13); fr*=2; a*=.5; } return f; }
 
 /* ---------- Daten ---------- */
-const COLORS = [0x2f7bff, 0xe23b3b, 0xf2c230, 0x3fbf5a];
-const COLNAMES = ['Blau','Rot','Gelb','Grün'];
+const COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61];
+const COLNAMES = ['Blau','Rot','Gelb','Grün','Lila','Orange','Türkis','Pink','Braun','Weiß','Schwarz','Hellgrün','Dunkelblau','Weinrot','Ocker','Waldgrün','Violett','Koralle'];
 const RES = ['food','wood','stone','gold'];
-const RES_DE = {food:'Nahrung',wood:'Holz',stone:'Stein',gold:'Gold'};
+const RES_DE = {food:'Nahrung',wood:'Holz',stone:'Stein',gold:'Gold',metal:'Metall',oil:'Öl'};
 const BUILD = {
   tc:    {name:'Stadtzentrum', size:6, cost:{}, time:60, hp:1200, drop:['food','wood','stone','gold'], pop:5},
   house: {name:'Hütte', size:2, cost:{wood:30}, time:14, hp:300, pop:5},
@@ -43,20 +43,23 @@ let G = null; // aktives Spiel
 async function start(){
   if(G) stop();
   EE.toast('Die Welt wird geladen …');
-  await loadModels();
+  await Promise.all([loadModels(), loadWorldMask()]);
   EE.hideMenu();
   const S = EE.S;
-  const N = [80,104,128][S.map] || 104;
-  const foes = (S.foes|0)+1;
+  const NX = [240,320,420,520][S.map|0] || 320, NZ = Math.round(NX*(LAT0-LAT1)/360);
   const civ = EE.CIVS[S.civ] || EE.CIVS[0];
+  const others = EE.CIVS.filter(c=>c!==civ);
+  for(let i=others.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [others[i],others[j]]=[others[j],others[i]]; }
+  const foes = clamp(S.ai||3, 1, 17);
   const gfx = S.gfx|0;
-
-  G = { N, foes, civ, gfx, seed:(Math.random()*1e9)|0, t:0, units:[], builds:[], res:[], deer:[],
+  G = { NX, NZ, foes, civ, gfx, seed:(Math.random()*1e9)|0, t:0, units:[], builds:[], res:[], deer:[],
         players:[], sel:[], selB:null, place:null, running:true, raf:0, msgT:0 };
   G.rand = rng(G.seed);
+  [civ, ...others.slice(0,foes)].forEach((c,i)=>G.players.push({id:i, civ:c, res:{...START_RES}, pop:0, popCap:0, tc:null, color:COLORS[i]}));
   buildUI();
   initRenderer();
   genWorld();
+  buildOverview();
   initInput();
   updateHUD(); drawPanel();
   centerCamOn(G.players[0].tc.x, G.players[0].tc.z);
@@ -230,135 +233,306 @@ function onResize(){
   G.W = w; G.H = h;
 }
 function updateCam(){
-  const s = G.camS, half = G.N/2-4;
-  s.x = clamp(s.x,-half,half); s.z = clamp(s.z,-half,half);
-  s.dist = clamp(s.dist, 14, 70);
-  const y = getH(s.x,s.z);
-  const hd = Math.cos(s.pitch)*s.dist;
-  G.cam.position.set(s.x+Math.sin(s.yaw)*hd, y+Math.sin(s.pitch)*s.dist, s.z+Math.cos(s.yaw)*hd);
+  const s = G.camS;
+  s.x = clamp(s.x,-G.NX/2+6,G.NX/2-6); s.z = clamp(s.z,-G.NZ/2+6,G.NZ/2-6);
+  const maxD = Math.max(G.NX,G.NZ)*1.05;
+  s.dist = clamp(s.dist, 12, maxD);
+  const far = clamp((s.dist-45)/(maxD-45),0,1);
+  const pitch = lerp(.95, 1.38, far);
+  const y = Math.max(getH(s.x,s.z), WATER_Y);
+  const hd = Math.cos(pitch)*s.dist, yaw = s.yaw*(1-far);
+  G.cam.position.set(s.x+Math.sin(yaw)*hd, y+Math.sin(pitch)*s.dist, s.z+Math.cos(yaw)*hd);
+  G.cam.far = s.dist*4+200; G.cam.updateProjectionMatrix();
   G.cam.lookAt(s.x, y, s.z);
+  G.scene.fog.near = s.dist*1.6+20; G.scene.fog.far = s.dist*4+120;
   G.sun.position.set(s.x+30, y+55, s.z+18);
   G.sun.target.position.set(s.x, y, s.z);
+  const shadows = G.gfx>=1 && s.dist<60;
+  if(G.sun.castShadow!==shadows){ G.sun.castShadow=shadows; }
+  G.farView = s.dist>55;
 }
 function centerCamOn(x,z){ G.camS.x=x; G.camS.z=z+4; }
+
+
+/* ============================================================
+   WELTKARTE
+   ============================================================ */
+const LAT0 = 76, LAT1 = -56;              // Kartenausschnitt (Breitengrade)
+const CIV_POS = { 'Osmanen':[32.5,39.5], 'Römer':[12.5,42], 'Griechen':[22,39], 'Ägypter':[31,27], 'Babylonier':[44.5,33],
+  'Germanen':[10,51], 'Briten':[-1.5,52.5], 'Franken':[2.5,47], 'Wikinger':[10,60.5], 'Mongolen':[105,47],
+  'Chinesen':[113,34], 'Japaner':[138,36], 'Koreaner':[127.5,37], 'Azteken':[-99,19.5], 'Inka':[-72,-13.5],
+  'Maya':[-89.5,17.5], 'Russen':[37.5,55.7], 'Zulu':[31,-28.5] };
+// Wüsten [lonMin, lonMax, latMin, latMax]
+const DESERTS = [[-17,34,15,31],[34,58,14,31],[50,66,25,34],[68,76,24,30],[76,92,36,42],[92,116,37,47],[118,146,-32,-18],
+  [17,25,-27,-19],[-118,-104,29,37],[-72,-68,-28,-17],[55,66,39,45]];
+// Gebirge [lon, lat, rLon, rLat, Höhe]
+const MOUNTAINS = [[86,31,11,4,6],[76,36,5,3,5],[96,30,4,4,4.5],[10.5,46.4,5,1.3,3.2],[-74,-15,3,10,4.5],[-70,-32,2.2,10,4.5],[-77,-2,2.5,6,4],
+  [-71,-45,2,7,3.4],[-113,45,6,9,3.6],[-122,55,4,6,3],[59,58,2,8,2.5],[44,42.5,4,1.3,3.2],[-3,32,7,2,2.6],[39,10,3,4,2.8],[30,-2,3,4,2],
+  [102,35,7,3,3.3],[83,43,7,2,3.2],[71,38,3,2,3.6],[24,46,4,2,2],[14,62,4,4,2.2],[138,36,1.5,2,2.4],[148,-34,2,6,2],[-80,37,4,6,1.8],[-104,24,3,6,2.6]];
+// Rohstoff-Vorkommen [Art, lonMin, lonMax, latMin, latMax, Anzahl]
+const DEPOSITS = [
+  ['oil',45,55,20,30,5],['oil',44,48,30,36,3],['oil',49,54,38,45,3],['oil',65,80,58,66,4],['oil',-103,-94,28,34,3],['oil',-72,-64,7,11,2],
+  ['oil',4,9,4,7,2],['oil',15,25,26,31,3],['oil',-118,-110,52,58,2],['oil',110,125,40,48,2],
+  ['gold',25,30,-28,-24,4],['gold',-122,-119,37,40,3],['gold',-140,-135,62,65,2],['gold',-3,0,5,8,3],['gold',-78,-70,-15,-8,3],
+  ['gold',118,123,-32,-28,3],['gold',110,135,55,62,3],['gold',20,26,44,47,2],
+  ['metal',57,62,50,65,4],['metal',-71,-68,-28,-20,3],['metal',-45,-42,-21,-18,2],['metal',17,22,65,68,2],['metal',25,29,-12,-10,3],
+  ['metal',116,120,-24,-21,3],['metal',-93,-88,46,48,2],['metal',110,118,30,40,3],['metal',33,36,34,35.5,2],['metal',8,14,49,52,2]];
+let WMASK = null, WMW = 0, WMH = 0;
+function loadWorldMask(){
+  if(WMASK) return Promise.resolve();
+  return new Promise(res=>{
+    const img = new Image();
+    img.onload = ()=>{ const c=document.createElement('canvas'); c.width=img.width; c.height=img.height; const x=c.getContext('2d'); x.drawImage(img,0,0);
+      const d=x.getImageData(0,0,c.width,c.height).data; WMW=c.width; WMH=c.height; WMASK=new Float32Array(WMW*WMH);
+      for(let i=0;i<WMASK.length;i++) WMASK[i]=d[i*4]/255; res(); };
+    img.onerror = ()=>res();
+    img.src = window.EE_WORLD || 'weltkarte.png';
+  });
+}
+function landAt(lon,lat){
+  if(!WMASK) return 0;
+  const fx=(lon+180)/360*(WMW-1), fy=(LAT0-lat)/(LAT0-LAT1)*(WMH-1);
+  const x0=clamp(Math.floor(fx),0,WMW-2), y0=clamp(Math.floor(fy),0,WMH-2), tx=clamp(fx-x0,0,1), ty=clamp(fy-y0,0,1);
+  const a=WMASK[y0*WMW+x0], b=WMASK[y0*WMW+x0+1], c=WMASK[(y0+1)*WMW+x0], d=WMASK[(y0+1)*WMW+x0+1];
+  return lerp(lerp(a,b,tx),lerp(c,d,tx),ty);
+}
+const toLon = x => (x+G.NX/2)/G.NX*360-180;
+const toLat = z => LAT0-(z+G.NZ/2)/G.NZ*(LAT0-LAT1);
+const fromLon = lon => (lon+180)/360*G.NX-G.NX/2;
+const fromLat = lat => (LAT0-lat)/(LAT0-LAT1)*G.NZ-G.NZ/2;
+function inBox(lon,lat,b,soft){ const cx=(b[0]+b[1])/2, cy=(b[2]+b[3])/2, rx=(b[1]-b[0])/2+soft, ry=(b[3]-b[2])/2+soft;
+  const d=Math.max(Math.abs(lon-cx)/rx, Math.abs(lat-cy)/ry); return clamp((1-d)/(soft/Math.max(rx,ry)+.001),0,1); }
+function desertAt(lon,lat){ let v=0; for(const b of DESERTS){ v=Math.max(v, inBox(lon,lat,b,3)); } return v; }
+function mountainAt(lon,lat){ let v=0; for(const m of MOUNTAINS){ const d=Math.hypot((lon-m[0])/m[2],(lat-m[1])/m[3]); if(d<1) v=Math.max(v,(1-d*d)*m[4]); } return v; }
+function coldAt(lat){ return clamp((Math.abs(lat)-55)/12,0,1); }
 
 /* ============================================================
    WELT
    ============================================================ */
 let H_SEED = 1;
 function rawH(x,z){
-  const n = fbm(x*.035+50, z*.035+50, H_SEED);
-  let h = (n-.45)*7;
-  h += (fbm(x*.12, z*.12, H_SEED+7)-.5)*1.2;
-  // Seen
-  for(const l of G.lakes){ const d=Math.hypot(x-l.x,z-l.z); if(d<l.r) h -= (1-d/l.r)**1.6*l.r*.55; }
-  // Basen ebnen
-  for(const b of G.bases){ const d=Math.hypot(x-b.x,z-b.z); if(d<16){ const t=clamp((16-d)/8,0,1); h = lerp(h, b.h, t); } }
-  // Kartenrand anheben
-  const e = Math.max(Math.abs(x),Math.abs(z)) - (G.N/2-6);
-  if(e>0) h += e*e*.25;
+  const lon=toLon(x), lat=toLat(z);
+  const m = landAt(lon,lat);
+  let h = WATER_Y + (m-.5)*3.2;
+  if(m>.5){
+    const land = clamp((m-.5)*4,0,1);
+    h += land*(fbm(x*.05+50, z*.05+50, H_SEED)*1.8 + (fbm(x*.15,z*.15,H_SEED+7)-.5)*.6);
+    const mt = mountainAt(lon,lat);
+    if(mt>0) h += mt*land*(.55+fbm(x*.12,z*.12,H_SEED+21)*.9);
+    const ds = desertAt(lon,lat);
+    if(ds>0) h += ds*land*Math.sin(x*.9+Math.sin(z*.35)*2)*.12;   // Dünen
+  }
+  for(const b of G.bases){ const d=Math.hypot(x-b.x,z-b.z);
+    if(d<6.5) h = lerp(h, b.h, clamp((6.5-d)/2,0,1));                       // Stadtplatz immer Land
+    else if(d<11 && h>WATER_Y+.1) h = lerp(h, b.h, clamp((11-d)/4.5,0,1)*.8); // nur vorhandenes Land einebnen
+  }
+  const e = Math.min(x+G.NX/2, G.NX/2-x, z+G.NZ/2, G.NZ/2-z);
+  if(e<3) h = Math.min(h, WATER_Y-1);
   return h;
 }
 function getH(x,z){
-  const N=G.N, s=G.hs, gx=(x+N/2)/s, gz=(z+N/2)/s;
-  const ix=clamp(Math.floor(gx),0,G.hn-2), iz=clamp(Math.floor(gz),0,G.hn-2);
-  const fx=clamp(gx-ix,0,1), fz=clamp(gz-iz,0,1), n=G.hn, a=G.hm;
+  const s=G.hs, gx=(x+G.NX/2)/s, gz=(z+G.NZ/2)/s, n=G.hnx;
+  const ix=clamp(Math.floor(gx),0,G.hnx-2), iz=clamp(Math.floor(gz),0,G.hnz-2);
+  const fx=clamp(gx-ix,0,1), fz=clamp(gz-iz,0,1), a=G.hm;
   const h00=a[iz*n+ix], h10=a[iz*n+ix+1], h01=a[(iz+1)*n+ix], h11=a[(iz+1)*n+ix+1];
   return lerp(lerp(h00,h10,fx), lerp(h01,h11,fx), fz);
 }
 const WATER_Y = -.55;
 
+function rawLand(x,z){ const m=landAt(toLon(x),toLat(z)); return m; }
 function genWorld(){
-  const N = G.N, R = G.rand; H_SEED = (G.seed%997)+1;
-  // Basen in den Ecken
-  const off = N*.32;
-  const corners = [[-off,off],[off,-off],[off,off],[-off,-off]];
+  const NX=G.NX, NZ=G.NZ, R=G.rand; H_SEED=(G.seed%997)+1;
+  // Startorte der Zivilisationen (echte Orte, bei Platzmangel etwas verschoben)
   G.bases = [];
-  for(let i=0;i<=G.foes;i++) G.bases.push({x:corners[i][0], z:corners[i][1], h:0});
-  // Seen zwischen den Basen
-  G.lakes = [];
-  for(let i=0;i<2+(N>100?1:0);i++){
-    for(let tries=0;tries<30;tries++){
-      const x=(R()-.5)*N*.7, z=(R()-.5)*N*.7, r=3.5+R()*4;
-      if(G.bases.every(b=>Math.hypot(b.x-x,b.z-z)>r+20)){ G.lakes.push({x,z,r}); break; }
+  const minD = Math.max(10, Math.round(NX/30));
+  G.players.forEach(p=>{
+    const ll = CIV_POS[p.civ[0]] || [0,30];
+    let bx=fromLon(ll[0]), bz=fromLat(ll[1]), found=false;
+    for(let r=0;r<60 && !found;r+=2){
+      for(let k=0;k<Math.max(1,r*3);k++){
+        const a=k/Math.max(1,r*3)*Math.PI*2, x=bx+Math.cos(a)*r, z=bz+Math.sin(a)*r;
+        if(rawLand(x,z)<(r<6?.5:.7)) continue;
+        if(Math.abs(x)>NX/2-10||Math.abs(z)>NZ/2-10) continue;
+        if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<minD)) continue;
+        bx=x; bz=z; found=true; break;
+      }
     }
-  }
-  G.bases.forEach(b=>{ G.lakes_tmp=G.lakes; b.h = Math.max(.2, (fbm(b.x*.035+50,b.z*.035+50,H_SEED)-.45)*7); });
+    G.bases.push({x:Math.round(bx), z:Math.round(bz), h:0});
+  });
+  const saveB = G.bases; G.bases = [];
+  saveB.forEach(b=>{ b.h = Math.max(WATER_Y+.7, rawH(b.x,b.z)); });
+  G.bases = saveB;
   // Höhenkarte
-  G.hs = 1; G.hn = N+1;
-  G.hm = new Float32Array(G.hn*G.hn);
-  for(let j=0;j<G.hn;j++) for(let i=0;i<G.hn;i++) G.hm[j*G.hn+i] = rawH(i-N/2, j-N/2);
+  G.hs = 1; G.hnx = NX+1; G.hnz = NZ+1;
+  G.hm = new Float32Array(G.hnx*G.hnz);
+  for(let j=0;j<G.hnz;j++) for(let i=0;i<G.hnx;i++) G.hm[j*G.hnx+i] = rawH(i-NX/2, j-NZ/2);
   // Raster für Wegfindung
-  G.grid = new Uint8Array(N*N);    // 1 = blockiert
-  for(let j=0;j<N;j++) for(let i=0;i<N;i++){
-    const h = getH(i-N/2+.5, j-N/2+.5);
-    const edge = i<2||j<2||i>N-3||j>N-3;
-    if(h<WATER_Y+.15 || edge) G.grid[j*N+i]=1;
+  G.grid = new Uint8Array(NX*NZ);
+  G.pfG = new Float32Array(NX*NZ); G.pfF = new Int32Array(NX*NZ); G.pfS = new Uint32Array(NX*NZ); G.pfC = new Uint32Array(NX*NZ); G.pfStamp = 0;
+  for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
+    const x=i-NX/2+.5, z=j-NZ/2+.5, h=getH(x,z);
+    const edge = i<2||j<2||i>NX-3||j>NZ-3;
+    const steep = Math.abs(getH(x+.5,z)-getH(x-.5,z))+Math.abs(getH(x,z+.5)-getH(x,z-.5)) > 2.2;
+    if(h<WATER_Y+.15 || edge || steep) G.grid[j*NX+i]=1;
   }
   buildTerrain();
   buildWater();
-  // Spieler
-  for(let i=0;i<=G.foes;i++){
-    const civ = i===0 ? G.civ : EE.CIVS[(R()*EE.CIVS.length)|0];
-    const p = {id:i, civ, res:{...START_RES}, pop:0, popCap:0, tc:null, color:COLORS[i]};
-    G.players.push(p);
+  // Spieler: Stadtzentrum, Arbeiter, faire Startressourcen
+  G.players.forEach((p,i)=>{
     const b = G.bases[i];
-    const tc = addBuilding('tc', i, b.x, b.z, true);
-    p.tc = tc;
+    p.tc = addBuilding('tc', i, b.x, b.z, true);
     for(let k=0;k<4;k++){ const a=k/4*Math.PI*2+.4; spawnWorker(i, b.x+Math.cos(a)*4.2, b.z+Math.sin(a)*4.2); }
-    // Ressourcen rund um die Basis (fair für alle)
     const ang = R()*Math.PI*2;
-    placeCluster('bush', b.x+Math.cos(ang)*8, b.z+Math.sin(ang)*8, 6, 2.6);
-    placeCluster('stone', b.x+Math.cos(ang+2)*10, b.z+Math.sin(ang+2)*10, 3, 1.6);
-    placeCluster('gold', b.x+Math.cos(ang+3.3)*11, b.z+Math.sin(ang+3.3)*11, 3, 1.6);
-    placeCluster('tree', b.x+Math.cos(ang+4.6)*13, b.z+Math.sin(ang+4.6)*13, 22, 5);
+    placeCluster('bush', b.x+Math.cos(ang)*8, b.z+Math.sin(ang)*8, 6, 2.6, 6.5);
+    placeCluster('stone', b.x+Math.cos(ang+2)*10, b.z+Math.sin(ang+2)*10, 3, 1.6, 6.5);
+    placeCluster('gold', b.x+Math.cos(ang+3.3)*11, b.z+Math.sin(ang+3.3)*11, 3, 1.6, 6.5);
+    placeCluster('tree', b.x+Math.cos(ang+4.6)*13, b.z+Math.sin(ang+4.6)*13, 22, 5, 6.5);
     for(let k=0;k<4;k++) spawnDeer(b.x+Math.cos(ang+1)*15+R()*4, b.z+Math.sin(ang+1)*15+R()*4);
+  });
+  // Natur auf allen Kontinenten
+  const area = NX*NZ;
+  const tries = Math.round(area/9);
+  for(let i=0;i<tries;i++){
+    const x=(R()-.5)*(NX-8), z=(R()-.5)*(NZ-8);
+    if(rawLand(x,z)<.7) continue;
+    if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<12)) continue;
+    const lon=toLon(x), lat=toLat(z), ds=desertAt(lon,lat), cold=coldAt(lat), mt=mountainAt(lon,lat);
+    const forest = fbm(x*.06,z*.06,H_SEED+40);
+    const r = R();
+    if(ds>.5){ if(r<.02) placeCluster('tree',x,z,3,1.5); else if(r<.05) placeCluster('stone',x,z,2,1); }
+    else if(forest>.53 && cold<.85 && mt<2.5 && r<.35) placeCluster('tree',x,z,5+(R()*9|0),2.2+R()*2.5);
+    else if(r<.045) placeCluster('bush',x,z,3,1.6);
+    else if(r<.075 && mt>.4) placeCluster('stone',x,z,3,1.5);
+    else if(r<.085) placeCluster('gold',x,z,2,1.2);
+    else if(r<.13 && cold<.9) spawnDeer(x,z);
   }
-  // Wälder und Felsen auf der Karte
-  const forests = Math.round(N*N/900);
-  for(let i=0;i<forests;i++){ const x=(R()-.5)*N*.85, z=(R()-.5)*N*.85;
-    if(G.bases.every(b=>Math.hypot(b.x-x,b.z-z)>14)) placeCluster('tree', x, z, 10+(R()*22|0), 3+R()*5); }
-  for(let i=0;i<Math.round(N/14);i++){ const x=(R()-.5)*N*.8, z=(R()-.5)*N*.8;
-    if(G.bases.every(b=>Math.hypot(b.x-x,b.z-z)>18)) placeCluster(R()<.5?'stone':'gold', x, z, 3, 1.5); }
-  for(let i=0;i<Math.round(N/10);i++){ const x=(R()-.5)*N*.8, z=(R()-.5)*N*.8;
-    if(G.bases.every(b=>Math.hypot(b.x-x,b.z-z)>18)){ placeCluster('bush', x, z, 4, 2); } }
-  for(let i=0;i<Math.round(N/9);i++){ const x=(R()-.5)*N*.8, z=(R()-.5)*N*.8; spawnDeer(x,z); }
-  // Deko: Gras-Büschel und Blumen (instanziert, kein Hindernis)
+  // Rohstoffe an echten Orten
+  for(const d of DEPOSITS){
+    const n = Math.max(1, Math.round(d[5]*NX/320));
+    for(let k=0;k<n;k++) for(let t=0;t<25;t++){
+      const lon=d[1]+R()*(d[2]-d[1]), lat=d[3]+R()*(d[4]-d[3]), x=fromLon(lon), z=fromLat(lat);
+      if(rawLand(x,z)<.7) continue;
+      placeCluster(d[0], x, z, d[0]==='oil'?1:3, 1.6); break;
+    }
+  }
   addDecor();
   buildMinimapBase();
 }
 
 /* ---------- Gelände ---------- */
-function buildTerrain(){
-  const N=G.N, n=G.hn;
-  const geo = new T.PlaneGeometry(N, N, n-1, n-1);
-  geo.rotateX(-Math.PI/2);
-  const pos = geo.attributes.position, col = new Float32Array(pos.count*3);
-  const cGrass1=new T.Color(0x6fae3f), cGrass2=new T.Color(0x4f8f34), cDirt=new T.Color(0xa58456), cSand=new T.Color(0xd9c38a), cRock=new T.Color(0x8d8a7e), c=new T.Color();
-  for(let i=0;i<pos.count;i++){
-    const x=pos.getX(i), z=pos.getZ(i);
-    const h = G.hm[i]; pos.setY(i,h);
-    const n1 = fbm(x*.08,z*.08,H_SEED+3);
-    c.copy(cGrass1).lerp(cGrass2, clamp(n1*1.6-.4,0,1));
-    for(const b of G.bases){ const d=Math.hypot(x-b.x,z-b.z); if(d<9) c.lerp(cDirt, clamp((9-d)/5,0,1)*.75); }
-    if(h<WATER_Y+.5) c.lerp(cSand, clamp((WATER_Y+.5-h)/.5,0,1));
-    if(h>3.2) c.lerp(cRock, clamp((h-3.2)/1.5,0,1));
-    const v = .94+hash2(x,z,9)*.12; c.multiplyScalar(v);
-    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+/* ---------- Boden-Texturen (nahtlos, selbst erzeugt; können durch Bilder ersetzt werden) ---------- */
+function tileNoise(size, cells, seed){
+  const out=new Float32Array(size*size), P=cells;
+  const hv=(i,j)=>hash2(((i%P)+P)%P, ((j%P)+P)%P, seed);
+  for(let y=0;y<size;y++) for(let x=0;x<size;x++){
+    const fx=x/size*P, fy=y/size*P, i=Math.floor(fx), j=Math.floor(fy), u=fx-i, v=fy-j;
+    const su=u*u*(3-2*u), sv=v*v*(3-2*v);
+    out[y*size+x]=lerp(lerp(hv(i,j),hv(i+1,j),su),lerp(hv(i,j+1),hv(i+1,j+1),su),sv);
   }
-  geo.setAttribute('color', new T.BufferAttribute(col,3));
+  return out;
+}
+function fbmTile(size, seed){ const a=tileNoise(size,4,seed), b=tileNoise(size,8,seed+1), c=tileNoise(size,16,seed+2), d=tileNoise(size,32,seed+3), o=new Float32Array(size*size);
+  for(let i=0;i<o.length;i++) o[i]=a[i]*.45+b[i]*.28+c[i]*.17+d[i]*.1; return o; }
+function makeGroundTex(kind){
+  const S=256, cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d'), img=x.createImageData(S,S);
+  const n=fbmTile(S, {grass:11,dirt:23,sand:37,rock:51,snow:67}[kind]);
+  const pal={grass:[[70,120,40],[112,160,62]], dirt:[[104,78,50],[150,118,80]], sand:[[205,166,104],[236,206,146]], rock:[[96,94,90],[150,148,140]], snow:[[214,224,236],[250,252,255]]}[kind];
+  for(let i=0;i<S*S;i++){ const t=n[i], o=i*4, xx=i%S, yy=(i/S)|0;
+    let v=t;
+    if(kind==='sand') v = t*.6 + .4*(.5+.5*Math.sin((xx+Math.sin(yy/S*Math.PI*4)*10)/S*Math.PI*2*10));
+    if(kind==='rock') v = Math.abs(t-.5)<.03 ? .05 : t;
+    img.data[o]=lerp(pal[0][0],pal[1][0],v); img.data[o+1]=lerp(pal[0][1],pal[1][1],v); img.data[o+2]=lerp(pal[0][2],pal[1][2],v); img.data[o+3]=255; }
+  x.putImageData(img,0,0);
+  const rnd=rng(kind.length*977);
+  if(kind==='grass'){ for(let i=0;i<2600;i++){ const px=rnd()*S, py=rnd()*S, l=3+rnd()*5, a=-Math.PI/2+(rnd()-.5)*.9; const g=110+rnd()*80|0;
+      x.strokeStyle=`rgba(${g*.45|0},${g},${g*.35|0},.55)`; x.lineWidth=1; x.beginPath(); x.moveTo(px,py); x.lineTo(px+Math.cos(a)*l,py+Math.sin(a)*l); x.stroke(); } }
+  if(kind==='dirt'||kind==='sand'){ for(let i=0;i<(kind==='dirt'?260:90);i++){ const px=rnd()*S, py=rnd()*S, r=.8+rnd()*2.2, g=kind==='dirt'?(120+rnd()*70|0):(190+rnd()*50|0);
+      x.fillStyle=`rgba(${g},${g*.88|0},${g*.72|0},.85)`; x.beginPath(); x.arc(px,py,r,0,7); x.fill(); } }
+  if(kind==='rock'){ for(let i=0;i<70;i++){ const px=rnd()*S, py=rnd()*S; x.strokeStyle='rgba(40,40,40,.35)'; x.lineWidth=1; x.beginPath(); x.moveTo(px,py); for(let k=0;k<4;k++) x.lineTo(px+(rnd()-.5)*30,py+(rnd()-.5)*30); x.stroke(); }
+      for(let i=0;i<90;i++){ x.fillStyle='rgba(80,110,50,.35)'; x.beginPath(); x.arc(rnd()*S,rnd()*S,1+rnd()*3,0,7); x.fill(); } }
+  const t=new T.CanvasTexture(cv); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; t.generateMipmaps=true; t.minFilter=T.LinearMipmapLinearFilter;
+  return t;
+}
+function buildTerrain(){
+  const NX=G.NX, NZ=G.NZ;
+  const geo = new T.PlaneGeometry(NX, NZ, G.hnx-1, G.hnz-1);
+  geo.rotateX(-Math.PI/2);
+  const pos = geo.attributes.position, wA = new Float32Array(pos.count*4), wB = new Float32Array(pos.count), tint = new Float32Array(pos.count*3);
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i), z=pos.getZ(i), h=G.hm[i]; pos.setY(i,h);
+    const lon=toLon(x), lat=toLat(z);
+    let grass=1, dirt=0, sand=0, rock=0, snow=0;
+    const n1 = fbm(x*.07,z*.07,H_SEED+3);
+    dirt = clamp((n1-.62)*3,0,.6);
+    const ds = desertAt(lon,lat); sand = Math.max(sand, ds);
+    for(const b of G.bases){ const d=Math.hypot(x-b.x,z-b.z); if(d<9) dirt=Math.max(dirt, clamp((9-d)/5,0,1)*.85); }
+    if(h<WATER_Y+.45) sand = Math.max(sand, clamp((WATER_Y+.45-h)/.4,0,1));
+    rock = clamp((h-(WATER_Y+3.1))/1.1,0,1);
+    const cold = coldAt(lat);
+    snow = Math.max(clamp((h-(WATER_Y+4.6))/.9,0,1), cold>.55 ? clamp((cold-.55)*2.5,0,1) : 0);
+    // Gewichte normalisieren (Reihenfolge: Schnee > Fels > Sand > Erde > Gras)
+    let rest = 1;
+    const ws = snow*rest; rest -= ws;
+    const wr = rock*rest; rest -= wr;
+    const wsa = sand*rest; rest -= wsa;
+    const wd = dirt*rest; rest -= wd;
+    wA[i*4]=rest; wA[i*4+1]=wd; wA[i*4+2]=wsa; wA[i*4+3]=wr; wB[i]=ws;
+    const v = .9+hash2(x,z,9)*.2, tn = cold*.25;
+    tint[i*3]=v*(1-tn*.4); tint[i*3+1]=v; tint[i*3+2]=v*(1+tn*.3);
+  }
+  geo.setAttribute('aW', new T.BufferAttribute(wA,4));
+  geo.setAttribute('aS', new T.BufferAttribute(wB,1));
+  geo.setAttribute('color', new T.BufferAttribute(tint,3));
   geo.computeVertexNormals();
-  const m = new T.Mesh(geo, new T.MeshLambertMaterial({vertexColors:true, flatShading:true}));
+  const tex = { grass:makeGroundTex('grass'), dirt:makeGroundTex('dirt'), sand:makeGroundTex('sand'), rock:makeGroundTex('rock'), snow:makeGroundTex('snow') };
+  G.groundTex = tex;
+  const mt = new T.MeshLambertMaterial({vertexColors:true});
+  mt.onBeforeCompile = sh => {
+    for(const k in tex) sh.uniforms['t_'+k] = {value:tex[k]};
+    sh.vertexShader = 'attribute vec4 aW;\nattribute float aS;\nvarying vec4 vW;\nvarying float vS;\nvarying vec2 vWP;\n' + sh.vertexShader
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vW=aW; vS=aS; vWP=position.xz;');
+    sh.fragmentShader = 'uniform sampler2D t_grass,t_dirt,t_sand,t_rock,t_snow;\nvarying vec4 vW;\nvarying float vS;\nvarying vec2 vWP;\n' + sh.fragmentShader
+      .replace('#include <map_fragment>', `
+        vec2 uv1 = vWP*.28, uv2 = vWP*.061 + vec2(.37,.11);
+        vec3 cg = mix(texture2D(t_grass,uv1).rgb, texture2D(t_grass,uv2).rgb, .45);
+        vec3 cd = mix(texture2D(t_dirt,uv1).rgb, texture2D(t_dirt,uv2).rgb, .4);
+        vec3 cs = mix(texture2D(t_sand,uv1*.7).rgb, texture2D(t_sand,uv2).rgb, .4);
+        vec3 cr = mix(texture2D(t_rock,uv1*.8).rgb, texture2D(t_rock,uv2).rgb, .4);
+        vec3 cn = texture2D(t_snow,uv1*.6).rgb;
+        vec3 ground = cg*vW.x + cd*vW.y + cs*vW.z + cr*vW.w + cn*vS;
+        diffuseColor.rgb *= ground;`);
+  };
+  const m = new T.Mesh(geo, mt);
   m.receiveShadow = true;
   G.scene.add(m); G.terrain = m;
-  // Unterseite / Rand
-  const skirt = new T.Mesh(new T.PlaneGeometry(N*4,N*4), new T.MeshLambertMaterial({color:0x5c8a35}));
-  skirt.rotation.x = -Math.PI/2; skirt.position.y = -2.5; G.scene.add(skirt);
+  const skirt = new T.Mesh(new T.PlaneGeometry(NX*6,NZ*6), new T.MeshLambertMaterial({color:0x123f66}));
+  skirt.rotation.x = -Math.PI/2; skirt.position.y = WATER_Y-2; G.scene.add(skirt);
 }
 function buildWater(){
-  const w = new T.Mesh(new T.PlaneGeometry(G.N, G.N, 1, 1),
-    new T.MeshLambertMaterial({color:0x2e8fd6, transparent:true, opacity:.82}));
-  w.rotation.x = -Math.PI/2; w.position.y = WATER_Y; G.scene.add(w); G.water = w;
+  const NX=G.NX, NZ=G.NZ;
+  const geo = new T.PlaneGeometry(NX*1.4, NZ*1.6, Math.round(NX/1.5), Math.round(NZ/1.5));
+  geo.rotateX(-Math.PI/2);
+  const mt = new T.MeshLambertMaterial({color:0x2f8fd8, transparent:true, opacity:.84});
+  mt.onBeforeCompile = sh => {
+    sh.uniforms.uTime = {value:0}; G.waterU = sh.uniforms.uTime;
+    sh.vertexShader = 'uniform float uTime;\nvarying float vWave;\n' + sh.vertexShader
+      .replace('#include <beginnormal_vertex>', `
+        float wx = position.x, wz = position.z;
+        float w1 = sin(wx*.55 + uTime*1.3) * .5 + sin(wz*.42 - uTime*1.05) * .5;
+        float w2 = sin((wx+wz)*.9 + uTime*2.1) * .35;
+        float dX = cos(wx*.55 + uTime*1.3)*.55*.5 + cos((wx+wz)*.9 + uTime*2.1)*.9*.35;
+        float dZ = -sin(wz*.42 - uTime*1.05)*0.0 + cos(wz*.42 - uTime*1.05)*.42*.5 + cos((wx+wz)*.9 + uTime*2.1)*.9*.35;
+        vec3 objectNormal = normalize(vec3(-dX*.12, 1.0, -dZ*.12));
+        #ifdef USE_TANGENT
+          vec3 objectTangent = vec3( tangent.xyz );
+        #endif`)
+      .replace('#include <begin_vertex>', `vec3 transformed = vec3(position); transformed.y += (w1+w2)*.07; vWave = w1+w2;`);
+    sh.fragmentShader = 'varying float vWave;\n' + sh.fragmentShader
+      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+        gl_FragColor.rgb += vec3(.10,.14,.16) * smoothstep(.55, 1.1, vWave);`);
+  };
+  const w = new T.Mesh(geo, mt);
+  w.position.y = WATER_Y; G.scene.add(w); G.water = w;
 }
 
 /* ---------- Materialien & Modelle ---------- */
@@ -411,13 +585,36 @@ function makeBush(R){
     g.add(mesh(GEO.berry, mat(0xd8283a), Math.cos(a)*r, y, Math.sin(a)*r)); }
   g.rotation.y = R()*6.28; return g;
 }
-function makeRock(R, gold){
+function makeRock(R, kind){
   geos();
   const g = new T.Group();
-  const r = mesh(GEO.rock, mat(gold?0x8a7a55:0x9aa1a8), 0,.35,0); r.scale.set(1.1,.7,1); r.rotation.set(R(),R(),R()); g.add(r);
+  const gold = kind==='gold';
+  if(kind==='stone' && MODELS.rock){
+    const big = MODELS.mono && R()<.25;
+    const m = modelMesh(big?'mono':'rock', big?1.1:1.5+R()*.4); if(big) m.scale.multiplyScalar(1.4); g.add(m);
+    g.rotation.y = R()*6.28; return g;
+  }
+  if((kind==='gold'||kind==='metal') && MODELS.ore){
+    const m = modelMesh('ore', 1.5+R()*.3);
+    if(gold){ m.material = MODELS.ore.goldMat || (MODELS.ore.goldMat = (()=>{ const x=MODELS.ore.mat.clone(); x.color.setRGB(1.5,1.15,.35); x.emissive=new T.Color(0x2a1a00); return x; })()); }
+    g.add(m);
+    if(gold) for(let i=0;i<5;i++){ const a=R()*6.28; g.add(mesh(GEO.nug, mat(0xffd24a,{emissive:0x553300}), Math.cos(a)*.6, .35+R()*.35, Math.sin(a)*.55)); }
+    g.rotation.y = R()*6.28; return g;
+  }
+  const r = mesh(GEO.rock, mat(gold?0x8a7a55:kind==='metal'?0x7a5a4a:0x9aa1a8), 0,.35,0); r.scale.set(1.1,.7,1); r.rotation.set(R(),R(),R()); g.add(r);
   const r2 = mesh(GEO.rock, mat(gold?0x7d6d48:0x868d94), .45,.2,.3); r2.scale.set(.55,.45,.55); g.add(r2);
   if(gold) for(let i=0;i<6;i++){ const a=R()*6.28; g.add(mesh(GEO.nug, mat(0xffd24a,{emissive:0x553300}), Math.cos(a)*.55, .3+R()*.35, Math.sin(a)*.5)); }
   g.rotation.y = R()*6.28; return g;
+}
+function makeOil(R){
+  geos();
+  const g = new T.Group();
+  const pool = new T.Mesh(new T.CircleGeometry(.75,20), new T.MeshPhongMaterial({color:0x07070a, specular:0x6a6a80, shininess:90}));
+  pool.rotation.x=-Math.PI/2; pool.position.y=.05; pool.scale.set(1,.7,1); g.add(pool);
+  const rim = new T.Mesh(new T.RingGeometry(.72,.95,20), new T.MeshLambertMaterial({color:0x2a2016}));
+  rim.rotation.x=-Math.PI/2; rim.position.y=.04; rim.scale.set(1,.72,1); g.add(rim);
+  g.rotation.y = R()*6.28;
+  return g;
 }
 function makeDeer(){
   geos();
@@ -451,14 +648,14 @@ function makeWorker(color){
 }
 const LOADCOL = {food:0xd8283a, wood:0x9a6232, stone:0x9aa3ad, gold:0xffd24a};
 
-function makeTC(color){
+function makeTC(color, civ){
   geos();
   const g = new T.Group();
   if(MODELS.tc){
     g.add(modelMesh('tc', 5.0));
     if(MODELS.fence){ const n=9; for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+Math.PI/2+.35; if(i===0) continue;
       const f=modelMesh('fence', 2.2); f.position.set(Math.cos(a)*3.05,0,Math.sin(a)*3.05); f.rotation.y=-a+Math.PI/2; g.add(f); } }
-    g.flag = teamFlag(g, color, 2.2, 0, 2.0, 3.6);
+    g.flag = civ ? civFlag(g, civ, color, 2.2, 0, 2.0, 4.2) : teamFlag(g, color, 2.2, 0, 2.0, 3.6);
     const fire = new T.Group(); fire.position.set(0,0,3.7);
     for(let i=0;i<5;i++){ const s2=mesh(GEO.rock, mat(0x777777), Math.cos(i*1.26)*.42,.06,Math.sin(i*1.26)*.42); s2.scale.set(.16,.12,.16); fire.add(s2); }
     const f1 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xffa31a})); f1.position.y=.32; fire.add(f1);
@@ -514,7 +711,7 @@ function makeStore(color){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb' };
+const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -565,13 +762,31 @@ function treeInstance(x,z){
   const key = palm?'palm':'tree';
   if(!G.trees) G.trees={};
   let t = G.trees[key];
-  if(!t){ const m=MODELS[key]; const im=new T.InstancedMesh(m.geo, m.mat, 1400); im.count=0; im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; G.scene.add(im); t=G.trees[key]={im}; }
+  if(!t){ const m=MODELS[key]; const im=new T.InstancedMesh(m.geo, m.mat, 9000); im.count=0; im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; G.scene.add(im); t=G.trees[key]={im}; }
   const bb=MODELS[key].geo.boundingBox, hgt=bb.max.y-bb.min.y;
   const sc=(palm?3.6:3.0)/hgt*(.8+R()*.45);
   const o=new T.Object3D(); o.position.set(x,h-.05,z); o.rotation.y=R()*6.28; o.scale.setScalar(sc); o.updateMatrix();
-  const i=t.im.count; if(i>=1400) return makeTree(R);
+  const i=t.im.count; if(i>=9000) return makeTree(R);
   t.im.setMatrixAt(i,o.matrix); t.im.count++; t.im.instanceMatrix.needsUpdate=true;
   const d=new T.Object3D(); d.inst={im:t.im,i}; return d;
+}
+const civTexCache = {};
+function civFlagTex(civ, color){
+  const key = civ[0]+color;
+  if(civTexCache[key]) return civTexCache[key];
+  const c=document.createElement('canvas'); c.width=128; c.height=96; const x=c.getContext('2d');
+  x.fillStyle='#'+color.toString(16).padStart(6,'0'); x.fillRect(0,0,128,96);
+  const t=new T.CanvasTexture(c); t.colorSpace=T.SRGBColorSpace; civTexCache[key]=t;
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 36">'+civ[2].replace(/cp/g,'cpf')+'</svg>';
+  const img=new Image(); img.onload=()=>{ x.fillStyle='#'+color.toString(16).padStart(6,'0'); x.fillRect(0,0,128,96); x.drawImage(img,8,6,112,84*1.0); t.needsUpdate=true; };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+  return t;
+}
+function civFlag(g, civ, color, x, y, z, h){
+  const pole = mesh(GEO.box, mat(0x5a3818), x, y+h/2, z); pole.scale.set(.1,h,.1); g.add(pole);
+  const fl = new T.Mesh(new T.PlaneGeometry(1.5,1.1), new T.MeshLambertMaterial({map:civFlagTex(civ,color), side:T.DoubleSide}));
+  fl.position.set(x+.78, y+h-.6, z); fl.castShadow=true; g.add(fl);
+  return fl;
 }
 function teamFlag(g, color, x, y, z, h){
   const pole = mesh(GEO.box, mat(0x5a3818), x, y+h/2, z); pole.scale.set(.08,h,.08); g.add(pole);
@@ -580,16 +795,16 @@ function teamFlag(g, color, x, y, z, h){
 }
 
 /* ---------- Objekte anlegen ---------- */
-const cellIdx = (x,z) => { const N=G.N; const i=Math.floor(x+N/2), j=Math.floor(z+N/2); return (i<0||j<0||i>=N||j>=N)?-1:j*N+i; };
+const cellIdx = (x,z) => { const i=Math.floor(x+G.NX/2), j=Math.floor(z+G.NZ/2); return (i<0||j<0||i>=G.NX||j>=G.NZ)?-1:j*G.NX+i; };
 function freeCell(x,z){ const k=cellIdx(x,z); return k>=0 && !G.grid[k]; }
 
-function placeCluster(type, cx, cz, count, spread){
+function placeCluster(type, cx, cz, count, spread, minB){
   const R = G.rand;
   for(let i=0,tries=0;i<count && tries<count*6;tries++){
     const a=R()*6.28, r=Math.sqrt(R())*spread;
     const x=Math.round(cx+Math.cos(a)*r)+.5, z=Math.round(cz+Math.sin(a)*r)+.5;
     if(!freeCell(x,z)) continue;
-    if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<6.5)) continue;
+    if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<(minB||6.5))) continue;
     if(getH(x,z)<WATER_Y+.3) continue;
     addRes(type,x,z); i++;
   }
@@ -599,8 +814,10 @@ function addRes(type,x,z){
   if(type==='tree' && MODELS.tree && G.gfx>=1){ m=treeInstance(x,z); kind='wood'; amt=100; }
   else if(type==='tree'){ m=makeTree(G.rand); kind='wood'; amt=100; }
   else if(type==='bush'){ m=makeBush(G.rand); kind='food'; amt=125; }
-  else if(type==='stone'){ m=makeRock(G.rand,false); kind='stone'; amt=250; }
-  else { m=makeRock(G.rand,true); kind='gold'; amt=250; }
+  else if(type==='stone'){ m=makeRock(G.rand,'stone'); kind='stone'; amt=250; }
+  else if(type==='gold'){ m=makeRock(G.rand,'gold'); kind='gold'; amt=250; }
+  else if(type==='metal'){ m=makeRock(G.rand,'metal'); kind='metal'; amt=400; }
+  else { m=makeOil(G.rand); kind='oil'; amt=1000; }
   m.position.set(x, getH(x,z), z);
   if(!m.inst) G.scene.add(m);
   const r = {type, kind, amt, max:amt, x, z, mesh:m, alive:true, r:.6};
@@ -624,6 +841,7 @@ function spawnWorker(owner,x,z){
   ring.visible=false; G.scene.add(ring);
   const u = {kind:'worker', owner, x, z, mesh:m, ring, state:'idle', path:null, pi:0, carry:{type:null,amt:0},
              target:null, site:null, speed:3.1, phase:Math.random()*6, face:0, repath:0, gt:0, lastType:null};
+  if(G.farView) m.visible=false;
   G.units.push(u);
   G.players[owner].pop++;
   return u;
@@ -637,7 +855,7 @@ function footprint(kind,x,z){
 function addBuilding(kind, owner, x, z, done){
   const fp = footprint(kind,x,z);
   const d = BUILD[kind], col = COLORS[owner];
-  const m = kind==='tc'?makeTC(col):kind==='house'?makeHouse(col):makeStore(col);
+  const m = kind==='tc'?makeTC(col, G.players[owner] && G.players[owner].civ):kind==='house'?makeHouse(col):makeStore(col);
   let hy = 0; for(const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1],[0,0]]) hy += getH(fp.cx+dx*d.size/2*.8, fp.cz+dz*d.size/2*.8);
   m.position.set(fp.cx, hy/5-.05, fp.cz);
   G.scene.add(m);
@@ -652,78 +870,78 @@ function addBuilding(kind, owner, x, z, done){
 }
 
 function addDecor(){
-  const R = G.rand, N=G.N;
-  const count = [250,600,1100][G.gfx];
+  const R = G.rand, NX=G.NX, NZ=G.NZ;
+  const count = [1500,4000,8000][G.gfx];
   const gGeo = new T.ConeGeometry(.08,.45,3); gGeo.translate(0,.2,0);
-  const im = new T.InstancedMesh(gGeo, new T.MeshLambertMaterial({color:0x5e9e36, flatShading:true}), count);
+  const im = new T.InstancedMesh(gGeo, new T.MeshLambertMaterial({color:0x5e9e36}), count);
   const fGeo = new T.IcosahedronGeometry(.08,0);
   const fl = new T.InstancedMesh(fGeo, new T.MeshBasicMaterial({color:0xffffff}), Math.floor(count/4));
-  const m4 = new T.Matrix4(), q = new T.Quaternion(), s = new T.Vector3(), p = new T.Vector3(), e = new T.Euler();
+  const m4 = new T.Matrix4(), q = new T.Quaternion(), sv = new T.Vector3(), p = new T.Vector3(), e = new T.Euler();
   let gi=0, fi=0; const fcols=[0xfff1a8,0xff9fc4,0xb9a3ff,0xffffff], c=new T.Color();
-  for(let k=0;k<count*2 && gi<count;k++){
-    const x=(R()-.5)*(N-8), z=(R()-.5)*(N-8), h=getH(x,z);
-    if(h<WATER_Y+.4) continue;
+  for(let k=0;k<count*6 && gi<count;k++){
+    const x=(R()-.5)*(NX-8), z=(R()-.5)*(NZ-8), h=getH(x,z);
+    if(h<WATER_Y+.4 || h>WATER_Y+3.2) continue;
+    const lon=toLon(x), lat=toLat(z); if(desertAt(lon,lat)>.3 || coldAt(lat)>.7) continue;
     if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<7)) continue;
-    e.set(0,R()*6,0); q.setFromEuler(e); const sc=.7+R()*.8; s.set(sc,sc,sc); p.set(x,h,z);
-    m4.compose(p,q,s); im.setMatrixAt(gi++, m4);
-    if(fi<fl.count && R()<.25){ p.set(x+.2,h+.12,z+.1); s.set(1,1,1); m4.compose(p,q,s); fl.setMatrixAt(fi, m4); fl.setColorAt(fi, c.setHex(fcols[(R()*4)|0])); fi++; }
+    e.set(0,R()*6,0); q.setFromEuler(e); const sc=.7+R()*.8; sv.set(sc,sc,sc); p.set(x,h,z);
+    m4.compose(p,q,sv); im.setMatrixAt(gi++, m4);
+    if(fi<fl.count && R()<.25){ p.set(x+.2,h+.12,z+.1); sv.set(1,1,1); m4.compose(p,q,sv); fl.setMatrixAt(fi, m4); fl.setColorAt(fi, c.setHex(fcols[(R()*4)|0])); fi++; }
   }
-  im.count = gi; fl.count = fi;
+  im.count = gi; fl.count = fi; im.frustumCulled=false; fl.frustumCulled=false;
   im.receiveShadow = true;
-  G.scene.add(im); G.scene.add(fl);
+  G.scene.add(im); G.scene.add(fl); G.decor=[im,fl];
 }
 
 /* ============================================================
    WEGFINDUNG (A*)
    ============================================================ */
 function nearestFree(i,j){
-  const N=G.N;
-  for(let r=0;r<12;r++){
+  const NX=G.NX, NZ=G.NZ;
+  for(let r=0;r<14;r++){
     let best=-1, bd=1e9;
     for(let dj=-r;dj<=r;dj++) for(let di=-r;di<=r;di++){
       if(Math.max(Math.abs(di),Math.abs(dj))!==r) continue;
-      const a=i+di, b=j+dj; if(a<0||b<0||a>=N||b>=N) continue;
-      if(!G.grid[b*N+a]){ const d=di*di+dj*dj; if(d<bd){bd=d;best=b*N+a;} }
+      const a=i+di, b=j+dj; if(a<0||b<0||a>=NX||b>=NZ) continue;
+      if(!G.grid[b*NX+a]){ const d=di*di+dj*dj; if(d<bd){bd=d;best=b*NX+a;} }
     }
     if(best>=0) return best;
   }
   return -1;
 }
 function findPath(x0,z0,x1,z1){
-  const N=G.N;
+  const NX=G.NX, NZ=G.NZ;
   let s = cellIdx(x0,z0), t = cellIdx(x1,z1);
   if(s<0||t<0) return null;
-  if(G.grid[s]) s = nearestFree(s%N, (s/N)|0);
-  if(G.grid[t]) t = nearestFree(t%N, (t/N)|0);
+  if(G.grid[s]) s = nearestFree(s%NX, (s/NX)|0);
+  if(G.grid[t]) t = nearestFree(t%NX, (t/NX)|0);
   if(s<0||t<0) return null;
   if(s===t) return [[x1,z1]];
-  const tx=t%N, tz=(t/N)|0;
-  const g = new Float32Array(N*N).fill(1e9), from = new Int32Array(N*N).fill(-1), closed = new Uint8Array(N*N);
+  const tx=t%NX, tz=(t/NX)|0;
+  const st = ++G.pfStamp, g=G.pfG, from=G.pfF, seen=G.pfS, closed=G.pfC;
   const heap = [], hp = (k,f)=>{ heap.push([f,k]); let i=heap.length-1; while(i>0){ const p=(i-1)>>1; if(heap[p][0]<=heap[i][0]) break; [heap[p],heap[i]]=[heap[i],heap[p]]; i=p; } };
   const pop = ()=>{ const top=heap[0], last=heap.pop(); if(heap.length){ heap[0]=last; let i=0; for(;;){ const l=i*2+1, r=l+1; let m=i; if(l<heap.length&&heap[l][0]<heap[m][0]) m=l; if(r<heap.length&&heap[r][0]<heap[m][0]) m=r; if(m===i) break; [heap[m],heap[i]]=[heap[i],heap[m]]; i=m; } } return top; };
-  const hfun = k => { const dx=Math.abs(k%N-tx), dz=Math.abs(((k/N)|0)-tz); return (dx+dz)+(1.414-2)*Math.min(dx,dz); };
-  g[s]=0; hp(s,hfun(s));
+  const hfun = k => { const dx=Math.abs(k%NX-tx), dz=Math.abs(((k/NX)|0)-tz); return (dx+dz)+(1.414-2)*Math.min(dx,dz); };
+  g[s]=0; seen[s]=st; from[s]=-1; hp(s,hfun(s));
   let it=0, found=false, best=s, bestH=hfun(s);
-  while(heap.length && it++<9000){
-    const [,k] = pop(); if(closed[k]) continue; closed[k]=1;
+  while(heap.length && it++<40000){
+    const [,k] = pop(); if(closed[k]===st) continue; closed[k]=st;
     if(k===t){ found=true; break; }
-    const ki=k%N, kj=(k/N)|0;
+    const ki=k%NX, kj=(k/NX)|0;
     for(let dj=-1;dj<=1;dj++) for(let di=-1;di<=1;di++){
       if(!di&&!dj) continue;
-      const a=ki+di, b=kj+dj; if(a<0||b<0||a>=N||b>=N) continue;
-      const nk=b*N+a; if(G.grid[nk]||closed[nk]) continue;
-      if(di&&dj && (G.grid[kj*N+a]||G.grid[b*N+ki])) continue;
+      const a=ki+di, b=kj+dj; if(a<0||b<0||a>=NX||b>=NZ) continue;
+      const nk=b*NX+a; if(G.grid[nk]||closed[nk]===st) continue;
+      if(di&&dj && (G.grid[kj*NX+a]||G.grid[b*NX+ki])) continue;
       const ng = g[k] + (di&&dj?1.414:1);
-      if(ng<g[nk]){ g[nk]=ng; from[nk]=k; const hh=hfun(nk); hp(nk, ng+hh); if(hh<bestH){bestH=hh;best=nk;} }
+      if(seen[nk]!==st || ng<g[nk]){ seen[nk]=st; g[nk]=ng; from[nk]=k; const hh=hfun(nk); hp(nk, ng+hh); if(hh<bestH){bestH=hh;best=nk;} }
     }
   }
   let k = found ? t : best; const pts=[];
-  while(k!==s && k>=0){ pts.push([k%N-N/2+.5, ((k/N)|0)-N/2+.5]); k=from[k]; }
+  while(k!==s && k>=0){ pts.push([k%NX-NX/2+.5, ((k/NX)|0)-NZ/2+.5]); k=from[k]; }
   pts.reverse();
-  // Glätten: überspringen, solange freie Sicht
   const out=[]; let cx=x0, cz=z0, i=0;
   while(i<pts.length){
-    let j=pts.length-1;
+    let j=Math.min(pts.length-1, i+40);
     while(j>i && !lineFree(cx,cz,pts[j][0],pts[j][1])) j--;
     out.push(pts[j]); cx=pts[j][0]; cz=pts[j][1]; i=j+1;
   }
@@ -902,8 +1120,8 @@ function updateBuilding(b,dt){
   if(b.qT>=WORKER_TIME){
     b.qT=0; b.queue.shift();
     const a = G.rand()*6.28, x=b.x+Math.cos(a)*4.3, z=b.z+Math.sin(a)*4.3;
-    const k = cellIdx(x,z); const N=G.N;
-    let sx=x, sz=z; if(G.grid[k]){ const f=nearestFree(Math.floor(x+N/2),Math.floor(z+N/2)); if(f>=0){ sx=f%N-N/2+.5; sz=((f/N)|0)-N/2+.5; } }
+    const k = cellIdx(x,z); const NX=G.NX, NZ=G.NZ;
+    let sx=x, sz=z; if(k<0||G.grid[k]){ const f=nearestFree(Math.floor(x+NX/2),Math.floor(z+NZ/2)); if(f>=0){ sx=f%NX-NX/2+.5; sz=((f/NX)|0)-NZ/2+.5; } }
     const u = spawnWorker(b.owner, sx, sz);
     if(b.owner===0){ updateHUD(); EE.vib(15); }
     autoJob(u);
@@ -934,7 +1152,8 @@ function update(dt){
   for(const d of G.deer) updateDeer(d,dt);
   for(const b of G.builds) updateBuilding(b,dt);
   for(let i=1;i<G.players.length;i++) updateAI(G.players[i],dt);
-  if(G.water) G.water.position.y = WATER_Y + Math.sin(G.t*.8)*.03;
+  if(G.waterU) G.waterU.value = G.t;
+  updateOverview();
   if(panelT>0){ panelT-=dt; if(panelT<=0) drawPanel(); }
   G.hudT = (G.hudT||0)-dt; if(G.hudT<=0){ G.hudT=.5; updateHUD(); if(G.sel.length===1) drawPanel(); }
   G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=.25; drawMinimap(); }
@@ -946,25 +1165,64 @@ function render(){ updateCam(); G.renderer.render(G.scene, G.cam); }
    MINIKARTE
    ============================================================ */
 function buildMinimapBase(){
-  const N=G.N, c=document.createElement('canvas'); c.width=c.height=N;
-  const x=c.getContext('2d'), img=x.createImageData(N,N);
-  for(let j=0;j<N;j++) for(let i=0;i<N;i++){
-    const h=getH(i-N/2+.5,j-N/2+.5), o=(j*N+i)*4;
-    let r=96,g=158,b=58; if(h<WATER_Y+.1){r=46;g=130;b=200;} else if(h>3.2){r=140;g=138;b=126;} else { const s=clamp(h/4,-.3,.3); r+=s*60; g+=s*60; b+=s*40; }
+  const NX=G.NX, NZ=G.NZ, c=document.createElement('canvas'); c.width=NX; c.height=NZ;
+  const x=c.getContext('2d'), img=x.createImageData(NX,NZ);
+  for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
+    const px=i-NX/2+.5, pz=j-NZ/2+.5, h=getH(px,pz), o=(j*NX+i)*4, lat=toLat(pz), lon=toLon(px);
+    let r=96,g=158,b=58;
+    if(h<WATER_Y+.05){ r=40;g=110;b=185; }
+    else if(desertAt(lon,lat)>.5){ r=222;g=190;b=120; }
+    else if(h>WATER_Y+4.6 || coldAt(lat)>.7){ r=235;g=240;b=245; }
+    else if(h>WATER_Y+3.3){ r=140;g=138;b=126; }
     img.data[o]=r; img.data[o+1]=g; img.data[o+2]=b; img.data[o+3]=255;
   }
   x.putImageData(img,0,0); G.miniBase=c;
+  const cv=$('#mini'); cv.width=Math.round(NX*1.2); cv.height=Math.round(NZ*1.2);
 }
 function drawMinimap(){
-  const cv=$('#mini'); if(!cv) return; const x=cv.getContext('2d'), W=cv.width, N=G.N, s=W/N;
-  x.drawImage(G.miniBase,0,0,W,W);
-  const px=v=>(v+N/2)*s;
-  for(const r of G.res){ if(!r.alive||r.deer) continue; x.fillStyle = r.kind==='wood'?'#1f5a26':r.kind==='food'?'#e04a5a':r.kind==='gold'?'#ffd24a':'#d0d4d8'; x.fillRect(px(r.x)-1,px(r.z)-1,2,2); }
-  for(const b of G.builds){ x.fillStyle='#'+COLORS[b.owner].toString(16).padStart(6,'0'); const z=b.size*s; x.fillRect(px(b.x)-z/2,px(b.z)-z/2,z,z); x.strokeStyle='#000'; x.lineWidth=1; x.strokeRect(px(b.x)-z/2,px(b.z)-z/2,z,z); }
-  for(const u of G.units){ x.fillStyle='#'+COLORS[u.owner].toString(16).padStart(6,'0'); x.fillRect(px(u.x)-1.5,px(u.z)-1.5,3,3); }
-  // Sichtbereich
+  const cv=$('#mini'); if(!cv) return; const x=cv.getContext('2d'), W=cv.width, H=cv.height, s=W/G.NX;
+  x.drawImage(G.miniBase,0,0,W,H);
+  const px=v=>(v+G.NX/2)*s, pz=v=>(v+G.NZ/2)*s;
+  G.miniResT=(G.miniResT||0)-1;
+  for(const r of G.res){ if(!r.alive||r.deer||r.kind==='wood'||r.kind==='food') continue; x.fillStyle = r.kind==='gold'?'#ffd24a':r.kind==='metal'?'#c87a4a':r.kind==='oil'?'#111':'#d0d4d8'; x.fillRect(px(r.x)-1,pz(r.z)-1,2,2); }
+  for(const b of G.builds){ x.fillStyle='#'+COLORS[b.owner].toString(16).padStart(6,'0'); const z=Math.max(3,b.size*s); x.fillRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); x.strokeStyle='#000'; x.lineWidth=1; x.strokeRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); }
+  for(const u of G.units){ x.fillStyle='#'+COLORS[u.owner].toString(16).padStart(6,'0'); x.fillRect(px(u.x)-1,pz(u.z)-1,2,2); }
   const pts=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([a,b])=>groundAtNDC(a,b)).filter(Boolean);
-  if(pts.length===4){ x.strokeStyle='#fff'; x.lineWidth=1.5; x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(px(p.x),px(p.z)):x.moveTo(px(p.x),px(p.z))); x.closePath(); x.stroke(); }
+  if(pts.length===4){ x.strokeStyle='#fff'; x.lineWidth=1.5; x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(px(p.x),pz(p.z)):x.moveTo(px(p.x),pz(p.z))); x.closePath(); x.stroke(); }
+}
+/* ---------- Übersicht beim Herauszoomen: Fahnen über Städten, Punkte für Einheiten ---------- */
+function buildOverview(){
+  G.banners = [];
+  G.players.forEach((p,i)=>{
+    const c=document.createElement('canvas'); c.width=256; c.height=72; const x=c.getContext('2d');
+    const col='#'+COLORS[i].toString(16).padStart(6,'0');
+    x.fillStyle='rgba(10,15,34,.85)'; x.beginPath(); x.roundRect(2,2,252,68,14); x.fill();
+    x.fillStyle=col; x.fillRect(10,12,16,48);
+    x.strokeStyle=col; x.lineWidth=4; x.beginPath(); x.roundRect(2,2,252,68,14); x.stroke();
+    x.fillStyle='#fff7e2'; x.font='bold 30px Georgia, serif'; x.textBaseline='middle'; x.fillText(p.civ[0]+(i===0?' (Du)':''),36,37);
+    const t=new T.CanvasTexture(c); t.colorSpace=T.SRGBColorSpace;
+    const sp=new T.Sprite(new T.SpriteMaterial({map:t, depthTest:false, transparent:true}));
+    sp.renderOrder=10; sp.visible=false; G.scene.add(sp); G.banners.push({sp,p});
+  });
+  const n=1500, geo=new T.BufferGeometry();
+  geo.setAttribute('position', new T.BufferAttribute(new Float32Array(n*3),3));
+  geo.setAttribute('color', new T.BufferAttribute(new Float32Array(n*3),3));
+  G.dots = new T.Points(geo, new T.PointsMaterial({size:6, sizeAttenuation:false, vertexColors:true, depthTest:false}));
+  G.dots.renderOrder=9; G.dots.frustumCulled=false; G.dots.visible=false; G.scene.add(G.dots);
+}
+function updateOverview(){
+  const far = G.farView;
+  if(G.lastFar!==far){ G.lastFar=far; for(const r of G.res) if(r.mesh && !r.mesh.inst) r.mesh.visible=!far; for(const u of G.units) u.mesh.visible=!far; if(G.decor) G.decor.forEach(d=>d.visible=!far); }
+  for(const {sp,p} of G.banners){
+    sp.visible = far && p.tc;
+    if(sp.visible){ const sc=G.camS.dist*.035; sp.scale.set(sc*3.55,sc,1); sp.center.set(.5,0); sp.position.set(p.tc.x, p.tc.mesh.position.y+4, p.tc.z); }
+  }
+  G.dots.visible = far;
+  if(far){
+    const pa=G.dots.geometry.attributes.position, ca=G.dots.geometry.attributes.color, c=new T.Color();
+    let i=0; for(const u of G.units){ if(i>=pa.count) break; pa.setXYZ(i,u.x,getH(u.x,u.z)+1,u.z); c.setHex(COLORS[u.owner]); ca.setXYZ(i,c.r,c.g,c.b); i++; }
+    G.dots.geometry.setDrawRange(0,i); pa.needsUpdate=true; ca.needsUpdate=true;
+  }
 }
 const _ray = new T.Raycaster(), _v2 = new T.Vector2(), _plane = new T.Plane(new T.Vector3(0,1,0),0), _v3 = new T.Vector3();
 function groundAtNDC(a,b){ _v2.set(a,b); _ray.setFromCamera(_v2,G.cam); _plane.constant=-getH(G.camS.x,G.camS.z); return _ray.ray.intersectPlane(_plane,_v3) ? _v3.clone() : null; }
@@ -988,7 +1246,7 @@ function initInput(){
   c.addEventListener('wheel', e=>{ e.preventDefault(); G.camS.dist *= e.deltaY>0?1.1:.9; }, {passive:false});
   c.addEventListener('contextmenu', e=>e.preventDefault());
   const mini = $('#mini');
-  const miniGo = e=>{ const r=mini.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width*G.N-G.N/2, z=(e.clientY-r.top)/r.height*G.N-G.N/2; G.camS.x=x; G.camS.z=z; };
+  const miniGo = e=>{ const r=mini.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width*G.NX-G.NX/2, z=(e.clientY-r.top)/r.height*G.NZ-G.NZ/2; G.camS.x=x; G.camS.z=z; };
   mini.addEventListener('pointerdown', e=>{ e.preventDefault(); mini.setPointerCapture(e.pointerId); miniGo(e); mini.onpointermove=miniGo; });
   mini.addEventListener('pointerup', ()=>{ mini.onpointermove=null; });
 }
@@ -1068,6 +1326,7 @@ function tapAt(sx,sy){
     select([], null); EE.toast('Gegnerischer Arbeiter ('+COLNAMES[hit.u.owner]+')'); return;
   }
   if(mine.length){
+    if(hit && hit.r && (hit.r.kind==='metal'||hit.r.kind==='oil')){ EE.toast(RES_DE[hit.r.kind]+'-Vorkommen – kann noch nicht abgebaut werden'); return; }
     if(hit && hit.r){ mine.forEach(u=>cmdGather(u,hit.r)); marker(hit.r.x,hit.r.z,0xffd24a); EE.vib(10); drawPanel(); return; }
     if(hit && hit.b && hit.b.owner===0 && hit.b.built<1){ mine.forEach(u=>cmdBuild(u,hit.b)); marker(hit.b.x,hit.b.z,0xffd24a); EE.vib(10); drawPanel(); return; }
     if(hit && hit.b && hit.b.owner===0 && BUILD[hit.b.kind].drop){ mine.forEach(u=>{ if(u.carry.amt>0){u.state='drop';u.path=null;} }); marker(hit.b.x,hit.b.z,0xffffff); return; }

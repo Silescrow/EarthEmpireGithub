@@ -73,6 +73,11 @@ html,body{margin:0;height:100%;background:#050814;color:var(--ink);overflow:hidd
 .seg button.on{background:var(--gold);color:#2b1a02;border-color:var(--gold2)}
 input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .acts{display:flex;gap:10px;margin-top:14px}
+.step{display:flex;align-items:center;gap:6px}
+.step button{min-width:40px;min-height:36px;border:1.5px solid #e8b64a80;border-radius:8px;background:#0b1130;color:#fff7e2;font:700 18px "Barlow Semi Condensed",sans-serif;cursor:pointer}
+.step button.all{font-size:14px;padding:0 10px}.step button.on{background:var(--gold);color:#2b1a02}
+.step b{min-width:74px;text-align:center;font:700 17px "Barlow Semi Condensed",sans-serif;color:var(--gold2)}
+.ver2{position:absolute;right:1.2%;bottom:1.2%;font:700 clamp(9px,1.8vh,13px) "Barlow Semi Condensed",sans-serif;color:#ffe9b0;text-shadow:0 1px 3px #000}
 .card.wide{width:min(860px,96vw)}
 .cols{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
 .nats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
@@ -111,12 +116,12 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .hb svg{width:24px;height:24px}
 .hb.dim{opacity:.5}
 .hb i{position:absolute;right:-6px;top:-6px;min-width:20px;height:20px;border-radius:10px;background:#e23b3b;color:#fff;font:700 12px/20px sans-serif;font-style:normal;text-align:center;padding:0 4px}
-#mini{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:10px;width:clamp(96px,30vh,150px);height:clamp(96px,30vh,150px);
+#mini{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:10px;width:clamp(150px,24vw,210px);height:auto;
   border:2px solid var(--gold);border-radius:8px;box-shadow:0 4px 14px #000a;touch-action:none;background:#000}
-#bIdle{position:absolute;left:calc(max(10px,env(safe-area-inset-left)) + clamp(96px,30vh,150px) + 10px);bottom:62px}
-#bHome{position:absolute;left:calc(max(10px,env(safe-area-inset-left)) + clamp(96px,30vh,150px) + 10px);bottom:10px}
+#bIdle{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:calc(10px + clamp(150px,24vw,210px)*0.37 + 10px)}
+#bHome{position:absolute;left:calc(max(10px,env(safe-area-inset-left)) + 54px);bottom:calc(10px + clamp(150px,24vw,210px)*0.37 + 10px)}
 #panel{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:10px;display:flex;align-items:stretch;gap:6px;
-  padding:6px;border-radius:12px;background:#0b1130e6;border:2px solid #e8b64a90;max-width:calc(100vw - 260px);flex-wrap:wrap;justify-content:flex-end}
+  padding:6px;border-radius:12px;background:#0b1130e6;border:2px solid #e8b64a90;max-width:calc(100vw - clamp(150px,24vw,210px) - 40px);flex-wrap:wrap;justify-content:flex-end}
 #panel.hidden{display:none}
 #panel .info{display:flex;flex-direction:column;justify-content:center;padding:0 8px;min-width:96px}
 #panel .info b{font:800 15px "Cinzel",Georgia,serif;color:var(--gold)}
@@ -164,6 +169,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
+    <div class="ver2">Version 1.03</div>
   </div>
 </section>
 
@@ -181,17 +187,16 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.02</div>
+  <div class="ver">Earth Empire · V1.03</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
     <div class="cols">
       <div><div class="nats" id="nats"></div><div class="bonus" id="bonus"></div></div>
       <div>
-        <div class="row"><label>Karte</label><div class="seg" data-k="map"><button>Klein</button><button>Mittel</button><button>Groß</button></div></div>
-        <div class="row"><label>Gegner</label><div class="seg" data-k="foes"><button>1</button><button>2</button><button>3</button></div></div>
+        <div class="row"><label>Weltkarte</label><div class="seg" data-k="map"><button>Klein</button><button>Mittel</button><button>Groß</button><button>Riesig</button></div></div>
+        <div class="row"><label>Gegner</label><div class="step"><button id="aiMinus" aria-label="weniger">−</button><b id="aiN">3</b><button id="aiPlus" aria-label="mehr">+</button><button id="aiAll" class="all">Alle</button></div></div>
         <div class="row"><label>Schwierigkeit</label><div class="seg" data-k="diff"><button>Leicht</button><button>Mittel</button><button>Schwer</button></div></div>
-        <div class="row"><label>Zeitalter</label><div class="seg" data-k="age"><button>Steinzeit</button><button>Bronzezeit</button><button>Mittelalter</button></div></div>
         <div class="acts"><button class="btn small" data-close>Zurück</button><button class="btn main small" id="bStart">Schlacht starten</button></div>
       </div>
     </div>
@@ -220,7 +225,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 /* ---------- Einstellungen ---------- */
-const DEF={civ:0,map:1,foes:0,diff:0,age:0,gfx:1,music:60,sfx:80,vib:1,mute:0};
+const DEF={ai:3,civ:0,map:1,foes:0,diff:0,age:0,gfx:1,music:60,sfx:80,vib:1,mute:0};
 let S={...DEF};
 try{Object.assign(S,JSON.parse(localStorage.getItem('ee_settings')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('ee_settings',JSON.stringify(S))}catch(e){}};
@@ -360,6 +365,13 @@ $('#nats').innerHTML=CIVS.map((c,i)=>`<button class="nat" data-i="${i}"><svg vie
 const drawCiv=()=>{$$('.nat').forEach((b,i)=>b.classList.toggle('on',i===S.civ));const c=CIVS[S.civ];$('#bonus').innerHTML='<b>'+c[0]+':</b> '+c[1]};
 $('#nats').addEventListener('click',e=>{const b=e.target.closest('.nat');if(!b)return;S.civ=+b.dataset.i;save();drawCiv();click();vib(10)});
 drawCiv();
+
+// Gegner-Anzahl (1–17 KI-Zivilisationen)
+const drawAI=()=>{ $('#aiN').textContent=S.ai>=17?'Alle (17)':S.ai; $('#aiAll').classList.toggle('on',S.ai>=17); };
+$('#aiMinus').addEventListener('click',()=>{ S.ai=Math.max(1,(S.ai||3)-1); save(); drawAI(); click(); });
+$('#aiPlus').addEventListener('click',()=>{ S.ai=Math.min(17,(S.ai||3)+1); save(); drawAI(); click(); });
+$('#aiAll').addEventListener('click',()=>{ S.ai=17; save(); drawAI(); click(); });
+if(!S.ai) S.ai=3; if(S.map>3) S.map=1; drawAI();
 
 // Kampagne
 const MIS=[['Das erste Feuer','Steinzeit · Gründe dein Dorf'],['Der Bronzepakt','Bronzezeit · Verteidige den Tempel'],
