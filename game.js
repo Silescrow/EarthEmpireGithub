@@ -48,7 +48,7 @@ async function start(){
   await Promise.all([loadModels(), loadWorldMask()]);
   EE.hideMenu();
   const S = EE.S;
-  const NX = [240,320,420,520][S.map|0] || 320, NZ = Math.round(NX*(LAT0-LAT1)/360);
+  const NX = [1000,1500,2000,2600][S.map|0] || 1500, HS = NX<=1000?2:NX<=1500?3:4, NZ = Math.round(NX*(LAT0-LAT1)/360/HS)*HS;
   const civ = EE.CIVS[S.civ] || EE.CIVS[0];
   const foes = clamp(S.ai||3, 1, 17);
   // Gegner möglichst weit weg wählen (bei wenigen Gegnern nie Nachbarn)
@@ -61,7 +61,7 @@ async function start(){
   }
   const others = chosen.slice(1);
   const gfx = S.gfx|0;
-  G = { NX, NZ, foes, civ, gfx, seed:(Math.random()*1e9)|0, t:0, units:[], builds:[], res:[], deer:[],
+  G = { NX, NZ, HS, foes, civ, gfx, seed:(Math.random()*1e9)|0, t:0, units:[], builds:[], res:[], deer:[],
         players:[], sel:[], selB:null, place:null, running:true, raf:0, msgT:0 };
   G.rand = rng(G.seed);
   [civ, ...others.slice(0,foes)].forEach((c,i)=>G.players.push({id:i, civ:c, res:{...START_RES}, pop:0, popCap:0, tc:null, color:COLORS[i]}));
@@ -69,6 +69,7 @@ async function start(){
   initRenderer();
   genWorld();
   buildOverview();
+  setTimeout(()=>{ if(G) drawMinimap(); }, 50);
   initInput();
   updateHUD(); drawPanel();
   centerCamOn(G.players[0].tc.x, G.players[0].tc.z);
@@ -339,8 +340,8 @@ function rawH(x,z){
     if(ds>0) h += ds*land*Math.sin(x*.9+Math.sin(z*.35)*2)*.12;   // Dünen
   }
   for(const b of G.bases){ const d=Math.hypot(x-b.x,z-b.z);
-    if(d<6.5) h = lerp(h, b.h, clamp((6.5-d)/2,0,1));                       // Stadtplatz immer Land
-    else if(d<11 && h>WATER_Y+.1) h = lerp(h, b.h, clamp((11-d)/4.5,0,1)*.8); // nur vorhandenes Land einebnen
+    if(d<7) h = lerp(h, b.h, clamp((7-d)/2,0,1));                            // Stadtplatz immer Land
+    else if(d<18 && h>WATER_Y+.1) h = lerp(h, b.h, clamp((18-d)/7,0,1)*.85); // vorhandenes Land großzügig einebnen
   }
   const e = Math.min(x+G.NX/2, G.NX/2-x, z+G.NZ/2, G.NZ/2-z);
   if(e<3) h = Math.min(h, WATER_Y-1);
@@ -355,13 +356,50 @@ function getH(x,z){
 }
 const WATER_Y = -.55;
 
+function genChunk(ci,cj){
+  const NX=G.NX, NZ=G.NZ, CH=G.CH;
+  if(ci<0||cj<0||ci*CH>=NX||cj*CH>=NZ) return;
+  const key=ci+','+cj; if(G.chunks.has(key)) return; G.chunks.add(key);
+  const R = rng((G.seed ^ (ci*73856093) ^ (cj*19349663))>>>0);
+  const x0=ci*CH-NX/2, z0=cj*CH-NZ/2;
+  // schnell prüfen, ob überhaupt Land im Chunk ist
+  let land=0; for(let k=0;k<9;k++){ if(rawLand(x0+((k%3)+.5)*CH/3, z0+(((k/3)|0)+.5)*CH/3)>.55) land++; }
+  if(!land) return;
+  const saveR=G.rand; G.rand=R;
+  const tries = Math.round(CH*CH/9);
+  for(let i=0;i<tries;i++){
+    const x=x0+R()*CH, z=z0+R()*CH;
+    if(rawLand(x,z)<.7) continue;
+    if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<12)) continue;
+    const lon=toLon(x), lat=toLat(z), ds=desertAt(lon,lat), cold=coldAt(lat), mt=mountainAt(lon,lat);
+    const forest = fbm(x*.03,z*.03,H_SEED+40);
+    const r = R();
+    if(ds>.5){ if(r<.02) placeCluster('tree',x,z,3,1.5); else if(r<.05) placeCluster('stone',x,z,2,1); }
+    else if(forest>.53 && cold<.85 && mt<2.5 && r<.35) placeCluster('tree',x,z,5+(R()*9|0),2.2+R()*2.5);
+    else if(r<.045) placeCluster('bush',x,z,3,1.6);
+    else if(r<.075 && mt>.4) placeCluster('stone',x,z,3,1.5);
+    else if(r<.085) placeCluster('gold',x,z,2,1.2);
+    else if(r<.13 && cold<.9) spawnDeer(x,z);
+  }
+  addDecorChunk(x0,z0,CH,R);
+  G.rand=saveR;
+  if(G.farView){ for(const r of G.res) if(r.mesh && !r.mesh.inst && r.mesh.visible) r.mesh.visible=false; }
+}
+function updateChunks(){
+  if(!G.chunks || G.farView) return;
+  const CH=G.CH, ci=Math.floor((G.camS.x+G.NX/2)/CH), cj=Math.floor((G.camS.z+G.NZ/2)/CH);
+  const rad = G.camS.dist<30?1:2;
+  let made=0;
+  for(let dj=-rad;dj<=rad && made<2;dj++) for(let di=-rad;di<=rad && made<2;di++){ const key=(ci+di)+','+(cj+dj); if(!G.chunks.has(key)){ genChunk(ci+di,cj+dj); made++; } }
+}
 function rawLand(x,z){ const m=landAt(toLon(x),toLat(z)); return m; }
 function genWorld(){
   const NX=G.NX, NZ=G.NZ, R=G.rand; H_SEED=(G.seed%997)+1;
   // Startorte der Zivilisationen (echte Orte, bei Platzmangel etwas verschoben)
   G.bases = [];
   const nP = G.players.length;
-  const minD = Math.max(10, Math.round(nP<=2 ? NX/13 : nP<=4 ? NX/15 : nP<=8 ? NX/20 : NX/30));
+  const minD = Math.max(14, Math.round(nP<=2 ? NX/11 : nP<=4 ? NX/12 : nP<=8 ? NX/14 : NX/22));
+  const landFrac=(x,z,r)=>{ let n=0; for(let i=0;i<24;i++){ const a=i/24*6.283, rr=r*(i%2?1:.55); if(rawLand(x+Math.cos(a)*rr, z+Math.sin(a)*rr)>.55) n++; } return n/24; };
   G.players.forEach(p=>{
     const ll = CIV_POS[p.civ[0]] || [0,30];
     let bx=fromLon(ll[0]), bz=fromLat(ll[1]), found=false;
@@ -369,6 +407,7 @@ function genWorld(){
       for(let k=0;k<Math.max(1,r*3);k++){
         const a=k/Math.max(1,r*3)*Math.PI*2, x=bx+Math.cos(a)*r, z=bz+Math.sin(a)*r;
         if(rawLand(x,z)<(r<6?.5:.7)) continue;
+        if(landFrac(x,z,13) < (r<28?.78:r<45?.6:.4)) continue;
         if(Math.abs(x)>NX/2-10||Math.abs(z)>NZ/2-10) continue;
         if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<minD)) continue;
         bx=x; bz=z; found=true; break;
@@ -380,12 +419,12 @@ function genWorld(){
   saveB.forEach(b=>{ b.h = Math.max(WATER_Y+.7, rawH(b.x,b.z)); });
   G.bases = saveB;
   // Höhenkarte
-  G.hs = 1; G.hnx = NX+1; G.hnz = NZ+1;
+  G.hs = G.HS; G.hnx = NX/G.hs+1; G.hnz = NZ/G.hs+1;
   G.hm = new Float32Array(G.hnx*G.hnz);
-  for(let j=0;j<G.hnz;j++) for(let i=0;i<G.hnx;i++) G.hm[j*G.hnx+i] = rawH(i-NX/2, j-NZ/2);
+  for(let j=0;j<G.hnz;j++) for(let i=0;i<G.hnx;i++) G.hm[j*G.hnx+i] = rawH(i*G.hs-NX/2, j*G.hs-NZ/2);
   // Raster für Wegfindung
   G.grid = new Uint8Array(NX*NZ);
-  G.pfG = new Float32Array(NX*NZ); G.pfF = new Int32Array(NX*NZ); G.pfS = new Uint32Array(NX*NZ); G.pfC = new Uint32Array(NX*NZ); G.pfStamp = 0;
+  const PW=320; G.pfW=PW; G.pfG = new Float32Array(PW*PW); G.pfF = new Int32Array(PW*PW); G.pfS = new Uint32Array(PW*PW); G.pfC = new Uint32Array(PW*PW); G.pfStamp = 0;
   for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
     const x=i-NX/2+.5, z=j-NZ/2+.5, h=getH(x,z);
     const edge = i<2||j<2||i>NX-3||j>NZ-3;
@@ -406,33 +445,18 @@ function genWorld(){
     placeCluster('tree', b.x+Math.cos(ang+4.6)*13, b.z+Math.sin(ang+4.6)*13, 22, 5, 6.5);
     for(let k=0;k<4;k++) spawnDeer(b.x+Math.cos(ang+1)*15+R()*4, b.z+Math.sin(ang+1)*15+R()*4);
   });
-  // Natur auf allen Kontinenten
-  const area = NX*NZ;
-  const tries = Math.round(area/9);
-  for(let i=0;i<tries;i++){
-    const x=(R()-.5)*(NX-8), z=(R()-.5)*(NZ-8);
-    if(rawLand(x,z)<.7) continue;
-    if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<12)) continue;
-    const lon=toLon(x), lat=toLat(z), ds=desertAt(lon,lat), cold=coldAt(lat), mt=mountainAt(lon,lat);
-    const forest = fbm(x*.06,z*.06,H_SEED+40);
-    const r = R();
-    if(ds>.5){ if(r<.02) placeCluster('tree',x,z,3,1.5); else if(r<.05) placeCluster('stone',x,z,2,1); }
-    else if(forest>.53 && cold<.85 && mt<2.5 && r<.35) placeCluster('tree',x,z,5+(R()*9|0),2.2+R()*2.5);
-    else if(r<.045) placeCluster('bush',x,z,3,1.6);
-    else if(r<.075 && mt>.4) placeCluster('stone',x,z,3,1.5);
-    else if(r<.085) placeCluster('gold',x,z,2,1.2);
-    else if(r<.13 && cold<.9) spawnDeer(x,z);
-  }
+  // Natur entsteht in Chunks (Stücken): zuerst rund um alle Städte, der Rest beim Hinschauen
+  G.chunks = new Set(); G.CH = 48;
+  G.bases.forEach(b=>{ const ci=Math.floor((b.x+NX/2)/G.CH), cj=Math.floor((b.z+NZ/2)/G.CH); for(let dj=-1;dj<=1;dj++) for(let di=-1;di<=1;di++) genChunk(ci+di,cj+dj); });
   // Rohstoffe an echten Orten
   for(const d of DEPOSITS){
-    const n = Math.max(1, Math.round(d[5]*NX/320));
+    const n = Math.max(1, Math.round(d[5]*Math.sqrt(NX/320)));
     for(let k=0;k<n;k++) for(let t=0;t<25;t++){
       const lon=d[1]+R()*(d[2]-d[1]), lat=d[3]+R()*(d[4]-d[3]), x=fromLon(lon), z=fromLat(lat);
       if(rawLand(x,z)<.7) continue;
       placeCluster(d[0], x, z, d[0]==='oil'?1:3, 1.6); break;
     }
   }
-  addDecor();
   buildMinimapBase();
 }
 
@@ -527,7 +551,7 @@ function buildTerrain(){
 }
 function buildWater(){
   const NX=G.NX, NZ=G.NZ;
-  const geo = new T.PlaneGeometry(NX*1.4, NZ*1.6, Math.round(NX/1.5), Math.round(NZ/1.5));
+  const geo = new T.PlaneGeometry(NX*1.4, NZ*1.6, Math.min(420,Math.round(NX/1.5)), Math.min(160,Math.round(NZ/1.5)));
   geo.rotateX(-Math.PI/2);
   const mt = new T.MeshLambertMaterial({color:0x2f8fd8, transparent:true, opacity:.84});
   mt.onBeforeCompile = sh => {
@@ -776,7 +800,7 @@ function makeTC(color, civ){
   geos();
   const g = new T.Group();
   if(MODELS.tc){
-    g.add(modelMesh('tc', 5.6));
+    g.add(modelMesh('tc', 6.2));
     g.flag = civ ? civFlag(g, civ, color, 2.2, 0, 2.0, 4.2) : teamFlag(g, color, 2.2, 0, 2.0, 3.6);
     const fire = makeCampfire(); fire.position.set(0,0,3.9);
     g.add(fire); g.fire=fire.flames; g.fireFx=fire;
@@ -830,7 +854,7 @@ function makeStore(color){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
+const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -878,15 +902,15 @@ function modelMesh(k, width){
 function treeInstance(x,z){
   const R=G.rand, h=getH(x,z);
   const palm = MODELS.palm && (h < WATER_Y+1.1 || R()<.08);
-  const key = palm?'palm':'tree';
+  const key = (palm?'palm':'tree')+':'+Math.floor((x+G.NX/2)/48)+','+Math.floor((z+G.NZ/2)/48);
   if(!G.trees) G.trees={};
   let t = G.trees[key];
-  if(!t){ const m=MODELS[key]; const im=new T.InstancedMesh(m.geo, m.mat, 9000); im.count=0; im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; G.scene.add(im); t=G.trees[key]={im}; }
-  const bb=MODELS[key].geo.boundingBox, hgt=bb.max.y-bb.min.y;
+  if(!t){ const m=MODELS[palm?'palm':'tree']; const im=new T.InstancedMesh(m.geo, m.mat, 700); im.count=0; im.castShadow=true; im.receiveShadow=true; G.scene.add(im); t=G.trees[key]={im}; }
+  const bb=MODELS[palm?'palm':'tree'].geo.boundingBox, hgt=bb.max.y-bb.min.y;
   const sc=(palm?3.6:3.0)/hgt*(.8+R()*.45);
   const o=new T.Object3D(); o.position.set(x,h-.05,z); o.rotation.y=R()*6.28; o.scale.setScalar(sc); o.updateMatrix();
-  const i=t.im.count; if(i>=9000) return makeTree(R);
-  t.im.setMatrixAt(i,o.matrix); t.im.count++; t.im.instanceMatrix.needsUpdate=true;
+  const i=t.im.count; if(i>=700) return makeTree(R);
+  t.im.setMatrixAt(i,o.matrix); t.im.count++; t.im.instanceMatrix.needsUpdate=true; t.im.computeBoundingSphere();
   const d=new T.Object3D(); d.inst={im:t.im,i}; return d;
 }
 const civTexCache = {};
@@ -1035,17 +1059,16 @@ function addBuilding(kind, owner, x, z, done){
   return b;
 }
 
-function addDecor(){
-  const R = G.rand, NX=G.NX, NZ=G.NZ;
-  const count = [1500,4000,8000][G.gfx];
-  const gGeo = new T.ConeGeometry(.08,.45,3); gGeo.translate(0,.2,0);
-  const im = new T.InstancedMesh(gGeo, new T.MeshLambertMaterial({color:0x5e9e36}), count);
-  const fGeo = new T.IcosahedronGeometry(.08,0);
-  const fl = new T.InstancedMesh(fGeo, new T.MeshBasicMaterial({color:0xffffff}), Math.floor(count/4));
-  const m4 = new T.Matrix4(), q = new T.Quaternion(), sv = new T.Vector3(), p = new T.Vector3(), e = new T.Euler();
-  let gi=0, fi=0; const fcols=[0xfff1a8,0xff9fc4,0xb9a3ff,0xffffff], c=new T.Color();
-  for(let k=0;k<count*6 && gi<count;k++){
-    const x=(R()-.5)*(NX-8), z=(R()-.5)*(NZ-8), h=getH(x,z);
+let DECOR_GEO=null, DECOR_MAT=null, FLOWER_GEO=null, FLOWER_MAT=null;
+function addDecorChunk(x0,z0,CH,R){
+  if(!DECOR_GEO){ DECOR_GEO=new T.ConeGeometry(.08,.45,3); DECOR_GEO.translate(0,.2,0); DECOR_MAT=new T.MeshLambertMaterial({color:0x5e9e36});
+    FLOWER_GEO=new T.IcosahedronGeometry(.08,0); FLOWER_MAT=new T.MeshBasicMaterial({color:0xffffff}); }
+  const count=[90,220,420][G.gfx];
+  const im=new T.InstancedMesh(DECOR_GEO, DECOR_MAT, count), fl=new T.InstancedMesh(FLOWER_GEO, FLOWER_MAT, Math.floor(count/4));
+  const m4=new T.Matrix4(), q=new T.Quaternion(), sv=new T.Vector3(), p=new T.Vector3(), e=new T.Euler(), c=new T.Color();
+  const fcols=[0xfff1a8,0xff9fc4,0xb9a3ff,0xffffff]; let gi=0, fi=0;
+  for(let k=0;k<count*3 && gi<count;k++){
+    const x=x0+R()*CH, z=z0+R()*CH, h=getH(x,z);
     if(h<WATER_Y+.4 || h>WATER_Y+3.2) continue;
     const lon=toLon(x), lat=toLat(z); if(desertAt(lon,lat)>.3 || coldAt(lat)>.7) continue;
     if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<7)) continue;
@@ -1053,9 +1076,11 @@ function addDecor(){
     m4.compose(p,q,sv); im.setMatrixAt(gi++, m4);
     if(fi<fl.count && R()<.25){ p.set(x+.2,h+.12,z+.1); sv.set(1,1,1); m4.compose(p,q,sv); fl.setMatrixAt(fi, m4); fl.setColorAt(fi, c.setHex(fcols[(R()*4)|0])); fi++; }
   }
-  im.count = gi; fl.count = fi; im.frustumCulled=false; fl.frustumCulled=false;
-  im.receiveShadow = true;
-  G.scene.add(im); G.scene.add(fl); G.decor=[im,fl];
+  if(!gi) return;
+  im.count=gi; fl.count=fi; im.computeBoundingSphere(); if(fi) fl.computeBoundingSphere();
+  im.receiveShadow=true; G.scene.add(im); if(fi) G.scene.add(fl);
+  (G.decor||(G.decor=[])).push(im); if(fi) G.decor.push(fl);
+  if(G.farView){ im.visible=false; fl.visible=false; }
 }
 
 /* ============================================================
@@ -1075,35 +1100,41 @@ function nearestFree(i,j){
   return -1;
 }
 function findPath(x0,z0,x1,z1){
-  const NX=G.NX, NZ=G.NZ;
+  const NX=G.NX, NZ=G.NZ, PW=G.pfW;
+  // Ziel zu weit weg: Zwischenziel in Richtung des Ziels (der Rest wird später neu berechnet)
+  const dd=Math.hypot(x1-x0,z1-z0), maxR=PW/2-30;
+  if(dd>maxR){ const k=maxR/dd; x1=x0+(x1-x0)*k; z1=z0+(z1-z0)*k; }
   let s = cellIdx(x0,z0), t = cellIdx(x1,z1);
   if(s<0||t<0) return null;
   if(G.grid[s]) s = nearestFree(s%NX, (s/NX)|0);
   if(G.grid[t]) t = nearestFree(t%NX, (t/NX)|0);
   if(s<0||t<0) return null;
   if(s===t) return [[x1,z1]];
-  const tx=t%NX, tz=(t/NX)|0;
+  const si=s%NX, sj=(s/NX)|0, ti=t%NX, tj=(t/NX)|0;
+  const ox = clamp(Math.round((si+ti)/2)-PW/2, 0, Math.max(0,NX-PW)), oz = clamp(Math.round((sj+tj)/2)-PW/2, 0, Math.max(0,NZ-PW));
+  const L = (i,j)=> (j-oz)*PW+(i-ox);
   const st = ++G.pfStamp, g=G.pfG, from=G.pfF, seen=G.pfS, closed=G.pfC;
   const heap = [], hp = (k,f)=>{ heap.push([f,k]); let i=heap.length-1; while(i>0){ const p=(i-1)>>1; if(heap[p][0]<=heap[i][0]) break; [heap[p],heap[i]]=[heap[i],heap[p]]; i=p; } };
   const pop = ()=>{ const top=heap[0], last=heap.pop(); if(heap.length){ heap[0]=last; let i=0; for(;;){ const l=i*2+1, r=l+1; let m=i; if(l<heap.length&&heap[l][0]<heap[m][0]) m=l; if(r<heap.length&&heap[r][0]<heap[m][0]) m=r; if(m===i) break; [heap[m],heap[i]]=[heap[i],heap[m]]; i=m; } } return top; };
-  const hfun = k => { const dx=Math.abs(k%NX-tx), dz=Math.abs(((k/NX)|0)-tz); return (dx+dz)+(1.414-2)*Math.min(dx,dz); };
-  g[s]=0; seen[s]=st; from[s]=-1; hp(s,hfun(s));
-  let it=0, found=false, best=s, bestH=hfun(s);
+  const hfun = (i,j) => { const dx=Math.abs(i-ti), dz=Math.abs(j-tj); return (dx+dz)+(1.414-2)*Math.min(dx,dz); };
+  const ls=L(si,sj); g[ls]=0; seen[ls]=st; from[ls]=-1; hp(ls,hfun(si,sj));
+  let it=0, found=-1, best=ls, bestH=hfun(si,sj);
   while(heap.length && it++<40000){
-    const [,k] = pop(); if(closed[k]===st) continue; closed[k]=st;
-    if(k===t){ found=true; break; }
-    const ki=k%NX, kj=(k/NX)|0;
+    const [,lk] = pop(); if(closed[lk]===st) continue; closed[lk]=st;
+    const ki=lk%PW+ox, kj=((lk/PW)|0)+oz;
+    if(ki===ti && kj===tj){ found=lk; break; }
     for(let dj=-1;dj<=1;dj++) for(let di=-1;di<=1;di++){
       if(!di&&!dj) continue;
-      const a=ki+di, b=kj+dj; if(a<0||b<0||a>=NX||b>=NZ) continue;
-      const nk=b*NX+a; if(G.grid[nk]||closed[nk]===st) continue;
+      const a=ki+di, b=kj+dj; if(a<ox||b<oz||a>=ox+PW||b>=oz+PW||a>=NX||b>=NZ) continue;
+      if(G.grid[b*NX+a]) continue;
       if(di&&dj && (G.grid[kj*NX+a]||G.grid[b*NX+ki])) continue;
-      const ng = g[k] + (di&&dj?1.414:1);
-      if(seen[nk]!==st || ng<g[nk]){ seen[nk]=st; g[nk]=ng; from[nk]=k; const hh=hfun(nk); hp(nk, ng+hh); if(hh<bestH){bestH=hh;best=nk;} }
+      const nl=L(a,b); if(closed[nl]===st) continue;
+      const ng = g[lk] + (di&&dj?1.414:1);
+      if(seen[nl]!==st || ng<g[nl]){ seen[nl]=st; g[nl]=ng; from[nl]=lk; const hh=hfun(a,b); hp(nl, ng+hh); if(hh<bestH){bestH=hh;best=nl;} }
     }
   }
-  let k = found ? t : best; const pts=[];
-  while(k!==s && k>=0){ pts.push([k%NX-NX/2+.5, ((k/NX)|0)-NZ/2+.5]); k=from[k]; }
+  let k = found>=0 ? found : best; const pts=[];
+  while(k!==ls && k>=0){ pts.push([k%PW+ox-NX/2+.5, ((k/PW)|0)+oz-NZ/2+.5]); k=from[k]; }
   pts.reverse();
   const out=[]; let cx=x0, cz=z0, i=0;
   while(i<pts.length){
@@ -1111,7 +1142,7 @@ function findPath(x0,z0,x1,z1){
     while(j>i && !lineFree(cx,cz,pts[j][0],pts[j][1])) j--;
     out.push(pts[j]); cx=pts[j][0]; cz=pts[j][1]; i=j+1;
   }
-  if(found && !G.grid[cellIdx(x1,z1)]) { if(out.length) out[out.length-1]=[x1,z1]; }
+  if(found>=0 && !G.grid[cellIdx(x1,z1)]) { if(out.length) out[out.length-1]=[x1,z1]; }
   return out;
 }
 function lineFree(x0,z0,x1,z1){
@@ -1124,7 +1155,7 @@ function lineFree(x0,z0,x1,z1){
    EINHEITEN-LOGIK
    ============================================================ */
 function moveTo(u,x,z){ u.path = findPath(u.x,u.z,x,z); u.pi=0; return !!u.path; }
-function cmdMove(u,x,z){ u.state='move'; u.target=null; u.site=null; moveTo(u,x,z); }
+function cmdMove(u,x,z){ u.state='move'; u.target=null; u.site=null; u.goal={x,z,tries:0}; moveTo(u,x,z); }
 function cmdGather(u,r){
   u.target=r; u.site=null; u.lastType=r.kind;
   if(u.carry.amt>0 && u.carry.type!==r.kind){ u.carry.amt=0; }
@@ -1161,7 +1192,7 @@ function updateWorker(u,dt){
   const gatherRate = (u.owner===0 && G.civ[0]==='Chinesen') ? 1.15 : 1;
   switch(u.state){
     case 'move':
-      if(followPath(u,dt)) u.state='idle';
+      if(followPath(u,dt)){ const gl=u.goal; if(gl && Math.hypot(gl.x-u.x,gl.z-u.z)>2 && gl.tries++<40){ moveTo(u,gl.x,gl.z); } else u.state='idle'; }
       break;
     case 'hunt': {
       const r = u.target;
@@ -1331,6 +1362,7 @@ function update(dt){
   for(const b of G.builds) updateBuilding(b,dt);
   for(let i=1;i<G.players.length;i++) updateAI(G.players[i],dt);
   if(G.waterU) G.waterU.value = G.t;
+  G.chunkT=(G.chunkT||0)-dt; if(G.chunkT<=0){ G.chunkT=.35; updateChunks(); }
   G.ambT=(G.ambT||0)-dt; if(G.ambT<=0){ G.ambT=.5; updateAmbient(); }
   FLAG_T.value = G.t;
   updateOverview();
@@ -1353,10 +1385,11 @@ function render(){ updateCam(); G.renderer.render(G.scene, G.cam); }
    MINIKARTE
    ============================================================ */
 function buildMinimapBase(){
-  const NX=G.NX, NZ=G.NZ, c=document.createElement('canvas'); c.width=NX; c.height=NZ;
-  const x=c.getContext('2d'), img=x.createImageData(NX,NZ);
-  for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
-    const px=i-NX/2+.5, pz=j-NZ/2+.5, h=getH(px,pz), o=(j*NX+i)*4, lat=toLat(pz), lon=toLon(px);
+  const NX=G.NX, NZ=G.NZ, st=Math.max(1,Math.ceil(NX/640)), W=Math.ceil(NX/st), H=Math.ceil(NZ/st);
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const x=c.getContext('2d'), img=x.createImageData(W,H);
+  for(let j=0;j<H;j++) for(let i=0;i<W;i++){
+    const px=i*st-NX/2+.5, pz=j*st-NZ/2+.5, h=getH(px,pz), o=(j*W+i)*4, lat=toLat(pz), lon=toLon(px);
     let r=96,g=158,b=58;
     if(h<WATER_Y+.05){ r=40;g=110;b=185; }
     else if(desertAt(lon,lat)>.5){ r=222;g=190;b=120; }
@@ -1365,14 +1398,14 @@ function buildMinimapBase(){
     img.data[o]=r; img.data[o+1]=g; img.data[o+2]=b; img.data[o+3]=255;
   }
   x.putImageData(img,0,0); G.miniBase=c;
-  const cv=$('#mini'); cv.width=Math.round(NX*1.2); cv.height=Math.round(NZ*1.2);
+  const cv=$('#mini'); cv.width=Math.min(640,W); cv.height=Math.round(cv.width*NZ/NX);
 }
 function drawMinimap(){
   const cv=$('#mini'); if(!cv) return; const x=cv.getContext('2d'), W=cv.width, H=cv.height, s=W/G.NX;
   x.drawImage(G.miniBase,0,0,W,H);
   const px=v=>(v+G.NX/2)*s, pz=v=>(v+G.NZ/2)*s;
   G.miniResT=(G.miniResT||0)-1;
-  for(const r of G.res){ if(!r.alive||r.deer||r.kind==='wood'||r.kind==='food') continue; x.fillStyle = r.kind==='gold'?'#ffd24a':r.kind==='metal'?'#c87a4a':r.kind==='oil'?'#111':'#d0d4d8'; x.fillRect(px(r.x)-1,pz(r.z)-1,2,2); }
+  for(const r of G.res){ if(!r.alive||r.deer||r.kind==='wood'||r.kind==='food'||r.kind==='stone') continue; x.fillStyle = r.kind==='gold'?'#ffd24a':r.kind==='metal'?'#c87a4a':r.kind==='oil'?'#111':'#d0d4d8'; x.fillRect(px(r.x)-1,pz(r.z)-1,2,2); }
   for(const b of G.builds){ x.fillStyle='#'+COLORS[b.owner].toString(16).padStart(6,'0'); const z=Math.max(3,b.size*s); x.fillRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); x.strokeStyle='#000'; x.lineWidth=1; x.strokeRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); }
   for(const u of G.units){ x.fillStyle='#'+COLORS[u.owner].toString(16).padStart(6,'0'); x.fillRect(px(u.x)-1,pz(u.z)-1,2,2); }
   const pts=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([a,b])=>groundAtNDC(a,b)).filter(Boolean);
