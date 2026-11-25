@@ -26,7 +26,7 @@ const RES = ['food','wood','stone','gold'];
 const RES_DE = {food:'Nahrung',wood:'Holz',stone:'Stein',gold:'Gold',metal:'Metall',oil:'Öl'};
 const BUILD = {
   tc:    {name:'Stadtzentrum', size:6, cost:{}, time:60, hp:1200, drop:['food','wood','stone','gold'], pop:5},
-  house: {name:'Hütte', size:2, cost:{wood:30}, time:14, hp:300, pop:5},
+  house: {name:'Hütte', size:3, cost:{wood:30}, time:14, hp:300, pop:5},
   store: {name:'Lager', size:3, cost:{wood:50}, time:18, hp:500, drop:['wood','stone','gold','food']},
 };
 const WORKER_COST = {food:50};
@@ -236,7 +236,7 @@ function updateCam(){
   const s = G.camS;
   s.x = clamp(s.x,-G.NX/2+6,G.NX/2-6); s.z = clamp(s.z,-G.NZ/2+6,G.NZ/2-6);
   const maxD = Math.max(G.NX,G.NZ)*1.05;
-  s.dist = clamp(s.dist, 12, maxD);
+  s.dist = clamp(s.dist, 5, maxD);
   const far = clamp((s.dist-45)/(maxD-45),0,1);
   const pitch = lerp(.95, 1.38, far);
   const y = Math.max(getH(s.x,s.z), WATER_Y);
@@ -632,6 +632,8 @@ function makeDeer(){
 }
 function makeWorker(color){
   geos();
+  const key = Math.random()<.5 ? 'cavem' : 'cavef';
+  if(MODELS[key]){ const g = makeRigged(key, 1.45, color); if(g){ g.rig.hips.userData.y0 = g.rig.hips.position.y; return g; } }
   const g = new T.Group();
   const skin = mat(0xe0b088), fur = mat(0x7d4f2a), hair = mat(0x3a2414), team = mat(color);
   const body = mesh(GEO.body, fur, 0,.72,0); g.add(body);
@@ -648,11 +650,116 @@ function makeWorker(color){
 }
 const LOADCOL = {food:0xd8283a, wood:0x9a6232, stone:0x9aa3ad, gold:0xffd24a};
 
+/* ============================================================
+   AUTOMATISCHES SKELETT (Auto-Rig) für Meshy-Figuren ohne Knochen
+   ============================================================ */
+const RIGS = {};
+function buildRig(key){
+  const m = MODELS[key]; if(!m) return null;
+  const geo = m.geo, pos = geo.attributes.position, n = pos.count;
+  const bb = geo.boundingBox, H = bb.max.y-bb.min.y;
+  const V = (x,y,z)=>new T.Vector3(x,y,z);
+  // Hände finden: äußerste Punkte links/rechts
+  const hand = [0,0].map(()=>V(0,0,0)), cnt=[0,0];
+  let maxX=0; for(let i=0;i<n;i++) maxX=Math.max(maxX,Math.abs(pos.getX(i)));
+  for(let i=0;i<n;i++){ const x=pos.getX(i); if(Math.abs(x)>maxX*.9){ const k=x<0?0:1; hand[k].add(V(x,pos.getY(i),pos.getZ(i))); cnt[k]++; } }
+  hand.forEach((h,k)=>h.multiplyScalar(1/Math.max(1,cnt[k])));
+  // Körperpunkte (Anteile der Höhe)
+  const J = {
+    hips:V(0,.52*H,0), spine:V(0,.64*H,0), chest:V(0,.76*H,0), neck:V(0,.85*H,0), head:V(0,.9*H,0), top:V(0,H,0),
+    shL:V(-.13*H,.81*H,0), shR:V(.13*H,.81*H,0),
+    hipL:V(-.06*H,.5*H,0), hipR:V(.06*H,.5*H,0), kneeL:V(-.065*H,.27*H,.01*H), kneeR:V(.065*H,.27*H,.01*H),
+    ankL:V(-.07*H,.045*H,0), ankR:V(.07*H,.045*H,0), toeL:V(-.07*H,.01*H,.09*H), toeR:V(.07*H,.01*H,.09*H),
+    handL:hand[0], handR:hand[1]
+  };
+  J.elL = J.shL.clone().lerp(J.handL,.5).add(V(0,0,-.02*H)); J.elR = J.shR.clone().lerp(J.handR,.5).add(V(0,0,-.02*H));
+  J.tipL = J.handL.clone().add(J.handL.clone().sub(J.elL).multiplyScalar(.35)); J.tipR = J.handR.clone().add(J.handR.clone().sub(J.elR).multiplyScalar(.35));
+  // Knochen: [Name, Elternteil, Gelenk]
+  const BONES = [['hips',-1,'hips'],['spine',0,'spine'],['chest',1,'chest'],['neck',2,'neck'],['head',3,'head'],
+    ['shL',2,'shL'],['elL',5,'elL'],['handL',6,'handL'],['shR',2,'shR'],['elR',8,'elR'],['handR',9,'handR'],
+    ['hipL',0,'hipL'],['kneeL',11,'kneeL'],['ankL',12,'ankL'],['hipR',0,'hipR'],['kneeR',14,'kneeR'],['ankR',15,'ankR']];
+  // Segmente (Bereich, der einem Knochen folgt) mit Seite: 0 Mitte, -1 links, 1 rechts, Art
+  const SEG = [[0,'hips','spine',0,'t'],[1,'spine','chest',0,'t'],[2,'chest','neck',0,'t'],[3,'neck','head',0,'t'],[4,'head','top',0,'t'],
+    [5,'shL','elL',-1,'a'],[6,'elL','handL',-1,'a'],[7,'handL','tipL',-1,'a'],[8,'shR','elR',1,'a'],[9,'elR','handR',1,'a'],[10,'handR','tipR',1,'a'],
+    [11,'hipL','kneeL',-1,'l'],[12,'kneeL','ankL',-1,'l'],[13,'ankL','toeL',-1,'l'],[14,'hipR','kneeR',1,'l'],[15,'kneeR','ankR',1,'l'],[16,'ankR','toeR',1,'l']];
+  const skinI = new Uint16Array(n*4), skinW = new Float32Array(n*4);
+  const p=V(0,0,0), ab=V(0,0,0), ap=V(0,0,0), q=V(0,0,0);
+  const armX = Math.abs(J.shL.x)*.95;
+  for(let i=0;i<n;i++){
+    p.set(pos.getX(i),pos.getY(i),pos.getZ(i));
+    const ds=[];
+    for(const [bi,a,b,side,kind] of SEG){
+      const A=J[a], B=J[b]; ab.subVectors(B,A); ap.subVectors(p,A);
+      const t=clamp(ap.dot(ab)/ab.lengthSq(),0,1); q.copy(A).addScaledVector(ab,t);
+      let d=p.distanceTo(q);
+      if(kind==='a' && side*p.x < armX) d+=H;                       // Arme nur außen
+      if(kind==='l' && (p.y>.56*H || side*p.x < -.02*H)) d+=H;       // Beine nur unten und auf ihrer Seite
+      if(kind==='t' && p.y<.46*H) d+=H*.5;                           // Rumpf nicht in den Beinen
+      if(kind==='t' && Math.abs(p.x)>armX*1.25 && p.y<.84*H) d+=H*.5; // Rumpf nicht in den Armen
+      ds.push([d,bi]);
+    }
+    ds.sort((a,b)=>a[0]-b[0]);
+    const w0=1/Math.pow(ds[0][0]+.004,4), w1=1/Math.pow(ds[1][0]+.004,4), sw=w0+w1;
+    skinI[i*4]=ds[0][1]; skinI[i*4+1]=ds[1][1]; skinW[i*4]=w0/sw; skinW[i*4+1]=w1/sw;
+  }
+  const g2 = geo.clone();
+  g2.setAttribute('skinIndex', new T.Uint16BufferAttribute(skinI,4));
+  g2.setAttribute('skinWeight', new T.Float32BufferAttribute(skinW,4));
+  g2.computeBoundingSphere();
+  const dL=J.handL.clone().sub(J.shL), dR=J.handR.clone().sub(J.shR);
+  const restZ=[Math.atan2(-dL.x,-dL.y)-.18, -(Math.atan2(dR.x,-dR.y)-.18)];
+  return RIGS[key] = {geo:g2, mat:m.mat, J, BONES, H, restZ};
+}
+function makeRigged(key, height, color){
+  const r = RIGS[key] || buildRig(key); if(!r) return null;
+  const bones = r.BONES.map(([name,par,j])=>{ const b=new T.Bone(); b.name=name; return b; });
+  r.BONES.forEach(([name,par,j],i)=>{ const jp=r.J[j]; if(par<0) bones[i].position.copy(jp); else { bones[i].position.copy(jp).sub(r.J[r.BONES[par][2]]); bones[par].add(bones[i]); } });
+  const sk = new T.SkinnedMesh(r.geo, r.mat);
+  sk.add(bones[0]); sk.bind(new T.Skeleton(bones));
+  sk.castShadow=true; sk.receiveShadow=true; sk.frustumCulled=false;
+  const g = new T.Group(); const sc = height/r.H; sk.scale.setScalar(sc); g.add(sk);
+  const B = {}; r.BONES.forEach(([name],i)=>B[name]=bones[i]);
+  // Teamfarbe: Band über der Brust, Keule in der rechten Hand, Last auf dem Rücken
+  const band = new T.Mesh(new T.TorusGeometry(.13*r.H,.018*r.H,6,16), new T.MeshLambertMaterial({color}));
+  band.rotation.set(Math.PI/2,0,.5); band.position.set(0,.02*r.H,0); band.scale.set(1.2,.85,1); B.chest.add(band);
+  const club = new T.Mesh(new T.CylinderGeometry(.012*r.H,.028*r.H,.28*r.H,6), new T.MeshLambertMaterial({color:0x6a4020}));
+  club.position.set(0,-.06*r.H,.08*r.H); club.rotation.x=1.4; B.handR.add(club);
+  const load = new T.Mesh(new T.BoxGeometry(.2*r.H,.12*r.H,.1*r.H), new T.MeshLambertMaterial({color:0x9a6232}));
+  load.position.set(0,0,-.13*r.H); load.visible=false; B.chest.add(load);
+  g.rig = B; g.load = load; g.club = club; g.isRigged = true; g.restZ = r.restZ;
+  return g;
+}
+function poseRig(g, mode, ph){
+  const B = g.rig, s=Math.sin(ph), c=Math.cos(ph);
+  const set=(b,x,y,z)=>{ B[b].rotation.set(x||0,y||0,z||0); };
+  set('hips'); set('spine'); set('chest'); set('neck'); set('head');
+  set('elL'); set('elR'); set('hipL'); set('kneeL'); set('ankL'); set('hipR'); set('kneeR'); set('ankR');
+  const zL=g.restZ[0], zR=g.restZ[1];
+  const arm=(b,x,z)=>B[b].rotation.set(x||0,0,(b==='shL'?zL:zR)+(z||0));
+  arm('shL'); arm('shR');
+  if(mode==='walk'){
+    set('hipL',-s*.55); set('hipR',s*.55);
+    set('kneeL',Math.max(0,s)*.85); set('kneeR',Math.max(0,-s)*.85);
+    arm('shL',s*.5); arm('shR',-s*.5); set('elL',-.25); set('elR',-.25);
+    set('spine',.06,0,0); set('chest',0,s*.08,0);
+    B.hips.position.y = g.rig.hips.userData.y0 + Math.abs(c)*.02*g.children[0].geometry.boundingSphere.radius;
+  } else if(mode==='work'){
+    const t=(Math.sin(ph)+1)/2;
+    set('spine',.25*t,0,0); set('chest',.15*t,0,0);
+    arm('shR',-2.4+t*1.9,-.2); set('elR',-.4*(1-t));
+    arm('shL',-.9+t*.5,.2); set('elL',-.6);
+    set('hipL',-.15); set('kneeL',.25); set('hipR',.2); set('kneeR',.15);
+  } else {
+    set('chest',Math.sin(ph*.5)*.03,0,0); set('elL',-.15); set('elR',-.15); set('head',0,Math.sin(ph*.3)*.25,0);
+  }
+}
+
+
 function makeTC(color, civ){
   geos();
   const g = new T.Group();
   if(MODELS.tc){
-    g.add(modelMesh('tc', 5.0));
+    g.add(modelMesh('tc', 5.6));
     if(MODELS.fence){ const n=9; for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+Math.PI/2+.35; if(i===0) continue;
       const f=modelMesh('fence', 2.2); f.position.set(Math.cos(a)*3.05,0,Math.sin(a)*3.05); f.rotation.y=-a+Math.PI/2; g.add(f); } }
     g.flag = civ ? civFlag(g, civ, color, 2.2, 0, 2.0, 4.2) : teamFlag(g, color, 2.2, 0, 2.0, 3.6);
@@ -685,7 +792,7 @@ function makeTC(color, civ){
 function makeHouse(color){
   geos();
   const g = new T.Group();
-  if(MODELS.house){ g.add(modelMesh('house', 2.3)); teamFlag(g, color, .75, 1.0, .75, 1.3); return g; }
+  if(MODELS.house){ g.add(modelMesh('house', 3.3)); teamFlag(g, color, 1.1, 1.5, 1.1, 1.4); return g; }
   const tent = mesh(new T.ConeGeometry(1.05,1.9,7), mat(0xb98b56), 0,.95,0); g.add(tent);
   const hide = mesh(new T.ConeGeometry(.75,1.1,7,1,true,0,2.2), mat(0x8a5a2e,{side:T.DoubleSide}), 0,.7,0); hide.rotation.y=1; g.add(hide);
   for(let i=0;i<4;i++){ const a=i*1.57+.4; const p=mesh(GEO.box, mat(0x5a3818), Math.cos(a)*.18,2,Math.sin(a)*.18); p.scale.set(.05,.6,.05); p.rotation.set(Math.sin(a)*.4,0,-Math.cos(a)*.4); g.add(p); }
@@ -695,7 +802,7 @@ function makeHouse(color){
 function makeStore(color){
   geos();
   const g = new T.Group();
-  if(MODELS.store){ const m=modelMesh('store', 3.1); g.add(m); teamFlag(g, color, 1.3, 0, 1.2, 2.4); return g; }
+  if(MODELS.store){ const m=modelMesh('store', 3.7); g.add(m); teamFlag(g, color, 1.6, 0, 1.4, 2.8); return g; }
   const base = mesh(GEO.box, mat(0x7a4d28), 0,.15,0); base.scale.set(2.6,.3,2.4); g.add(base);
   for(let i=0;i<4;i++){ const l=mesh(new T.CylinderGeometry(.16,.16,1.6,6), mat(0x9a6232), -.4,.48+i*.0,-.7+i*.34); l.rotation.z=Math.PI/2; g.add(l); }
   for(let i=0;i<3;i++){ const l=mesh(new T.CylinderGeometry(.16,.16,1.6,6), mat(0x8a5428), -.4,.78,-.53+i*.34); l.rotation.z=Math.PI/2; g.add(l); }
@@ -711,7 +818,7 @@ function makeStore(color){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb' };
+const MODEL_FILES = { tc:'models/knochenhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', tree:'models/baum.glb', palm:'models/palme.glb', bush:'models/busch.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', cavef:'models/hoehlenfrau.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -1061,12 +1168,15 @@ function updateWorker(u,dt){
   // Darstellung
   const m = u.mesh; m.position.set(u.x, getH(u.x,u.z), u.z);
   let df = u.face - m.rotation.y; df = Math.atan2(Math.sin(df),Math.cos(df)); m.rotation.y += df*Math.min(1,dt*10);
-  u.phase += dt*(u.moving?11:u.working?7:2);
+  u.phase += dt*(u.moving?8.5:u.working?6:2);
+  if(m.isRigged){ if(!G.farView) poseRig(m, u.moving?'walk':u.working?'work':'idle', u.phase); }
+  else {
   const sw = u.moving ? Math.sin(u.phase)*.7 : 0;
   m.legs[0].rotation.x = sw; m.legs[1].rotation.x = -sw;
   m.arms[0].rotation.x = -sw*.8;
   m.arms[1].rotation.x = u.working ? -1.4+Math.sin(u.phase)*.9 : sw*.8;
   m.club.rotation.x = u.working ? .6+Math.sin(u.phase)*.9 : .6;
+  }
   m.load.visible = u.carry.amt>0.5;
   if(m.load.visible) m.load.material = mat(LOADCOL[u.carry.type]);
   u.ring.position.set(u.x, m.position.y+.06, u.z); u.ring.scale.setScalar(1.3);
