@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#060a1a">
+<title>Earth Empire</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Barlow+Semi+Condensed:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: episch, golden, Strategiespiel
+   IDEA: Spielmenü auf Pergament-Gold-Rahmen über den Splash-Bildern
+   PICTURE: die beiden Bilder des Spielers füllen den Schirm
+   COLOUR and TYPE: Weltraumblau, Gold #e8b64a, Cinzel + Barlow
+   LAYOUT: Ladebalken exakt im Bildbalken; Menü rechts (quer) bzw. unten (hoch) */
+:root{--gold:#e8b64a;--gold2:#fff0b8;--dark:#0a0f22;--ink:#fff7e2}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#050814;color:var(--ink);overflow:hidden;
+  font:16px/1.4 "Barlow Semi Condensed",system-ui,sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.screen{position:fixed;inset:0;transition:opacity .7s}
+.hidden{opacity:0;pointer-events:none}
+
+/* ---------- Ladebildschirm ---------- */
+#load .blur{position:absolute;inset:-40px;background:url(laden.jpg) center/cover;filter:blur(22px) brightness(.55)}
+#load .stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(100vw,177.68vh);aspect-ratio:1672/941;background:url(laden.jpg) center/100% 100%;box-shadow:0 0 60px #000}
+.bar{position:absolute;left:9.7%;width:80.6%;top:87.5%;height:4.6%;border-radius:3px;overflow:hidden}
+.fill{position:absolute;inset:0;width:0%;background:linear-gradient(180deg,#fff3b0,#e8b64a 45%,#9a6414);
+  box-shadow:0 0 18px #ffc95a;transition:width .25s}
+.fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,#ffffff80,transparent);
+  width:30%;animation:shine 1.4s linear infinite}
+@keyframes shine{from{transform:translateX(-100%)}to{transform:translateX(400%)}}
+.btxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:.6em;
+  font:700 clamp(9px,1.9vh,15px) "Cinzel",Georgia,serif;letter-spacing:.06em;color:#fff;text-shadow:0 1px 3px #000,0 0 6px #000}
+.tip{position:absolute;left:10%;right:10%;top:93.2%;text-align:center;font-size:clamp(9px,2.2vh,15px);color:#ffe9b0;
+  text-shadow:0 1px 3px #000}
+.tap .btxt{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+/* ---------- Hauptmenü ---------- */
+#menu .bg{position:absolute;inset:0;background:url(menue.jpg) 18% top/cover;transform-origin:20% 0;animation:pan 30s ease-in-out infinite alternate}
+@keyframes pan{to{transform:scale(1.05)}}
+#menu .shade{position:absolute;inset:0;background:linear-gradient(90deg,transparent 45%,#0a0f22c0 80%)}
+.panel{position:absolute;right:max(4vw,env(safe-area-inset-right));top:50%;transform:translateY(-50%);
+  width:min(330px,40vw);display:flex;flex-direction:column;gap:clamp(6px,1.6vh,12px)}
+.btn{position:relative;display:block;width:100%;padding:clamp(8px,2.2vh,14px) 18px;border:2px solid var(--gold);border-radius:10px;
+  background:linear-gradient(180deg,#1d2752ee,#0b1130ee);color:var(--gold2);cursor:pointer;
+  font:800 clamp(14px,3.6vh,21px) "Cinzel",Georgia,serif;letter-spacing:.05em;text-align:center;
+  box-shadow:0 4px 0 #6d4a10,0 6px 16px #0009,inset 0 1px 0 #ffffff30;text-shadow:0 2px 2px #000;transition:transform .08s}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #6d4a10,0 3px 8px #0009}
+.btn.main{background:linear-gradient(180deg,#f6cf62,#c98a1e);color:#3a2203;text-shadow:0 1px 0 #ffe9a0;border-color:#fff0b8}
+.btn.small{font-size:clamp(12px,2.8vh,16px);padding:8px 12px}
+.ver{position:absolute;left:max(12px,env(safe-area-inset-left));bottom:8px;font-size:12px;color:#fff9;text-shadow:0 1px 2px #000}
+.corner{position:absolute;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));display:flex;gap:8px}
+.ico{width:44px;height:44px;border-radius:50%;border:2px solid var(--gold);background:#0b1130cc;color:var(--gold2);
+  display:grid;place-items:center;cursor:pointer}
+.ico svg{width:22px;height:22px}
+
+/* Dialoge */
+.dlg{position:absolute;inset:0;display:grid;place-items:center;background:#02040cb0;backdrop-filter:blur(3px);transition:opacity .25s}
+.card{width:min(560px,92vw);max-height:88vh;overflow:auto;padding:clamp(12px,3vh,22px) 20px;border:2px solid var(--gold);border-radius:14px;
+  background:linear-gradient(180deg,#18224a,#0a0f26);box-shadow:0 10px 40px #000}
+.card h2{margin:0 0 10px;font:800 clamp(18px,4.4vh,26px) "Cinzel",Georgia,serif;color:var(--gold);text-align:center}
+.row{display:grid;grid-template-columns:8.5em minmax(0,1fr);align-items:center;gap:10px;margin:8px 0}
+.row label{color:#ffe9b0}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 1 auto;min-height:38px;padding:4px 8px;border:1.5px solid #e8b64a80;border-radius:8px;background:#0b1130;color:#fff7e2;
+  font:600 14px "Barlow Semi Condensed",sans-serif;cursor:pointer}
+.seg button.on{background:var(--gold);color:#2b1a02;border-color:var(--gold2)}
+input[type=range]{width:100%;accent-color:var(--gold);height:30px}
+.acts{display:flex;gap:10px;margin-top:14px}
+.mis{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:6px 0;border:1.5px solid #e8b64a60;border-radius:10px;background:#0b1130}
+.mis b{font:800 18px "Cinzel",Georgia,serif;color:var(--gold);width:1.4em;text-align:center}
+.mis div{flex:1}.mis small{display:block;color:#fff9}
+.mis.lock{opacity:.45}
+.toast{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:10px;
+  background:#0b1130ee;border:1.5px solid var(--gold);color:var(--gold2);font-weight:700;transition:opacity .3s;white-space:nowrap}
+
+@media (orientation:portrait){
+  #menu::before{content:"";position:absolute;inset:-40px;background:url(menue.jpg) 30% center/cover;filter:blur(18px) brightness(.6)}
+  #menu .bg{background:url(menue.jpg) center top/100% auto no-repeat;top:max(8vh,env(safe-area-inset-top));animation:none}
+  #menu .shade{background:linear-gradient(180deg,transparent 40%,#0a0f22d0 75%)}
+  .panel{left:6vw;right:6vw;width:auto;top:auto;bottom:calc(5vh + env(safe-area-inset-bottom));transform:none}
+  .btn{font-size:clamp(15px,2.4vh,20px)}
+  .row{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){#menu .bg,.fill::after{animation:none}}
+</style>
+</head>
+<body>
+
+<section id="load" class="screen">
+  <div class="blur"></div>
+  <div class="stage" id="stage">
+    <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
+    <div class="tip" id="tip"></div>
+  </div>
+</section>
+
+<section id="menu" class="screen hidden">
+  <div class="bg"></div><div class="shade"></div>
+  <div class="panel">
+    <button class="btn main" data-open="dPlay">Spielen</button>
+    <button class="btn" data-open="dCamp">Kampagne</button>
+    <button class="btn" id="bTut">Tutorial</button>
+    <button class="btn" data-open="dSet">Einstellungen</button>
+  </div>
+  <div class="corner">
+    <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
+    <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </div>
+  <div class="ver">Earth Empire · V1.00</div>
+
+  <div class="dlg hidden" id="dPlay"><div class="card">
+    <h2>Freies Spiel</h2>
+    <div class="row"><label>Karte</label><div class="seg" data-k="map"><button>Klein</button><button>Mittel</button><button>Groß</button></div></div>
+    <div class="row"><label>Gegner</label><div class="seg" data-k="foes"><button>1</button><button>2</button><button>3</button></div></div>
+    <div class="row"><label>Schwierigkeit</label><div class="seg" data-k="diff"><button>Leicht</button><button>Mittel</button><button>Schwer</button></div></div>
+    <div class="row"><label>Start-Zeitalter</label><div class="seg" data-k="age"><button>Steinzeit</button><button>Bronzezeit</button><button>Mittelalter</button></div></div>
+    <div class="acts"><button class="btn small" data-close>Zurück</button><button class="btn main small" id="bStart">Schlacht starten</button></div>
+  </div></div>
+
+  <div class="dlg hidden" id="dCamp"><div class="card">
+    <h2>Kampagne</h2>
+    <div id="mlist"></div>
+    <div class="acts"><button class="btn small" data-close>Zurück</button></div>
+  </div></div>
+
+  <div class="dlg hidden" id="dSet"><div class="card">
+    <h2>Einstellungen</h2>
+    <div class="row"><label>Grafik</label><div class="seg" data-k="gfx"><button>Niedrig</button><button>Mittel</button><button>Hoch</button></div></div>
+    <div class="row"><label>Musik</label><input type="range" min="0" max="100" data-k="music"></div>
+    <div class="row"><label>Effekte</label><input type="range" min="0" max="100" data-k="sfx"></div>
+    <div class="row"><label>Vibration</label><div class="seg" data-k="vib"><button>Aus</button><button>An</button></div></div>
+    <div class="acts"><button class="btn main small" data-close>Fertig</button></div>
+  </div></div>
+
+  <div class="toast hidden" id="toast"></div>
+</section>
+
+<script>
+{
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+/* ---------- Einstellungen ---------- */
+const DEF={map:1,foes:0,diff:0,age:0,gfx:1,music:60,sfx:80,vib:1,mute:0};
+let S={...DEF};
+try{Object.assign(S,JSON.parse(localStorage.getItem('ee_settings')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('ee_settings',JSON.stringify(S))}catch(e){}};
+
+/* ---------- Ton (Web Audio, keine Dateien) ---------- */
+let AC=null,musicGain=null,sfxGain=null;
+function initAudio(){
+  if(AC) return;
+  try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return}
+  musicGain=AC.createGain();sfxGain=AC.createGain();
+  musicGain.connect(AC.destination);sfxGain.connect(AC.destination);
+  applyVol();startMusic();
+}
+function applyVol(){
+  if(!AC) return;
+  const m=S.mute?0:1;
+  musicGain.gain.setTargetAtTime(S.music/100*0.22*m,AC.currentTime,.2);
+  sfxGain.gain.setTargetAtTime(S.sfx/100*0.5*m,AC.currentTime,.05);
+}
+function tone(f,t0,dur,type='sine',vol=.3,dest=sfxGain){
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type=type;o.frequency.value=f;
+  g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+.02);g.gain.exponentialRampToValueAtTime(.001,t0+dur);
+  o.connect(g);g.connect(dest);o.start(t0);o.stop(t0+dur+.05);
+}
+function click(){if(!AC)return;const t=AC.currentTime;tone(660,t,.08,'triangle',.25);tone(990,t+.03,.08,'triangle',.15)}
+function fanfare(){if(!AC)return;const t=AC.currentTime;[392,523,659,784].forEach((f,i)=>{tone(f,t+i*.13,.5,'sawtooth',.09);tone(f/2,t+i*.13,.5,'triangle',.12)})}
+function startMusic(){
+  // ruhige, epische Akkordfläche mit Tiefpass
+  const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=900;lp.connect(musicGain);
+  const chords=[[110,165,220,277],[98,147,196,247],[87,131,175,220],[98,147,196,294]];
+  let i=0;
+  const play=()=>{
+    const t=AC.currentTime;
+    chords[i%4].forEach((f,k)=>{
+      const o=AC.createOscillator(),g=AC.createGain();
+      o.type=k?'sawtooth':'triangle';o.frequency.value=f;o.detune.value=(k%2?6:-6);
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(k?.05:.14,t+1.5);g.gain.linearRampToValueAtTime(0,t+6.2);
+      o.connect(g);g.connect(lp);o.start(t);o.stop(t+6.4);
+    });
+    // Trommelschlag
+    [0,1.5,3,4.5].forEach(d=>tone(55,t+d,.5,'sine',.35,musicGain));
+    i++;
+  };
+  play();setInterval(play,6000);
+}
+const vib=ms=>{if(S.vib&&navigator.vibrate)try{navigator.vibrate(ms)}catch(e){}};
+
+/* ---------- Ladebildschirm ---------- */
+const AGES=['Steinzeit','Bronzezeit','Mittelalter','Renaissance','Industriezeitalter','Moderne','Zukunft'];
+const TIPS=['Tipp: Mit zwei Fingern ziehen verschiebt die Kamera.',
+  'Tipp: Kneifen mit zwei Fingern zoomt ins Schlachtfeld.',
+  'Tipp: Lange drücken und ziehen wählt viele Einheiten aus.',
+  'Tipp: Ritter schlagen Infanterie, Speerträger stoppen Reiter.',
+  'Tipp: Baue Häuser, damit dein Volk wachsen kann.',
+  'Tipp: Ein Wunder, das 5 Minuten steht, gewinnt das Spiel.'];
+const fill=$('#fill'),btxt=$('#btxt'),tip=$('#tip');
+let ti=Math.floor(Math.random()*TIPS.length);
+tip.textContent=TIPS[ti];
+const tipTimer=setInterval(()=>{ti=(ti+1)%TIPS.length;tip.textContent=TIPS[ti]},2600);
+
+// echte Ladeschritte: Menübild + Schrift, dazu Aufbau-Schritte
+const loadImg=src=>new Promise(r=>{const i=new Image();i.onload=i.onerror=r;i.src=src});
+let real=0;
+Promise.all([loadImg('menue.jpg'),loadImg('laden.jpg'),(document.fonts?document.fonts.ready:Promise.resolve())]).then(()=>real=1);
+let p=0;
+const tick=setInterval(()=>{
+  const cap=real?100:85;
+  p=Math.min(cap,p+(real?2.2:Math.random()*1.6));
+  fill.style.width=p+'%';
+  const age=AGES[Math.min(6,Math.floor(p/100*7))];
+  btxt.textContent=age+' … '+Math.floor(p)+' %';
+  if(p>=100){clearInterval(tick);ready()}
+},60);
+
+function ready(){
+  clearInterval(tipTimer);
+  $('#stage').classList.add('tap');
+  btxt.textContent='Tippe zum Starten';
+  tip.textContent='Für das beste Erlebnis: Handy quer halten';
+  $('#load').addEventListener('pointerup',enter,{once:true});
+}
+function enter(){
+  initAudio();fanfare();vib(30);
+  $('#load').classList.add('hidden');$('#menu').classList.remove('hidden');
+}
+
+/* ---------- Menü ---------- */
+const open=id=>{click();$('#'+id).classList.remove('hidden')};
+const closeAll=()=>{click();$$('.dlg').forEach(d=>d.classList.add('hidden'))};
+$$('[data-open]').forEach(b=>b.addEventListener('click',()=>open(b.dataset.open)));
+$$('[data-close]').forEach(b=>b.addEventListener('click',closeAll));
+$$('.dlg').forEach(d=>d.addEventListener('click',e=>{if(e.target===d)closeAll()}));
+
+let tt;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(tt);tt=setTimeout(()=>t.classList.add('hidden'),2400)}
+
+// Auswahl-Knöpfe
+$$('.seg').forEach(seg=>{
+  const k=seg.dataset.k,bs=[...seg.children];
+  const draw=()=>bs.forEach((b,i)=>b.classList.toggle('on',i===S[k]));
+  bs.forEach((b,i)=>b.addEventListener('click',()=>{S[k]=i;save();draw();click();vib(10)}));
+  draw();
+});
+$$('input[type=range]').forEach(r=>{
+  const k=r.dataset.k;r.value=S[k];
+  r.addEventListener('input',()=>{S[k]=+r.value;save();applyVol()});
+  r.addEventListener('change',click);
+});
+
+// Kampagne
+const MIS=[['Das erste Feuer','Steinzeit · Gründe dein Dorf'],['Der Bronzepakt','Bronzezeit · Verteidige den Tempel'],
+  ['Die Belagerung','Mittelalter · Erobere die Burg'],['Neue Welten','Renaissance · Überquere das Meer'],
+  ['Stahl und Dampf','Industriezeitalter · Halte die Fabriken']];
+$('#mlist').innerHTML=MIS.map((m,i)=>`<div class="mis${i?' lock':''}"><b>${i+1}</b><div>${m[0]}<small>${m[1]}</small></div><span>${i?'Gesperrt':'Bereit'}</span></div>`).join('');
+$('#mlist').addEventListener('click',e=>{const m=e.target.closest('.mis');if(!m)return;
+  click();toast(m.classList.contains('lock')?'Erst die vorherige Mission schaffen':'Missionen kommen im nächsten Update')});
+
+$('#bStart').addEventListener('click',()=>{fanfare();vib(40);toast('Das Schlachtfeld wird als Nächstes gebaut')});
+$('#bTut').addEventListener('click',()=>{click();toast('Tutorial kommt mit dem Schlachtfeld')});
+
+// Ton & Vollbild
+const drawMute=()=>$('#wave').style.opacity=S.mute?.15:1;drawMute();
+$('#bSound').addEventListener('click',()=>{S.mute=S.mute?0:1;save();initAudio();applyVol();drawMute();click()});
+$('#bFull').addEventListener('click',async()=>{
+  click();
+  try{
+    if(!document.fullscreenElement){await document.documentElement.requestFullscreen();
+      try{await screen.orientation.lock('landscape')}catch(e){}}
+    else await document.exitFullscreen();
+  }catch(e){toast('Vollbild wird hier nicht unterstützt')}
+});
+
+// Browser-Zoom per Geste verhindern
+document.addEventListener('gesturestart',e=>e.preventDefault());
+document.addEventListener('dblclick',e=>e.preventDefault());
+}
+</script>
+</body>
+</html>
