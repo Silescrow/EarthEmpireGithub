@@ -1972,7 +1972,7 @@ function addBuilding(kind, owner, x, z, done){
   if(!done){ m.scale.y = .25; m.traverse(o=>{ if(o.material && o.isMesh){ o.material = o.material.clone(); o.material.transparent=true; o.material.opacity=.55; } }); }
   else if(d.pop) G.players[owner].popCap += d.pop;
   G.builds.push(b);
-  if(done && kind==='tc' && G.borderGrp){ claimRegion(b); buildBorders(); }
+  if(kind==='tc' && G.borderGrp){ if(done) claimRegion(b); buildBorders(); }
   return b;
 }
 
@@ -2773,8 +2773,16 @@ const HOUSE_MAX = 6;
 function friendlyLand(owner,x,z){ const o=regOwner(regionAt(x,z)); if(o<0) return false; if(o===owner) return true; const p=o===0?owner:owner===0?o:-1; return p>=0 && G.dip[p] && G.dip[p].state==='ally'; }
 // Grenzen zeichnen: Außengrenze in Teamfarbe (leicht nach innen versetzt), innere Gebietsgrenzen zart,
 // freie Nachbargebiete weiß gestrichelt
+// Hauptfarbe der Flagge eines Volkes (erste nicht-weiße Füllfarbe im Wappen)
+const flagCache={};
+function flagColor(owner){
+  const civ=G.players[owner].civ; if(flagCache[civ[0]]!=null) return flagCache[civ[0]];
+  const fills=[...String(civ[2]).matchAll(/fill="(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})"/g)].map(m=>new T.Color(m[1]));
+  const c = fills.find(c=>c.r+c.g+c.b<2.5) || fills[0] || new T.Color(COLORS[owner]);
+  return flagCache[civ[0]] = c.getHex();
+}
 function buildBorders(){
-  if(G.borderGrp){ G.scene.remove(G.borderGrp); G.borderGrp.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+  if(G.borderGrp){ G.scene.remove(G.borderGrp); G.borderGrp.traverse(o=>{ if(o.geometry && o.geometry!==GEO.post) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
   const grp=new T.Group(); G.borderGrp=grp; G.scene.add(grp);
   const lines=new Map(); // farbe+art -> positions
   const add=(key,col,op,w,x0,z0,x1,z1,nx,nz,inset,dash)=>{
@@ -2787,24 +2795,44 @@ function buildBorders(){
       const cx=ax+nx*w, cz=az+nz*w, dx=bx+nx*w, dz=bz+nz*w;
       L.pos.push(ax,y(ax,az),az, cx,y(cx,cz),cz, bx,y(bx,bz),bz,  bx,y(bx,bz),bz, cx,y(cx,cz),cz, dx,y(dx,dz),dz); }
   };
+  // Außengrenzen: kleine Holzpfosten in gleichmäßigem Abstand (ein einziges InstancedMesh)
+  const P=[], POST_GAP=2.0;
+  let PC=0, PH=1;
+  const posts=(x0,z0,x1,z1,nx,nz)=>{ const len=Math.hypot(x1-x0,z1-z0), n=Math.max(1,Math.round(len/POST_GAP));
+    for(let k=0;k<n;k++){ const t=(k+.5)/n, x=x0+(x1-x0)*t+nx*.3, z=z0+(z1-z0)*t+nz*.3; if(getH(x,z)<WATER_Y+.1) continue; P.push(x,z,PC,PH); } };
   const owned=[...G.reg.owner.entries()];
   const shownFree=new Set();
   for(const [id,ow] of owned){
-    const P=regPoly(id), s=G.reg.seeds[id], col=COLORS[ow];
+    const P=regPoly(id), s=G.reg.seeds[id], col=COLORS[ow]; PC=flagColor(ow); PH=1;
     for(let k=0;k<P.length;k++){
       const a=P[k], b=P[(k+1)%P.length], nb=a[2];
       const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1; nx/=L; nz/=L;
       const other = nb>=0 ? regOwner(nb) : -1;
       if(other===ow) add('in', 0xffffff, .35, .12, a[0],a[1],b[0],b[1], nx,nz, .05, true);
-      else { add('out', 0xffffff, .9, .16, a[0],a[1],b[0],b[1], nx,nz, .05, false); }
+      else { posts(a[0],a[1],b[0],b[1], nx,nz); }
       if(ow===0 && nb>=0 && other<0) shownFree.add(nb);
     }
   }
+  // Gebiete, in denen gerade ein Stadtzentrum entsteht: niedrige Pfosten (werden erst noch eingeschlagen)
+  for(const b of G.builds){ if(b.kind!=='tc' || b.built>=1 || b.dead) continue; const id=regionAt(b.x,b.z); if(id<0 || regOwner(id)>=0) continue;
+    const P=regPoly(id), s=G.reg.seeds[id]; PC=flagColor(b.owner); PH=.45+.55*b.built;
+    for(let k=0;k<P.length;k++){ const a=P[k], c=P[(k+1)%P.length]; if(a[2]>=0 && regOwner(a[2])===b.owner) continue;
+      const mx=(a[0]+c[0])/2, mz=(a[1]+c[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1; posts(a[0],a[1],c[0],c[1], nx/L,nz/L); }
+    shownFree.delete(id); }
   // freie Nachbargebiete des Spielers zart umranden
   for(const id of shownFree){ const P=regPoly(id), s=G.reg.seeds[id];
     for(let k=0;k<P.length;k++){ const a=P[k], b=P[(k+1)%P.length]; if(a[2]>=0 && regOwner(a[2])===0) continue;
       const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1;
       add('free', 0xffffff, .35, .12, a[0],a[1],b[0],b[1], nx/L,nz/L, .1, false); } }
+  if(P.length){
+    if(!GEO.post){ const I=new T.Matrix4(); GEO.post=mergeParts([[new T.CylinderGeometry(.11,.13,1.05,6,1,true), new T.Matrix4().makeTranslation(0,.45,0)],[new T.ConeGeometry(.11,.22,6,1,true), new T.Matrix4().makeTranslation(0,1.08,0)]]); }
+    const NP=P.length/4, im=new T.InstancedMesh(GEO.post, new T.MeshLambertMaterial({color:0xffffff}), NP), m4=new T.Matrix4(), q=new T.Quaternion(), e=new T.Euler(), sc=new T.Vector3(), ps=new T.Vector3();
+    const R=rng(77);
+    const col=new T.Color();
+    for(let i=0;i<NP;i++){ const x=P[i*4], z=P[i*4+1]; e.set((R()-.5)*.12,R()*6.28,(R()-.5)*.12); q.setFromEuler(e); const s=(.85+R()*.3)*P[i*4+3]; sc.set(1,s,1); ps.set(x,getH(x,z)-.04,z); m4.compose(ps,q,sc); im.setMatrixAt(i,m4);
+      col.setHex(P[i*4+2]).multiplyScalar(1.05+R()*.3); im.setColorAt(i, col); }
+    im.castShadow=G.gfx>0; im.frustumCulled=false; grp.add(im);
+  }
   for(const L of lines.values()){ if(!L.pos.length) continue;
     const geo=new T.BufferGeometry(); geo.setAttribute('position',new T.Float32BufferAttribute(L.pos,3));
     const m=new T.Mesh(geo,new T.MeshBasicMaterial({color:L.col, transparent:true, opacity:L.op, depthWrite:false, side:T.DoubleSide, polygonOffset:true, polygonOffsetFactor:-4}));
