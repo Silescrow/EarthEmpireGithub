@@ -2781,6 +2781,21 @@ function flagColor(owner){
   const c = fills.find(c=>c.r+c.g+c.b<2.5) || fills[0] || new T.Color(COLORS[owner]);
   return flagCache[civ[0]] = c.getHex();
 }
+// Beim Platzieren eines Stadtzentrums: Umriss des Gebiets anzeigen, das man damit bekommt (grün = möglich, rot = nicht)
+function regionPreview(pl, id, ok){
+  const key=id+'/'+ok; if(pl.regKey===key) return; pl.regKey=key;
+  if(pl.regM){ G.scene.remove(pl.regM); pl.regM.geometry.dispose(); pl.regM=null; }
+  if(id<0) return;
+  const P=regPoly(id), s=G.reg.seeds[id], pos=[];
+  for(let k=0;k<P.length;k++){ const a=P[k], b=P[(k+1)%P.length]; let nx=s.x-(a[0]+b[0])/2, nz=s.z-(a[1]+b[1])/2; const L=Math.hypot(nx,nz)||1; nx/=L; nz/=L;
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1]), n=Math.max(1,Math.ceil(len/1.5));
+    for(let i=0;i<n;i++){ const t0=i/n, t1=(i+1)/n, ax=a[0]+(b[0]-a[0])*t0, az=a[1]+(b[1]-a[1])*t0, bx=a[0]+(b[0]-a[0])*t1, bz=a[1]+(b[1]-a[1])*t1, w=.5;
+      const y=(x,z)=>Math.max(getH(x,z),WATER_Y)+.15;
+      pos.push(ax,y(ax,az),az, ax+nx*w,y(ax+nx*w,az+nz*w),az+nz*w, bx,y(bx,bz),bz, bx,y(bx,bz),bz, ax+nx*w,y(ax+nx*w,az+nz*w),az+nz*w, bx+nx*w,y(bx+nx*w,bz+nz*w),bz+nz*w); } }
+  const geo=new T.BufferGeometry(); geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));
+  pl.regM=new T.Mesh(geo,new T.MeshBasicMaterial({color:ok?0x55ff77:0xff5544, transparent:true, opacity:.8, depthWrite:false, side:T.DoubleSide, polygonOffset:true, polygonOffsetFactor:-4}));
+  pl.regM.renderOrder=3; pl.regM.frustumCulled=false; G.scene.add(pl.regM);
+}
 function buildBorders(){
   if(G.borderGrp){ G.scene.remove(G.borderGrp); G.borderGrp.traverse(o=>{ if(o.geometry && o.geometry!==GEO.post) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
   const grp=new T.Group(); G.borderGrp=grp; G.scene.add(grp);
@@ -2808,8 +2823,7 @@ function buildBorders(){
       const a=P[k], b=P[(k+1)%P.length], nb=a[2];
       const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1; nx/=L; nz/=L;
       const other = nb>=0 ? regOwner(nb) : -1;
-      if(other===ow) add('in', 0xffffff, .35, .12, a[0],a[1],b[0],b[1], nx,nz, .05, true);
-      else { posts(a[0],a[1],b[0],b[1], nx,nz); }
+      if(other!==ow) posts(a[0],a[1],b[0],b[1], nx,nz);
       if(ow===0 && nb>=0 && other<0) shownFree.add(nb);
     }
   }
@@ -2819,11 +2833,6 @@ function buildBorders(){
     for(let k=0;k<P.length;k++){ const a=P[k], c=P[(k+1)%P.length]; if(a[2]>=0 && regOwner(a[2])===b.owner) continue;
       const mx=(a[0]+c[0])/2, mz=(a[1]+c[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1; posts(a[0],a[1],c[0],c[1], nx/L,nz/L); }
     shownFree.delete(id); }
-  // freie Nachbargebiete des Spielers zart umranden
-  for(const id of shownFree){ const P=regPoly(id), s=G.reg.seeds[id];
-    for(let k=0;k<P.length;k++){ const a=P[k], b=P[(k+1)%P.length]; if(a[2]>=0 && regOwner(a[2])===0) continue;
-      const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1;
-      add('free', 0xffffff, .35, .12, a[0],a[1],b[0],b[1], nx/L,nz/L, .1, false); } }
   if(P.length){
     if(!GEO.post){ const I=new T.Matrix4(); GEO.post=mergeParts([[new T.CylinderGeometry(.06,.07,.5,6,1,true), new T.Matrix4().makeTranslation(0,.2,0)],[new T.ConeGeometry(.06,.12,6,1,true), new T.Matrix4().makeTranslation(0,.51,0)]]); }
     const NP=P.length/4, im=new T.InstancedMesh(GEO.post, new T.MeshLambertMaterial({color:0xffffff}), NP), m4=new T.Matrix4(), q=new T.Quaternion(), e=new T.Euler(), sc=new T.Vector3(), ps=new T.Vector3();
@@ -2868,6 +2877,7 @@ function updateGhost(){
   pl.ghost.position.set(fp.cx,y,fp.cz); pl.pad.position.set(fp.cx,y+.1,fp.cz);
   pl.ok = validPlace(pl.kind,pl.x,pl.z,0);
   pl.why = terrCheck(0, pl.kind, fp.cx, fp.cz);
+  if(pl.kind==='tc') regionPreview(pl, regionAt(fp.cx,fp.cz), pl.ok);
   const slow = pl.ok && pl.kind!=='tc' && !friendlyLand(0,fp.cx,fp.cz);
   $('#pTxt').textContent = pl.why || (BUILD[pl.kind].name + (!pl.ok ? ' – hier ist kein Platz' : slow ? ' – außerhalb deines Landes: Bau dauert 3× so lange' : ' – hier bauen?'));
   pl.pad.material.color.setHex(!pl.ok?0xff4444:slow?0xffcc33:0x44ff66);
@@ -2889,8 +2899,9 @@ function endPlace(){
   const pl=G.place; if(!pl) return;
   if(pl.ghost) G.scene.remove(pl.ghost); if(pl.pad) G.scene.remove(pl.pad);
   if(pl.ghosts) for(const gh of pl.ghosts) G.scene.remove(gh);
+  if(pl.regM){ G.scene.remove(pl.regM); pl.regM.geometry.dispose(); }
   G.place=null; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
