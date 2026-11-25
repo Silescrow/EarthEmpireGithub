@@ -2795,8 +2795,8 @@ function buildBorders(){
       const a=P[k], b=P[(k+1)%P.length], nb=a[2];
       const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1; nx/=L; nz/=L;
       const other = nb>=0 ? regOwner(nb) : -1;
-      if(other===ow) add('in'+ow, col, .45, .4, a[0],a[1],b[0],b[1], nx,nz, .2, true);
-      else { add('out'+ow, col, 1, .8, a[0],a[1],b[0],b[1], nx,nz, .3, false); add('glow'+ow, col, .3, 4, a[0],a[1],b[0],b[1], nx,nz, 1.1, false); }
+      if(other===ow) add('in', 0xffffff, .35, .12, a[0],a[1],b[0],b[1], nx,nz, .05, true);
+      else { add('out', 0xffffff, .9, .16, a[0],a[1],b[0],b[1], nx,nz, .05, false); }
       if(ow===0 && nb>=0 && other<0) shownFree.add(nb);
     }
   }
@@ -2804,7 +2804,7 @@ function buildBorders(){
   for(const id of shownFree){ const P=regPoly(id), s=G.reg.seeds[id];
     for(let k=0;k<P.length;k++){ const a=P[k], b=P[(k+1)%P.length]; if(a[2]>=0 && regOwner(a[2])===0) continue;
       const mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2; let nx=s.x-mx, nz=s.z-mz; const L=Math.hypot(nx,nz)||1;
-      add('free', 0xd8d8d8, .6, .4, a[0],a[1],b[0],b[1], nx/L,nz/L, .1, false); } }
+      add('free', 0xffffff, .35, .12, a[0],a[1],b[0],b[1], nx/L,nz/L, .1, false); } }
   for(const L of lines.values()){ if(!L.pos.length) continue;
     const geo=new T.BufferGeometry(); geo.setAttribute('position',new T.Float32BufferAttribute(L.pos,3));
     const m=new T.Mesh(geo,new T.MeshBasicMaterial({color:L.col, transparent:true, opacity:L.op, depthWrite:false, side:T.DoubleSide, polygonOffset:true, polygonOffsetFactor:-4}));
