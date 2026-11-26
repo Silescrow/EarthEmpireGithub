@@ -34,6 +34,7 @@ const BUILD = {
   store: {name:'Lager', size:3, cost:{wood:50}, time:18, hp:500, drop:['wood','stone','gold','food']},
   road:  {name:'Weg', size:1, cost:{}, time:2.2, hp:100},
   barracks:{name:'Kriegerhütte', size:4, cost:{wood:120, stone:40}, time:35, hp:900},
+  tower: {name:'Wachturm', size:2, cost:{wood:100, stone:50}, time:30, hp:600, range:13, atk:6, cd:2.2},
 };
 const WORKER_COST = {food:60};
 const WORKER_TIME = 18;
@@ -294,6 +295,7 @@ function drawPanel(){
       h += `<button class="ab" data-a="b-wall"><span class="ai">${wallSVG()}</span>Palisade<span class="ac">${costText(BUILD.wall.cost)}/Stück</span></button>`;
       h += `<button class="ab" data-a="b-road"><span class="ai">${roadSVG()}</span>Weg<span class="ac">kostenlos</span></button>`;
       h += `<button class="ab" data-a="b-barracks"><span class="ai">${swordSVG()}</span>Kriegerhütte<span class="ac">${costText(BUILD.barracks.cost)}</span></button>`;
+      h += `<button class="ab" data-a="b-tower"><span class="ai"><svg viewBox="0 0 24 24"><path d="M8 22l2-12h4l2 12M9 16h6M7 10h10l-1-4H8zM12 2l5 4H7z" fill="none" stroke="#e8c98a" stroke-width="1.8" stroke-linejoin="round"/></svg></span>Wachturm<span class="ac">${costText(BUILD.tower.cost)}</span></button>`;
     }
     el.innerHTML = h; el.className='';
   } else {
@@ -472,9 +474,9 @@ function nearestFoe(u, R){
   return best;
 }
 const arrows=[];
-function shootArrow(u,t,dmg){
+function shootArrow(u,t,dmg,h){
   const m=new T.Mesh(new T.CylinderGeometry(.015,.015,.7,4), mat(0x5a3818)); m.rotation.x=Math.PI/2;
-  const g=new T.Group(); g.add(m); const y0=getH(u.x,u.z)+1.3; g.position.set(u.x,y0,u.z); G.scene.add(g);
+  const g=new T.Group(); g.add(m); const y0=getH(u.x,u.z)+(h||1.3); g.position.set(u.x,y0,u.z); G.scene.add(g);
   arrows.push({g, x0:u.x, z0:u.z, y0, t, dmg, k:0, src:u, len:Math.max(1,Math.hypot(t.x-u.x,t.z-u.z))});
 }
 function updateArrows(dt){
@@ -1696,6 +1698,13 @@ function makeTC(color, civ, owner){
   g.add(fire); g.fire=[f1,f2];
   return g;
 }
+// Wachturm: hoher Ausguck aus gebundenen Stangen, schießt Pfeile auf Feinde in Reichweite
+function makeTower(color, owner){
+  geos(); const g=new T.Group();
+  if(MODELS.tower){ const m=modelMesh('tower', 2.2); g.add(m); const top=MODELS.tower.geo.boundingBox.max.y*m.scale.y; g.userData.top=top*.8; teamFlag(g, color, 0, top*.93, 0, 1.3); return g; }
+  const legs=mesh(new T.CylinderGeometry(.5,.9,5,6,1,true), mat(0x6b4a2a,{side:T.DoubleSide}), 0,2.5,0); g.add(legs);
+  const hut=mesh(new T.ConeGeometry(1.1,1.2,8), mat(0xa0784a), 0,5.6,0); g.add(hut); g.userData.top=5; teamFlag(g, color, 0, 6.1, 0, 1.3); return g;
+}
 function makeBarracks(color, owner){
   geos();
   const g = new T.Group();
@@ -1734,7 +1743,7 @@ function makeStore(color, owner){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
+const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', tower:'models/wachturm.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -1766,7 +1775,7 @@ function parseGLB(buf){
   return texP.then(()=>({geo, mat}));
 }
 // Grafik „Niedrig“: Gebäude in einfacher Fassung (models/niedrig/), ab „Mittel“ volle Qualität
-const MODEL_LOW = new Set(['warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
+const MODEL_LOW = new Set(['tower','warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
 let modelsLow = null;
 function loadModels(gfx){
   const low = gfx===0;
@@ -2178,7 +2187,7 @@ function footprint(kind,x,z){
 function addBuilding(kind, owner, x, z, done){
   const fp = footprint(kind,x,z);
   const d = BUILD[kind], col = COLORS[owner];
-  const m = kind==='tc'?makeTC(col, G.players[owner] && G.players[owner].civ, owner):kind==='house'?makeHouse(col, owner):kind==='barracks'?makeBarracks(col, owner):makeStore(col, owner);
+  const m = kind==='tc'?makeTC(col, G.players[owner] && G.players[owner].civ, owner):kind==='house'?makeHouse(col, owner):kind==='barracks'?makeBarracks(col, owner):kind==='tower'?makeTower(col, owner):makeStore(col, owner);
   let hy = 0; for(const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1],[0,0]]) hy += getH(fp.cx+dx*d.size/2*.8, fp.cz+dz*d.size/2*.8);
   m.position.set(fp.cx, hy/5-.05, fp.cz);
   G.scene.add(m);
@@ -2535,7 +2544,15 @@ function updatePiles(b){
     im.instanceMatrix.needsUpdate=true; }
 }
 function removePiles(b){ if(b.piles){ for(const t in b.piles) G.scene.remove(b.piles[t]); b.piles=null; } }
+function updateTower(b,dt){
+  const d=BUILD.tower; b.cdT=(b.cdT||0)-dt; if(b.cdT>0) return;
+  let best=null, bd=d.range;
+  for(const o of G.units){ if(!alive(o) || !hostile(b.owner,o.owner)) continue; const dd=Math.hypot(o.x-b.x,o.z-b.z); if(dd<bd){ bd=dd; best=o; } }
+  if(!best){ b.cdT=.5; return; }
+  b.cdT=d.cd; shootArrow(b, best, d.atk, b.mesh.userData.top||5); sfxAt('click', b.x, b.z, .3);
+}
 function updateBuilding(b,dt){
+  if(b.kind==='tower' && b.built>=1 && !b.dead) updateTower(b,dt);
   b.pileT=(b.pileT||0)-dt; if(b.pileT<=0){ b.pileT=1; updatePiles(b); }
   if(b.owner===0) updateBBar(b);
   if(b.kind==='tc' && b.mesh.fireFx && !G.farView) animateFire(b.mesh.fireFx, G.t+b.x, dt);
@@ -3135,7 +3152,7 @@ function validPlace(kind,x,z,owner){
 }
 function startPlace(kind){
   const col = COLORS[0];
-  const ghost = kind==='house'?makeHouse(col,0):kind==='barracks'?makeBarracks(col,0):makeStore(col,0);
+  const ghost = kind==='house'?makeHouse(col,0):kind==='barracks'?makeBarracks(col,0):kind==='tower'?makeTower(col,0):makeStore(col,0);
   ghost.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.6; o.castShadow=false; } });
   const pad = new T.Mesh(new T.PlaneGeometry(BUILD[kind].size,BUILD[kind].size), new T.MeshBasicMaterial({color:0x44ff66, transparent:true, opacity:.4, depthWrite:false}));
   pad.rotation.x=-Math.PI/2; G.scene.add(ghost); G.scene.add(pad);
