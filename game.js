@@ -1680,14 +1680,13 @@ function makeRock(R, kind){
   }
   if((kind==='gold'||kind==='metal') && MODELS.ore){
     const m = modelMesh('ore', 1.5+R()*.3);
-    if(gold){ m.material = MODELS.ore.goldMat || (MODELS.ore.goldMat = (()=>{ const x=MODELS.ore.mat.clone(); x.color.setRGB(1.5,1.15,.35); x.emissive=new T.Color(0x2a1a00); return x; })()); }
+    if(gold){ m.material = MODELS.ore.goldMat || (MODELS.ore.goldMat = (()=>{ const x=MODELS.ore.mat.clone(); x.color.setRGB(1.12,1.0,.78); x.emissive=new T.Color(0x0d0800); return x; })()); }
     g.add(m);
-    if(gold){ const ng=partsVariant('nug', 5, ()=>{ const parts=[]; for(let i=0;i<5;i++){ const a=Math.random()*6.28; parts.push([GEO.nug, new T.Matrix4().makeTranslation(Math.cos(a)*.6, .35+Math.random()*.35, Math.sin(a)*.55)]); } return mergeParts(parts); }); g.add(new T.Mesh(ng, mat(0xffd24a,{emissive:0x553300}))); }
+    // keine gelben Kugeln mehr auf dem Golderz (V1.55)
     g.rotation.y = R()*6.28; return g;
   }
   const r = mesh(GEO.rock, mat(gold?0x8a7a55:kind==='metal'?0x7a5a4a:0x9aa1a8), 0,.35,0); r.scale.set(1.1,.7,1); r.rotation.set(R(),R(),R()); g.add(r);
   const r2 = mesh(GEO.rock, mat(gold?0x7d6d48:0x868d94), .45,.2,.3); r2.scale.set(.55,.45,.55); g.add(r2);
-  if(gold) for(let i=0;i<6;i++){ const a=R()*6.28; g.add(mesh(GEO.nug, mat(0xffd24a,{emissive:0x553300}), Math.cos(a)*.55, .3+R()*.35, Math.sin(a)*.5)); }
   g.rotation.y = R()*6.28; return g;
 }
 function makeOil(R){
@@ -3080,7 +3079,7 @@ async function applyGfx(g){
 }
 let fpsN=0, fpsT=0;
 function fpsTick(now){ fpsN++; if(now-fpsT>=500){ const el=document.getElementById('fps'); if(el){ const on=!!(EE.S.fps|0); el.classList.toggle('hidden',!on); if(on) el.textContent=Math.round(fpsN*1000/(now-fpsT))+' FPS'; } fpsN=0; fpsT=now; } }
-function render(){ updateCam(); updateWeather(G.dtW||.016); G.fr=(G.fr||0)+1; if(G.renderer.shadowMap.enabled && (G.fr%2===0 || G.camMoved)) G.renderer.shadowMap.needsUpdate=true; G.camMoved=false; G.renderer.render(G.scene, G.cam); }
+function render(){ updateCam(); updateWeather(G.dtW||.016); updateRegionOverlay(); G.fr=(G.fr||0)+1; if(G.renderer.shadowMap.enabled && (G.fr%2===0 || G.camMoved)) G.renderer.shadowMap.needsUpdate=true; G.camMoved=false; G.renderer.render(G.scene, G.cam); }
 
 /* ============================================================
    MINIKARTE
@@ -3709,10 +3708,50 @@ function buildBorders(){
     m.renderOrder=3; m.frustumCulled=false; grp.add(m); }
   if(G.miniBase) drawMinimap();
 }
+// Eroberte Gebiete auf der Minikarte: durchsichtig in der Farbe des Volkes, nur auf Land, kräftige Außengrenze
+function landMaskCanvas(W,H){
+  if(G.landMC && G.landMC.width===W) return G.landMC;
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d'), im=x.createImageData(W,H);
+  for(let j=0;j<H;j++) for(let i=0;i<W;i++){ const wx=(i+.5)/W*G.NX-G.NX/2, wz=(j+.5)/H*G.NZ-G.NZ/2; im.data[(j*W+i)*4+3]=rawLand(wx,wz)>.5?255:0; }
+  x.putImageData(im,0,0); G.landMC=c; return c;
+}
 function drawRegionsMini(x, px, pz){
-  for(const [id,ow] of G.reg.owner){ const P=regPoly(id), col='#'+COLORS[ow].toString(16).padStart(6,'0');
-    x.beginPath(); P.forEach((p,i)=>i?x.lineTo(px(p[0]),pz(p[1])):x.moveTo(px(p[0]),pz(p[1]))); x.closePath();
-    x.globalAlpha=.35; x.fillStyle=col; x.fill(); x.globalAlpha=.9; x.strokeStyle=col; x.lineWidth=1; x.stroke(); x.globalAlpha=1; }
+  const W=x.canvas.width, H=x.canvas.height;
+  if(!G.regMC || G.regMC.width!==W) { G.regMC=document.createElement('canvas'); G.regMC.width=W; G.regMC.height=H; }
+  const sig=[...G.reg.owner].join(';');
+  if(G.regMCsig!==sig){ G.regMCsig=sig; const c=G.regMC.getContext('2d'); c.clearRect(0,0,W,H);
+    for(const [id,ow] of G.reg.owner){ const P=regPoly(id), col='#'+COLORS[ow].toString(16).padStart(6,'0');
+      c.beginPath(); P.forEach((p,i)=>i?c.lineTo(px(p[0]),pz(p[1])):c.moveTo(px(p[0]),pz(p[1]))); c.closePath(); c.globalAlpha=.5; c.fillStyle=col; c.fill();
+      c.globalAlpha=1; c.strokeStyle=col; c.lineWidth=1.6;
+      for(let k=0;k<P.length;k++){ const a=P[k], b=P[(k+1)%P.length]; if(a[2]>=0 && regOwner(a[2])===ow) continue; c.beginPath(); c.moveTo(px(a[0]),pz(a[1])); c.lineTo(px(b[0]),pz(b[1])); c.stroke(); } }
+    c.globalAlpha=1; c.globalCompositeOperation='destination-in'; c.drawImage(landMaskCanvas(W,H),0,0); c.globalCompositeOperation='source-over'; }
+  x.drawImage(G.regMC,0,0);
+}
+/* ---------- Eroberte Gebiete beim Herauszoomen: durchsichtige Farbfläche und Grenzlinie (nur auf Land) ---------- */
+function regOverlayMat(lines){
+  if(!G.landTex){ const W=WMW||2, H=WMH||2, d=new Uint8Array(W*H); if(WMASK) for(let i=0;i<W*H;i++) d[i]=WMASK[i]>.5?255:0;
+    G.landTex=new T.DataTexture(d,W,H,T.RedFormat,T.UnsignedByteType); G.landTex.magFilter=T.LinearFilter; G.landTex.minFilter=T.LinearFilter; G.landTex.needsUpdate=true; }
+  return new T.ShaderMaterial({ transparent:true, depthTest:false, depthWrite:false, vertexColors:true, side:T.DoubleSide,
+    uniforms:{ uMask:{value:G.landTex}, uSize:{value:new T.Vector2(G.NX,G.NZ)}, uA:{value:0} },
+    vertexShader:`varying vec3 vC; varying vec2 vUv; uniform vec2 uSize; void main(){ vC=color; vUv=(position.xz+uSize*.5)/uSize; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader:`varying vec3 vC; varying vec2 vUv; uniform sampler2D uMask; uniform float uA; void main(){ if(texture2D(uMask,vUv).r<.5) discard; gl_FragColor=vec4(vC,uA*${lines?'1.0':'.42'}); }` });
+}
+function updateRegionOverlay(){
+  if(!G.reg || !G.cam) return;
+  const s=G.camS, a=clamp((s.dist-40)/40,0,1);
+  if(!G.regOv){ const f=new T.Mesh(new T.BufferGeometry(), regOverlayMat(false)), l=new T.LineSegments(new T.BufferGeometry(), regOverlayMat(true));
+    f.renderOrder=7; l.renderOrder=8; f.frustumCulled=l.frustumCulled=false; G.scene.add(f); G.scene.add(l); G.regOv={f,l,sig:''}; }
+  const o=G.regOv; o.f.visible=o.l.visible=a>0; if(a<=0) return;
+  o.f.material.uniforms.uA.value=a; o.l.material.uniforms.uA.value=a;
+  const sig=[...G.reg.owner].join(';'); if(sig===o.sig) return; o.sig=sig;
+  const fp=[], fc=[], lp=[], lc=[], Y=WATER_Y+.5, c=new T.Color(), cl=new T.Color();
+  for(const [id,ow] of G.reg.owner){ const P=regPoly(id), sd=G.reg.seeds[id]; c.setHex(COLORS[ow]); cl.copy(c).offsetHSL(0,.1,.12);
+    for(let k=0;k<P.length;k++){ const p=P[k], q=P[(k+1)%P.length];
+      fp.push(sd.x,Y,sd.z, p[0],Y,p[1], q[0],Y,q[1]); for(let t=0;t<3;t++) fc.push(c.r,c.g,c.b);
+      if(p[2]>=0 && regOwner(p[2])===ow) continue;
+      lp.push(p[0],Y,p[1], q[0],Y,q[1]); lc.push(cl.r,cl.g,cl.b, cl.r,cl.g,cl.b); } }
+  const set=(m,P,C)=>{ m.geometry.dispose(); const g=new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute(P,3)); g.setAttribute('color',new T.Float32BufferAttribute(C,3)); m.geometry=g; };
+  set(o.f,fp,fc); set(o.l,lp,lc);
 }
 function validPlace(kind,x,z,owner){
   if(terrCheck(owner|0, kind, x, z)) return false;

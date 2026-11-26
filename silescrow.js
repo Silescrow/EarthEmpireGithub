@@ -153,9 +153,10 @@
 #scId .res{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 #scId .chat{display:flex;flex-direction:column;gap:5px;max-height:40vh;overflow:auto;margin:6px 0}#scId .chat div{padding:6px 9px;border-radius:9px;background:#0007;max-width:85%}#scId .chat .adm{align-self:flex-end;background:#3a2e10}
 #scId .agb{max-height:50vh;overflow:auto;font-size:13px;line-height:1.4;color:#ddd}
-#scEcke{position:fixed;left:max(10px,env(safe-area-inset-left));top:max(10px,env(safe-area-inset-top));z-index:40;display:flex;gap:6px;align-items:center}
+#scEcke{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));z-index:40;flex-direction:row-reverse;display:flex;gap:6px;align-items:center}
 #scEcke button{height:38px;padding:0 12px;border-radius:19px;border:2px solid #e8b64a;background:#0b1130cc;color:#ffe9b0;font:700 14px "Barlow Semi Condensed",system-ui,sans-serif;cursor:pointer;position:relative}
 #scEcke button .neu{position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:#f44;border:2px solid #fff}
+body:has(#game:not(.hidden)) #scEcke{display:none!important}
 #scEcke .wolke{opacity:.8;font-size:12px;color:#cfe;text-shadow:0 1px 2px #000}
 #scPop{position:fixed;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);z-index:95;display:flex;flex-direction:column;gap:6px;width:min(420px,92vw)}
 #scPop .pop{padding:10px 12px;border:2px solid #e8b64a;border-radius:12px;background:linear-gradient(180deg,#1d2752f2,#0b1130f2);color:#fff7e2;box-shadow:0 6px 20px #000a;font:15px "Barlow Semi Condensed",system-ui,sans-serif}

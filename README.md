@@ -1,6 +1,6 @@
 # EARTH EMPIRE – zum Spielen
 
-Hier liegt nur die spielbare Version von Earth Empire (aktuell V1.54).
+Hier liegt nur die spielbare Version von Earth Empire (aktuell V1.55).
 
 **Online spielen:** https://silescrow.github.io/EarthEmpireGithub/
 
