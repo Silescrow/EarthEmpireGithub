@@ -2936,7 +2936,8 @@ function buildMinimapBase(){
       c = mix(c, tundra, sm(62,68,al));                // Tundra
       const ds=desertAt(lon,lat); c = mix(c, steppe, sm(.2,.45,ds)); c = mix(c, desert, sm(.45,.6,ds));
       const hh=h-WATER_Y; c = mix(c, [138,128,112], sm(3.0,3.8,hh));   // Gebirge
-      c = mix(c, [240,244,248], Math.max(sm(4.4,5.0,hh), sm(.62,.75,coldAt(lat))));   // Schnee und Eis
+      const snowLine = 5.2 + 1.6*(1-sm(25,55,al));              // Schneegrenze: in den Tropen viel höher
+      c = mix(c, [240,244,248], Math.max(sm(snowLine,snowLine+.5,hh)*.85, sm(.62,.75,coldAt(lat))));   // Gipfelschnee nur auf hohen Bergen, Eis an den Polen
       const sh=clamp((getH(px-st,pz)-getH(px+st,pz))*.6,-.25,.25); c=c.map(v=>v*(1+sh)); // leichte Hangschattierung
     }
     img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=255;
