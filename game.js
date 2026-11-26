@@ -412,9 +412,9 @@ function updatePopulation(dt){
    ============================================================ */
 const UNIT = {
   worker:{name:'Bauer', hp:40, atk:2, range:.9, cd:1.3, speed:3.1, bld:.2},
-  club:  {name:'Axtkrieger', hp:95, atk:9, range:1.1, cd:1.15, speed:3.0, bld:.6, cost:{food:50,wood:20}, time:12, weapon:'w_axe', wlen:.85},
-  spear: {name:'Speerträger', hp:85, atk:7, range:1.7, cd:1.0, speed:3.2, bld:.4, cost:{food:45,wood:30}, time:12, weapon:'w_spear', wlen:1.6},
-  bow:   {name:'Bogenschütze', hp:55, atk:6, range:9, cd:1.7, speed:3.0, bld:.25, cost:{food:40,wood:45}, time:14, weapon:'w_bow', wlen:1.25, ranged:true},
+  club:  {name:'Axtkrieger', hp:95, atk:9, range:1.1, cd:1.15, speed:3.0, bld:.6, cost:{food:50,wood:20}, time:12, weapon:'w_axe', wlen:.5},
+  spear: {name:'Speerträger', hp:85, atk:7, range:1.7, cd:1.0, speed:3.2, bld:.4, cost:{food:45,wood:30}, time:12, weapon:'w_spear', wlen:1.35},
+  bow:   {name:'Bogenschütze', hp:55, atk:6, range:9, cd:1.7, speed:3.0, bld:.25, cost:{food:40,wood:45}, time:14, weapon:'w_bow', wlen:1.0, ranged:true},
 };
 UNIT_DE.club='Axtkrieger'; UNIT_DE.spear='Speerträger'; UNIT_DE.bow='Bogenschützen';
 const isSoldier = u => u.kind!=='worker' && u.kind!=='kid';
@@ -1554,7 +1554,7 @@ function makeRigged(key, height, color){
   const B = {}; r.BONES.forEach(([name],i)=>B[name]=bones[i]);
   // Teamfarbe: Band über der Brust, Keule in der rechten Hand, Last auf dem Rücken
   // Teamfarbe als Stirnband (statt Ring um die Brust)
-  const band = new T.Mesh(new T.TorusGeometry(.052*r.H,.009*r.H,6,18), new T.MeshLambertMaterial({color}));
+  const band = new T.Mesh(new T.TorusGeometry(.052*r.H,.0045*r.H,5,20), new T.MeshLambertMaterial({color}));
   band.rotation.set(Math.PI/2+.12,0,0); band.position.set(0,HEADBAND_Y*r.H,.012*r.H); band.scale.set(1,1.18,1); B.head.add(band); g.band=band;
   const club = new T.Mesh(new T.CylinderGeometry(.012*r.H,.028*r.H,.28*r.H,6), new T.MeshLambertMaterial({color:0x6a4020}));
   club.position.set(0,-.06*r.H,.08*r.H); club.rotation.x=1.4; B.handR.add(club);
