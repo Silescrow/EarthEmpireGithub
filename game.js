@@ -251,7 +251,7 @@ function buildUI(){
     const done = () => { if(!d.classList.contains('hidden')) return; mo.disconnect(); if(G && (EE.S.gfx|0)!==G.gfx) applyGfx(EE.S.gfx|0); };
     const mo = new MutationObserver(done); mo.observe(d,{attributes:true, attributeFilter:['class']}); };
   $('#kinds').onclick = e => { const b=e.target.closest('[data-k]'); if(b) selectKind(b.dataset.k); };
-  $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); select([],tc); } };
+  $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); } };
   $('#pOk').onclick = confirmPlace;
   $('#pGate').onclick = ()=>{ if(G.place&&G.place.kind==='wall'){ G.place.gate=!G.place.gate; $('#pGate').classList.toggle('on',G.place.gate); EE.click(); } };
   $('#pNo').onclick = cancelPlace;
