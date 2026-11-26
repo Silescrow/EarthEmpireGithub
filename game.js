@@ -22,6 +22,9 @@ function ridged(x,y,s){ let f=0,a=.55,fr=1,w=1; for(let i=0;i<5;i++){ let n=1-Ma
 function fbm(x,y,s){ let f=0,a=.5,fr=1; for(let i=0;i<4;i++){ f+=a*vnoise(x*fr,y*fr,s+i*13); fr*=2; a*=.5; } return f; }
 
 /* ---------- Daten ---------- */
+const CIV_COLOR = { 'Osmanen':0xd0182c, 'Römer':0x7a1030, 'Griechen':0x2a6fd6, 'Ägypter':0xe3b23c, 'Babylonier':0x17b3c4, 'Germanen':0x2e7d32,
+  'Briten':0x1a2a80, 'Franken':0x7e57c2, 'Wikinger':0xd9d9d9, 'Mongolen':0x6ec6ff, 'Chinesen':0xff7a1a, 'Japaner':0xff8fb1, 'Koreaner':0x2b2b2b,
+  'Azteken':0x138a7d, 'Inka':0xffd400, 'Maya':0x7cc242, 'Russen':0xa0522d, 'Zulu':0xc9a46a };
 const BASE_COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61];
 const COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61];
 const COLNAMES = ['Blau','Rot','Gelb','Grün','Lila','Orange','Türkis','Pink','Braun','Weiß','Schwarz','Hellgrün','Dunkelblau','Weinrot','Ocker','Waldgrün','Violett','Koralle'];
@@ -79,7 +82,9 @@ async function start(sv){
     G.players.forEach((p,i)=>{
       const fl=[...String(p.civ[2]).matchAll(/fill="(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})"/g)].map(m=>new T.Color(m[1]).getHex()).filter(okL);
       // zuerst die Hauptfarbe der Flagge, dann die anderen Flaggenfarben, erst zuletzt eine Ersatzfarbe
-      let c = fl.find(f=>!used.some(u=>dist(u,f)<70));
+      // feste, gut unterscheidbare Farbe je Zivilisation – passend zur Flagge
+      let c = CIV_COLOR[p.civ[0]]; if(c!=null && used.some(u=>dist(u,c)<40)) c=null;
+      if(c==null) c = fl.find(f=>!used.some(u=>dist(u,f)<70));
       if(c==null) c = BASE_COLORS.filter(okL).filter(b=>!used.some(u=>dist(u,b)<70))[0] ?? BASE_COLORS[i];
       used.push(c); COLORS[i]=c; p.color=c; flagCache[p.civ[0]]=c; }); }
   initDip();
@@ -2855,7 +2860,7 @@ function pileSlot(type, i){
 function updatePiles(b){
   if(b.built<1 || b.dead || !BUILD[b.kind].drop) return;
   pileGeo(); const p=G.players[b.owner];
-  if(!b.piles){ b.piles={}; const off=b.size*.5+.9;
+  if(!b.piles){ b.piles={}; const off=b.size*.17;
     const spots={wood:[off,-off*.45], stone:[off,off*.45], gold:[-off,off*.45], food:[-off,-off*.45]};
     for(const t of PILE.types){ const im=new T.InstancedMesh(PILE.geo[t], PILE.mat[t], PILE.max); im.castShadow=G.gfx>0; im.receiveShadow=true; im.count=0;
       const [sx,sz]=spots[t]; im.position.set(b.x+sx, getH(b.x+sx,b.z+sz)-.02, b.z+sz); im.userData.n=-1; G.scene.add(im); b.piles[t]=im; } }
@@ -2867,7 +2872,8 @@ function updatePiles(b){
 }
 function removePiles(b){ if(b.piles){ for(const t in b.piles) G.scene.remove(b.piles[t]); b.piles=null; } }
 function updateBuilding(b,dt){
-  b.pileT=(b.pileT||0)-dt; if(b.pileT<=0){ b.pileT=1; updatePiles(b); }
+  // Rohstoffe: im Stadtzentrum unsichtbar, im Lager wachsen die Vorräte sichtbar IM Gebäude (V1.59)
+  if(b.kind==='store'){ b.pileT=(b.pileT||0)-dt; if(b.pileT<=0){ b.pileT=1; updatePiles(b); } }
   if(b.owner===0) updateBBar(b);
   if(b.kind==='tc' && b.mesh.fireFx && !G.farView) animateFire(b.mesh.fireFx, G.t+b.x, dt);
 
@@ -3786,7 +3792,7 @@ function regOverlayMat(lines){
 }
 function updateRegionOverlay(){
   if(!G.reg || !G.cam) return;
-  const s=G.camS, a=clamp((s.dist-40)/40,0,1);
+  const s=G.camS, a=clamp((s.dist-170)/60,0,1);   // erst deutlich weiter herausgezoomt sichtbar
   if(!G.regOv){ const f=new T.Mesh(new T.BufferGeometry(), regOverlayMat(false)), l=new T.LineSegments(new T.BufferGeometry(), regOverlayMat(true));
     f.renderOrder=7; l.renderOrder=8; f.frustumCulled=l.frustumCulled=false; G.scene.add(f); G.scene.add(l); G.regOv={f,l,sig:''}; }
   const o=G.regOv; o.f.visible=o.l.visible=a>0; if(a<=0) return;
