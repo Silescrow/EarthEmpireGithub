@@ -1,4 +1,4 @@
-// EARTH EMPIRE – Service Worker: Spiel ohne Internet (z. B. im Flugzeug).
+// SILES EMPIRE – Service Worker: Spiel ohne Internet (z. B. im Flugzeug).
 // Immer zuerst aus dem Netz (Updates kommen sofort). Ohne Internet: die zuletzt geladene Version aus dem Speicher.
 const CACHE = 'earth-empire-v1';
 const KERN = ['./', 'index.html', 'game.js', 'audio.js', 'online.js', 'silescrow.js', 'three.min.js', 'manifest.webmanifest',

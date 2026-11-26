@@ -1,5 +1,5 @@
 /* ============================================================
-   EARTH EMPIRE – Spiel (Steinzeit)
+   SILES EMPIRE – Spiel (Steinzeit)
    Three.js (r160, three.min.js), eine Szene, Touch-Steuerung
    ============================================================ */
 (function(){

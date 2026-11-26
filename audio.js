@@ -1,5 +1,5 @@
 /* ============================================================
-   EARTH EMPIRE – Musik & Geräusche (alles im Browser erzeugt)
+   SILES EMPIRE – Musik & Geräusche (alles im Browser erzeugt)
    Hauptthema (Ladebildschirm + Hauptmenü, läuft durch),
    ruhige Spielmusik (gleiche Melodie, Steinzeit-Instrumente),
    Spielgeräusche und Umgebungsgeräusche.

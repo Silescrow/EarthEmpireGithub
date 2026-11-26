@@ -156,7 +156,7 @@
 #scEcke{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));z-index:40;flex-direction:row-reverse;display:flex;gap:6px;align-items:center}
 #scEcke button{height:38px;padding:0 12px;border-radius:19px;border:2px solid #e8b64a;background:#0b1130cc;color:#ffe9b0;font:700 14px "Barlow Semi Condensed",system-ui,sans-serif;cursor:pointer;position:relative}
 #scEcke button .neu{position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:#f44;border:2px solid #fff}
-body:has(#game:not(.hidden)) #scEcke{display:none!important}
+body:has(#game:not(.hidden)) #scEcke,body:has(#load:not(.hidden)) #scEcke{display:none!important}
 #scEcke .wolke{opacity:.8;font-size:12px;color:#cfe;text-shadow:0 1px 2px #000}
 #scPop{position:fixed;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);z-index:95;display:flex;flex-direction:column;gap:6px;width:min(420px,92vw)}
 #scPop .pop{padding:10px 12px;border:2px solid #e8b64a;border-radius:12px;background:linear-gradient(180deg,#1d2752f2,#0b1130f2);color:#fff7e2;box-shadow:0 6px 20px #000a;font:15px "Barlow Semi Condensed",system-ui,sans-serif}
@@ -589,7 +589,7 @@ html.sc-offline .sc-online{opacity:.4;filter:grayscale(1);pointer-events:none}`;
 
   // ---------- Start ----------
   /* SC.init({
-       id:'earth-empire', name:'Earth Empire', version:'1.54',
+       id:'earth-empire', name:'Siles Empire', version:'1.54',
        sammeln:()=>string|null,  anwenden:(string)=>void,  zeit:()=>ms des lokalen Stands,  loeschen:()=>void,  info:()=>{...},
        ressourcen:[['food','Nahrung'],...],  geschenk:(res)=>void,  werfen:(grund)=>void,
        beitreten:({code,schluessel,schloss,name})=>void,  inSpiel:()=>bool,  imMenue:()=>bool,  netz:(an)=>void,

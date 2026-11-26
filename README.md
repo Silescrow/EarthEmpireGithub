@@ -1,8 +1,8 @@
-# EARTH EMPIRE – zum Spielen
+# SILES EMPIRE – zum Spielen
 
-Hier liegt nur die spielbare Version von Earth Empire (aktuell V1.55).
+Hier liegt nur die spielbare Version von Siles Empire (früher Earth Empire) (aktuell V1.56).
 
-**Online spielen:** https://silescrow.github.io/EarthEmpireGithub/
+**Online spielen:** https://silescrow.github.io/SilesEmpireGithub/
 
 | Datei | Inhalt |
 |---|---|
@@ -18,4 +18,4 @@ Hier liegt nur die spielbare Version von Earth Empire (aktuell V1.55).
 | `icon-*.png`, `manifest.webmanifest` | App-Symbol für den Startbildschirm |
 | `version.txt` | aktuelle Version |
 
-Alle Bilder, Texte und alten Versionen liegen in https://github.com/Silescrow/Earth-Empire
+Alle Bilder, Texte und alten Versionen liegen in https://github.com/Silescrow/Siles-Empire
