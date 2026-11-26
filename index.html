@@ -159,7 +159,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 .selx .pic i{position:absolute;left:4px;bottom:2px;height:3px;border-radius:2px;background:#62e06a}
 .selx .more{align-self:center;color:var(--gold2);font:700 13px sans-serif;padding:0 3px}
 .selx small{font-size:13px;color:#ffe9b0}
-/* ---- Bedienfeld unten: edles Design (V1.47) ---- */
+/* ---- Bedienfeld unten: edles Design (V1.48) ---- */
 #panel{padding:8px 10px;gap:7px;border-radius:16px;border:2px solid #d4a64a;
   background:linear-gradient(180deg,rgba(26,36,80,.97),rgba(8,12,32,.97));
   box-shadow:0 0 0 1px #000a,inset 0 1px 0 rgba(255,232,170,.28),inset 0 0 22px rgba(232,182,74,.10),0 10px 30px rgba(0,0,0,.6)}
@@ -182,6 +182,8 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 #kinds .kb img.th{width:32px;height:32px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.6))}
 #kinds .kb.all{border-color:#e8684a;background:radial-gradient(130% 90% at 50% 0%,#7a2a2a,#3a0f14 70%)}
 #kinds .kb:active{transform:scale(.94)}
+.ab.tool .ai{width:40px;height:40px}.ab.tool .ai svg{width:36px;height:36px}.ab.tool{font:800 13.5px "Cinzel",Georgia,serif;color:var(--gold)}
+.ab.back{min-width:56px;width:56px}
 /* Diplomatie */
 #dip{position:absolute;inset:0;display:grid;place-items:center;background:#060a1aa8;z-index:4}
 #dip.hidden{display:none}
@@ -253,7 +255,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.47</div>
+    <div class="ver2">Version 1.48</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -272,7 +274,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.47</div>
+  <div class="ver">Earth Empire · V1.48</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -300,7 +302,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="toast hidden" id="toast"></div>
 </section>
 
-<script src="audio.js?v=1.47"></script>
+<script src="audio.js?v=1.48"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -455,7 +457,7 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.47"></script>
-<script src="game.js?v=1.47"></script>
+<script src="three.min.js?v=1.48"></script>
+<script src="game.js?v=1.48"></script>
 </body>
 </html>

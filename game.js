@@ -326,7 +326,11 @@ function drawPanel(){
     ws.slice(0,MAXP).forEach((u,i)=>{ h += `<button class="pic${u.owner!==0?' foe':''}" data-u="${i}">${unitPic(u)}</button>`; });
     if(ws.length>MAXP) h += `<span class="more">+${ws.length-MAXP}</span>`;
     h += `</div>${ws.length===1?`<small>${job}${carry}</small>`:''}</div>`;
-    if(ws[0].owner===0 && ws.every(u=>u.kind==='worker')){
+    if(ws[0].owner===0 && ws.some(u=>u.kind==='worker') && !G.buildMenu){
+      h += `<button class="ab tool" data-a="bmenu"><span class="ai">${hammerSVG()}</span>Bauen</button>`;
+    }
+    if(ws[0].owner===0 && ws.some(u=>u.kind==='worker') && G.buildMenu){
+      h += `<button class="ab tool back" data-a="bback"><span class="ai"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="#e8b64a" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Zurück</button>`;
       h += `<button class="ab" data-a="b-tc"><span class="ai">${buildPic('tc',hutSVG())}</span>Stadtzentrum<span class="ac">${costText(BUILD.tc.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-house"><span class="ai">${buildPic('house',hutSVG())}</span>Hütte<span class="ac">${costText(BUILD.house.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-store"><span class="ai">${buildPic('store',storeSVG())}</span>Lager<span class="ac">${costText(BUILD.store.cost)}</span></button>`;
@@ -817,6 +821,7 @@ function checkEnd(){
 // KI: Kriegerhütte bauen, Krieger ausbilden, im Krieg angreifen
 const swordSVG = () => '<svg viewBox="0 0 24 24"><path d="M5 4l10 10M19 4L9 14M7 13l-3 3 2 2 3-3M17 13l3 3-2 2-3-3" stroke="#e8b64a" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>';
 const towerSVG = () => '<svg viewBox="0 0 24 24"><path d="M7 22l2-12h6l2 12M9 14h6M8.4 18h7.2" stroke="#a86d36" stroke-width="1.8" fill="none"/><rect x="6" y="6" width="12" height="4" fill="#c9a46a" stroke="#5a3818"/><path d="M8 6V3M16 6V3" stroke="#5a3818" stroke-width="1.6"/></svg>';
+const hammerSVG = () => '<svg viewBox="0 0 24 24"><path d="M13.5 9.5l-9 9 2 2 9-9z" fill="#a8743e" stroke="#5a3818" stroke-width=".8"/><path d="M11 4.5l4-1.5 6 6-1.5 4-3-3-2.5 1-3-3 1-2.5z" fill="#b9c2cc" stroke="#4a525a" stroke-width=".9" stroke-linejoin="round"/></svg>';
 const roadSVG = () => '<svg viewBox="0 0 24 24"><path d="M8 22L11 2h2l3 20z" fill="#b08a58"/><path d="M12 4v3M12 10v3M12 16v3" stroke="#f3e2b8" stroke-width="1.4"/><circle cx="6" cy="18" r="1.3" fill="#9aa3ad"/><circle cx="18" cy="9" r="1" fill="#9aa3ad"/></svg>';
 const wallSVG = () => '<svg viewBox="0 0 24 24"><path d="M3 21V8l2-3 2 3v13M9 21V7l2-3 2 3v14M15 21V8l2-3 2 3v13" fill="#a86d36" stroke="#5a3818"/><path d="M2 12h20M2 17h20" stroke="#5a3818" stroke-width="1.6"/></svg>';
 const hutSVG = () => '<svg viewBox="0 0 24 24"><path d="M12 3L3 18h18z" fill="#c9a46a"/><path d="M12 3L8 18h8z" fill="#8a5a2b"/></svg>';
@@ -835,6 +840,8 @@ function action(a){
     if(b.queue.length>=5){ EE.toast('Warteschlange voll'); return; }
     if(!canPay(p,c)){ EE.toast('Nicht genug Rohstoffe'); EE.sfx('error'); return; }
     pay(p,c); b.queue.push(k); EE.vib(15);
+  } else if(a==='bmenu'){ G.buildMenu=true;
+  } else if(a==='bback'){ G.buildMenu=false;
   } else if(a==='helpin'){ helperIn(G.selB); drawPanel();
   } else if(a==='helpout'){ helpersOut(G.selB); drawPanel();
   } else if(a==='crewin'){ const b=G.selB, free=TOWER_MAX-crew(b).length-G.units.filter(u=>u.state==='garrison'&&u.site===b).length;
@@ -3312,7 +3319,7 @@ function boxSelect(x0,y0,x1,y1){
   select(us,null); if(us.length) EE.click();
 }
 function select(us,b){
-  us = us.filter(u=>!u.inside);
+  us = us.filter(u=>!u.inside); G.buildMenu=false;
   for(const u of G.sel) u.ring.visible=false;
   if(G.selB) G.selB.ring.visible=false;
   G.sel = us; G.selB = b;
