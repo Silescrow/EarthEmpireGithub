@@ -130,7 +130,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 #onSlots{display:flex;flex-direction:column;gap:4px;max-height:38vh;overflow:auto}#dOnline .on-row{display:grid;grid-template-columns:26px 1fr 140px 90px 20px auto;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;background:#0005;color:#fff;font-size:14px}
 #dOnline .on-row.me{outline:2px solid #c9a24a}#dOnline .on-row.off{opacity:.55}#dOnline .on-row i{font-style:normal;font-size:11px;color:#ffd770;margin-left:6px}#dOnline .on-flag{width:22px;height:26px}#dOnline .on-flag.none{display:inline-block;background:#333;border-radius:3px}
 #dOnline select{background:#0d1824;color:#fff;border:1px solid #c9a24a88;border-radius:6px;padding:4px}#dOnline .dim{color:#99a}#dOnline .warn{color:#ffb04a}#dOnline .ok{color:#7cff7c}#dOnline .on-sl{background:#14202e;color:#ddd;border:1px solid #556;border-radius:6px;padding:3px 7px;font-size:12px}
-#dOnline .on-set{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0}#onChat{height:70px;overflow:auto;background:#0005;border-radius:8px;padding:6px;font-size:13px;color:#eee}#onChat .sys{color:#aab;font-style:italic}#dOnline .on-chatin{display:flex;gap:6px;margin-top:4px}#dOnline .on-chatin input{flex:1}#onWait{display:block;text-align:right;color:#ffd770;margin-top:4px}
+#dOnline .on-ich{margin:0 0 8px;color:#e8dcc0;text-align:center}#dOnline .on-ich b{color:#ffd770}#dOnline .on-fr{margin-top:10px;padding:10px;border-radius:12px;background:#0005;border:1px solid #c9a24a44;color:#f3e2b8}#dOnline .on-fr>div{display:flex;flex-direction:column;gap:5px;margin-top:6px}#dOnline .on-row2{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#fff}#dOnline .on-row2 .btn{width:auto}#dOnline .on-hb{display:flex;gap:6px}#dOnline .on-hb .btn{width:auto}#dOnline .on-head{flex-wrap:wrap;gap:6px}#dOnline .on-set{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0}#onChat{height:70px;overflow:auto;background:#0005;border-radius:8px;padding:6px;font-size:13px;color:#eee}#onChat .sys{color:#aab;font-style:italic}#dOnline .on-chatin{display:flex;gap:6px;margin-top:4px}#dOnline .on-chatin input{flex:1}#onWait{display:block;text-align:right;color:#ffd770;margin-top:4px}
 @media (max-width:700px){#dOnline .on-two{grid-template-columns:1fr}#dOnline .on-row{grid-template-columns:22px 1fr 110px 70px 16px}}
 #mini{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:10px;width:clamp(150px,24vw,210px);height:auto;
   border:2px solid var(--gold);border-radius:8px;box-shadow:0 4px 14px #000a;touch-action:none;background:#000}
@@ -293,7 +293,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.53</div>
+    <div class="ver2">Version 1.54</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -312,7 +312,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.53</div>
+  <div class="ver">Earth Empire · V1.54</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -341,7 +341,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.53"></script>
+<script src="audio.js?v=1.54"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -513,7 +513,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={VER:'1.53',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={VER:'1.54',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -538,9 +538,29 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.53"></script>
-<script src="game.js?v=1.53"></script>
-<script src="online.js?v=1.53"></script>
+<script src="three.min.js?v=1.54"></script>
+<script src="game.js?v=1.54"></script>
+<script src="silescrow.js?v=1.54"></script>
+<script src="online.js?v=1.54"></script>
+<script>
+// Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
+SC.init({ id:'earth-empire', name:'Earth Empire', version:EE.VER, pflicht:true,
+  sammeln:()=>{ try{ if(window.EEGame && EEGame.running()) EEGame.save(); return localStorage.getItem('ee_save_v1'); }catch(e){ return null; } },
+  zeit:()=>{ try{ return (JSON.parse(localStorage.getItem('ee_save_v1')||'null')||{}).date||0; }catch(e){ return 0; } },
+  anwenden:(t)=>{ try{ localStorage.setItem('ee_save_v1', t); }catch(e){} if(!(window.EEGame && EEGame.running())) EE.showMenu(false); },
+  loeschen:()=>{ try{ localStorage.removeItem('ee_save_v1'); }catch(e){} if(window.EEGame && EEGame.running()){ EEGame.stop(); } EE.showMenu(false); },
+  info:()=>{ try{ const s=JSON.parse(localStorage.getItem('ee_save_v1')||'null'); return s ? {Volk:s.civs&&s.civs[0], Spielzeit:Math.round((s.t||0)/60)+' Min', Gebäude:(s.builds||[]).filter(b=>b.o===0).length} : null; }catch(e){ return null; } },
+  ressourcen:[['food','Nahrung'],['wood','Holz'],['stone','Stein'],['gold','Gold']],
+  geschenk:(r)=>EEGame.gift(r),
+  werfen:()=>{ try{ if(window.EEOnline && EEOnline.lobby) EEOnline.leave(false); }catch(e){} if(window.EEGame && EEGame.online()) EEGame.quit(); $('#dOnline')&&$('#dOnline').classList.add('hidden'); },
+  beitreten:(r)=>{ if(window.EEGame && EEGame.running() && !document.querySelector('#game').classList.contains('hidden')) EEGame.quit(); EEOnline.joinRoom(r); },
+  inSpiel:()=>!!(window.EEGame && EEGame.running() && !document.querySelector('#game').classList.contains('hidden')),
+  imMenue:()=>!document.querySelector('#menu').classList.contains('hidden') && !document.querySelector('#menu .dlg:not(.hidden)'),
+  zeigtRaeume:()=>{ const d=document.querySelector('#dOnline'); return d && !d.classList.contains('hidden'); },
+  raeume:()=>{ try{ EEOnline.friendsRooms(); }catch(e){} },
+  netz:(an)=>{ const b=document.querySelector('#bOnline'); if(b) b.textContent = an ? 'Online spielen' : 'Online spielen · 📴 kein Internet'; },
+  toast:t=>EE.toast(t), klick:()=>EE.click() });
+</script>
 <script>
 // Ohne Internet spielen: Service Worker legt alle Dateien auf dem Gerät ab
 if('serviceWorker' in navigator && location.protocol!=='file:'){ navigator.serviceWorker.register('sw.js').then(()=>navigator.serviceWorker.ready).then(reg=>{

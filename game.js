@@ -162,6 +162,14 @@ function applySave(sv){
   if(sv.cam) G.loadCam = sv.cam;
   G.quiet = false;
 }
+// Geschenke vom Admin (Silescrow ID): sofort im laufenden Spiel, sonst beim nächsten Spiel
+function gift(res){
+  const add=r=>{ const p=G.players[0]; for(const k in r) if(k in p.res) p.res[k]+=Math.max(0,r[k]|0); EE.toast('🎁 Geschenk erhalten: '+Object.entries(r).map(([k,v])=>v+' '+({food:'Nahrung',wood:'Holz',stone:'Stein',gold:'Gold'}[k]||k)).join(', ')); };
+  if(G && !G.over && G.players[0] && !G.inMenu){ add(res); return; }
+  try{ const l=JSON.parse(localStorage.getItem('ee_geschenk')||'[]'); l.push(res); localStorage.setItem('ee_geschenk', JSON.stringify(l)); }catch(e){}
+  EE.toast('🎁 Geschenk kommt in deine nächste Partie');
+}
+function giftPending(){ try{ const l=JSON.parse(localStorage.getItem('ee_geschenk')||'[]'); localStorage.removeItem('ee_geschenk'); const sum={}; for(const r of l) for(const k in r) sum[k]=(sum[k]||0)+r[k]; if(Object.keys(sum).length) gift(sum); }catch(e){} }
 function loadGame(){ const sv=readSave(); if(!sv){ EE.toast('Kein Spielstand gefunden'); return; } start(sv); }
 addEventListener('pagehide', ()=>saveGame());
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveGame(); });
@@ -2943,6 +2951,7 @@ function updateAIWar(p, mine, tc){
    ============================================================ */
 function update(dt){
   pcUpdate(dt);
+  if(!G.giftOk && G.t>2 && !G.inMenu){ G.giftOk=true; giftPending(); }
   G.t += dt;
   if((G.saveT-=dt)<=0){ G.saveT=30; saveGame(); }
   for(const u of G.units.slice()) updateWorker(u,dt);
@@ -3766,5 +3775,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { gift, quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
