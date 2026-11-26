@@ -55,8 +55,10 @@ html,body{margin:0;height:100%;background:#050814;color:var(--ink);overflow:hidd
 .btn.main{background:linear-gradient(180deg,#f6cf62,#c98a1e);color:#3a2203;text-shadow:0 1px 0 #ffe9a0;border-color:#fff0b8}
 .btn.small{font-size:clamp(12px,2.8vh,16px);padding:8px 12px}
 .btn.dis,.btn:disabled{opacity:.4;filter:grayscale(1);pointer-events:none}
-.btn.upd{background:linear-gradient(180deg,#3fbf5a,#1f7a34);color:#fff;border-color:#b8f5c4;animation:updPulse 1.6s ease-in-out infinite}
-@keyframes updPulse{0%,100%{box-shadow:0 0 0 0 rgba(90,230,120,.55)}50%{box-shadow:0 0 0 10px rgba(90,230,120,0)}}
+#updBar{position:fixed;left:50%;bottom:calc(6px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:3px;min-width:190px;padding:5px 10px 6px;border-radius:10px;background:#0b1130e8;border:1px solid #e8b64a90;box-shadow:0 3px 10px #0008;font:600 11px system-ui,sans-serif;color:#ffe9b0;cursor:pointer;transition:opacity .4s}
+#updBar.hidden{display:none}#updBar.mini{opacity:.55;transform:translateX(-50%) scale(.85)}
+#updBar .ub{height:4px;border-radius:2px;background:#0008;overflow:hidden}#updFill{height:100%;width:0;background:linear-gradient(90deg,#7ee87a,#3fbf5a);transition:width .2s}
+#updBar.tap{border-color:#7ee87a}
 .ver{position:absolute;left:max(12px,env(safe-area-inset-left));bottom:8px;font-size:12px;color:#fff9;text-shadow:0 1px 2px #000}
 .ico.quit{color:#ff8a8a}
 .corner{position:absolute;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));display:flex;gap:8px}
@@ -164,7 +166,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 .selx .pic i{position:absolute;left:4px;bottom:2px;height:3px;border-radius:2px;background:#62e06a}
 .selx .more{align-self:center;color:var(--gold2);font:700 13px sans-serif;padding:0 3px}
 .selx small{font-size:13px;color:#ffe9b0}
-/* ---- Bedienfeld unten: edles Design (V1.51) ---- */
+/* ---- Bedienfeld unten: edles Design (V1.52) ---- */
 #panel{padding:8px 10px;gap:7px;border-radius:16px;border:2px solid #d4a64a;
   background:linear-gradient(180deg,rgba(26,36,80,.97),rgba(8,12,32,.97));
   box-shadow:0 0 0 1px #000a,inset 0 1px 0 rgba(255,232,170,.28),inset 0 0 22px rgba(232,182,74,.10),0 10px 30px rgba(0,0,0,.6)}
@@ -282,7 +284,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.51</div>
+    <div class="ver2">Version 1.52</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -292,7 +294,6 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 <section id="menu" class="screen hidden">
   <div class="bg"></div><div class="shade"></div>
   <div class="panel">
-    <button class="btn upd hidden" id="bUpdate">Update verfügbar</button>
     <button class="btn main hidden" id="bResume">Weiterspielen</button>
     <button class="btn main" data-open="dPlay">Spielen</button>
     <button class="btn" data-open="dSet">Einstellungen</button>
@@ -302,7 +303,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.51</div>
+  <div class="ver">Earth Empire · V1.52</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -330,7 +331,8 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="toast hidden" id="toast"></div>
 </section>
 
-<script src="audio.js?v=1.51"></script>
+<div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
+<script src="audio.js?v=1.52"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -458,31 +460,51 @@ $('#aiPlus').addEventListener('click',()=>{ S.ai=Math.min(17,(S.ai||3)+1); save(
 $('#aiAll').addEventListener('click',()=>{ S.ai=17; save(); drawAI(); click(); });
 if(!S.ai) S.ai=3; if(S.map>3) S.map=1; drawAI();
 
-// Update-Prüfung: neue Version auf GitHub? Dann grüner Knopf „Update verfügbar“ im Hauptmenü
+// Update: neue Version auf GitHub? Dann unten klein mit Balken automatisch herunterladen und neu starten
 const CUR_VER=(document.querySelector('.ver2')||{}).textContent.replace(/[^0-9.]/g,'');
 const triedUpd=(location.search.match(/update=([0-9.]+)/)||[])[1]||sessionStorage.getItem('ee_upd');
 if(location.search.includes('update=')){ try{ sessionStorage.setItem('ee_upd',triedUpd); }catch(e){} history.replaceState(null,'',location.pathname); }   // Link bleibt immer gleich
-let updVer=null, updToast=false;
+let updVer=null, updState='', updating=false;
 const newer=(a,b)=>{ const x=a.split('.').map(Number), y=b.split('.').map(Number); for(let i=0;i<Math.max(x.length,y.length);i++){ if((x[i]||0)!==(y[i]||0)) return (x[i]||0)>(y[i]||0); } return false; };
-function checkUpdate(){
-  if(location.protocol==='file:') return;
-  fetch('version.txt?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(t=>{ t=t.trim();
-    if(t && /^[0-9.]+$/.test(t) && newer(t,CUR_VER)){ updVer=t; const b=$('#bUpdate'); b.textContent='Update verfügbar – V'+t; b.classList.remove('hidden'); lockPlay();
-      // automatisch: außerhalb einer Partie sofort laden, in einer Partie beim nächsten Menü-Öffnen (Spielstand wird vorher gespeichert)
-      if(window.EEGame && EEGame.running() && !$('#game').classList.contains('hidden')){ if(!updToast){ updToast=true; toast('Neue Version V'+t+' – wird beim Öffnen des Menüs automatisch geladen'); } }
-      else doUpdate(); } }).catch(()=>{});   // schon versucht (GitHub noch nicht fertig)? Dann nur der grüne Knopf
+const inGame=()=>window.EEGame && EEGame.running() && !$('#game').classList.contains('hidden');
+function updShow(txt, f){ const b=$('#updBar'); b.classList.remove('hidden'); $('#updTxt').textContent=txt; $('#updFill').style.width=Math.round((f||0)*100)+'%'; }
+function lockPlay(on){ for(const s of ['[data-open=dPlay]','#bResume']){ const e=$(s); if(e){ e.disabled=on; e.classList.toggle('dis',on); } } }
+// Dateien der neuen Version vorab laden (danach kommen sie beim Neustart sofort aus dem Speicher)
+async function prefetch(v){
+  const files=['index.html?update='+v,'game.js?v='+v,'audio.js?v='+v,'three.min.js?v='+v,'version.txt'];
+  let done=0;
+  for(const f of files){
+    try{ const r=await fetch(f,{cache:'reload'}); const tot=+r.headers.get('content-length')||0;
+      if(r.body && tot){ const rd=r.body.getReader(); let got=0; for(;;){ const {done:d,value}=await rd.read(); if(d) break; got+=value.length; updShow('Update V'+v+' wird geladen …', (done+Math.min(1,got/tot))/files.length); } }
+      else await r.arrayBuffer();
+    }catch(e){}
+    done++; updShow('Update V'+v+' wird geladen …', done/files.length);
+  }
 }
-// Bei verfügbarem Update: Spielen/Weiterspielen ausgegraut, nur Update und Einstellungen gehen
-function lockPlay(){ for(const s of ['[data-open=dPlay]','#bResume']){ const e=$(s); if(e){ e.disabled=true; e.classList.add('dis'); } } }
-let updating=false;
-function doUpdate(force){ if(updating||!updVer || (!force && triedUpd===updVer)) return; updating=true; try{ if(window.EEGame && EEGame.running()) EEGame.save(); }catch(e){}
-  toast('Neue Version V'+updVer+' wird geladen …'); setTimeout(()=>location.replace(location.pathname+'?update='+updVer),1500); }
-$('#bUpdate').addEventListener('click',()=>{ click(); doUpdate(true); });
+async function startUpdate(force){
+  if(updating || !updVer) return; updating=true;
+  if(!inGame()) lockPlay(true);
+  await prefetch(updVer);
+  updState='ready';
+  if(inGame() && !force){ updShow('Update V'+updVer+' bereit – startet beim Öffnen des Menüs', 1); setTimeout(()=>{ if(inGame()) $('#updBar').classList.add('mini'); }, 6000); return; }
+  installUpdate();
+}
+function installUpdate(){ try{ if(window.EEGame && EEGame.running()) EEGame.save(); }catch(e){} updShow('Update V'+updVer+' – Neustart …', 1); setTimeout(()=>location.replace(location.pathname+'?update='+updVer),700); }
+function checkUpdate(){
+  if(location.protocol==='file:' || updating) return;
+  fetch('version.txt?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(t=>{ t=t.trim();
+    if(!(t && /^[0-9.]+$/.test(t) && newer(t,CUR_VER))) return;
+    updVer=t;
+    if(triedUpd===t){ updShow('Update V'+t+' – tippen zum Laden', 0); $('#updBar').classList.add('tap'); return; }   // GitHub war noch nicht fertig
+    startUpdate(false);
+  }).catch(()=>{});
+}
+$('#updBar').addEventListener('click',()=>{ if(!updVer) return; click(); if(updState==='ready') installUpdate(); else { updating=false; startUpdate(true); } });
 checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) checkUpdate(); });
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updVer){ setTimeout(doUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -507,7 +529,7 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.51"></script>
-<script src="game.js?v=1.51"></script>
+<script src="three.min.js?v=1.52"></script>
+<script src="game.js?v=1.52"></script>
 </body>
 </html>
