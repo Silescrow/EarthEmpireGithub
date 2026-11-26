@@ -348,15 +348,15 @@ const UNIT_DE = {worker:'Bauern'};
 /* ---------- Kleine Bilder (Icons) aus den echten 3D-Modellen ---------- */
 const THUMB = {}; let thumbRT = null;
 function renderThumb(obj, portrait){
-  const S=256, r=G.renderer;
+  const S=512, r=G.renderer;   // hohe Auflösung (auch für PC)
   if(!thumbRT){ thumbRT=new T.WebGLRenderTarget(S,S,{samples:4}); thumbRT.texture.colorSpace=T.SRGBColorSpace; }
   const sc=new T.Scene(); sc.add(new T.HemisphereLight(0xfff6e8,0x5a4a38,1.7)); const d=new T.DirectionalLight(0xffffff,2.3); d.position.set(3,6,5); sc.add(d);
   if(obj.rig) poseRig(obj,'idle',0);
   sc.add(obj); obj.updateMatrixWorld(true);
   const box=new T.Box3().setFromObject(obj), c=box.getCenter(new T.Vector3()), sz=box.getSize(new T.Vector3());
-  let rad; if(portrait){ c.y=box.max.y-sz.y*.24; rad=sz.y*.3; } else if(obj.rig){ rad=sz.y*.5; } else rad=Math.max(sz.x,sz.y,sz.z)*.6;
+  let rad; if(portrait){ c.y=box.max.y-sz.y*.24; rad=sz.y*.3; } else if(obj.rig){ const H=1.55; c.set(0,H*.52,0); rad=H*.62; } else rad=Math.max(sz.x,sz.y,sz.z)*.6;
   const cam=new T.PerspectiveCamera(30,1,.02,500);
-  cam.position.set(c.x+rad*1.1, c.y+rad*(portrait?.35:1.05), c.z+rad*2.4); cam.lookAt(c);
+  cam.position.set(c.x+rad*1.1, c.y+rad*(portrait||obj.rig?.35:1.05), c.z+rad*2.4); cam.lookAt(c);
   const old=r.getRenderTarget(), oc=r.getClearColor(new T.Color()), oa=r.getClearAlpha(), sh=r.shadowMap.enabled;
   r.shadowMap.enabled=false; r.setRenderTarget(thumbRT); r.setClearColor(0x000000,0); r.clear(); r.render(sc,cam);
   const px=new Uint8Array(S*S*4); r.readRenderTargetPixels(thumbRT,0,0,S,S,px);
@@ -3249,7 +3249,9 @@ function hideBox(){ const b=$('#sel-box'); if(b) b.style.display='none'; }
 function pickAt(sx,sy){
   let best=null, bd=34;
   if(G.sel.some(u=>u.owner===0 && u.kind==='worker')){ let bb=1e9; for(const b of G.builds){ if(b.owner!==0 || b.kind==='road' || (b.built>=1 && b.hp>=BUILD[b.kind].hp)) continue; const s=toScreen(b.x, b.mesh.position.y+.5, b.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<26+b.size*14 && d<bb){ bb=d; best={b}; } } if(best) return best; }
-  for(const u of G.units){ if(u.inside) continue; const s=toScreen(u.x, getH(u.x,u.z)+.7, u.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<bd){bd=d;best={u};} }
+  // Sind schon eigene Einheiten ausgewählt, zählt ein Tipp neben eigene Figuren als Marschbefehl (nur genau auf eine Figur = diese auswählen)
+  const selOwn = G.sel.some(u=>u.owner===0);
+  for(const u of G.units){ if(u.inside) continue; const s=toScreen(u.x, getH(u.x,u.z)+.7, u.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<bd && !(selOwn && u.owner===0 && (d>14 || (G.sel.length>1 && G.sel.includes(u))))){bd=d;best={u};} }
   if(best) return best;
   bd = 1e9;
   for(const b of G.builds){ if(b.kind==='road') continue; const s=toScreen(b.x, b.mesh.position.y+1, b.z); const r = 26+b.size*14; const d=Math.hypot(s.x-sx,s.y-sy); if(d<r && d<bd){bd=d;best={b};} }
