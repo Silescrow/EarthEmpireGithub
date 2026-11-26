@@ -121,6 +121,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .hb svg{width:24px;height:24px}
 .hb.dim{opacity:.5}
 .hb i{position:absolute;right:-6px;top:-6px;min-width:20px;height:20px;border-radius:10px;background:#e23b3b;color:#fff;font:700 12px/20px sans-serif;font-style:normal;text-align:center;padding:0 4px}
+#bigmap{position:fixed;inset:0;z-index:60;background:rgba(6,14,24,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left))}#bigmap.hidden{display:none}#bigmap canvas{max-width:100%;max-height:calc(100% - 90px);border-radius:10px;border:2px solid #c9a24a;touch-action:none}#bigmap .bm-head{width:100%;display:flex;justify-content:space-between;align-items:center;color:#f3e2b8;font-size:18px}#bigmap .bm-x{width:40px;height:40px;border-radius:50%;border:2px solid #c9a24a;background:#14202e;color:#fff;font-size:20px}#bigmap .bm-leg{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;color:#fff;font-size:12px}#bigmap .bm-leg i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid #000}#bigmap .bm-tip{color:#aab}
 #mini{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:10px;width:clamp(150px,24vw,210px);height:auto;
   border:2px solid var(--gold);border-radius:8px;box-shadow:0 4px 14px #000a;touch-action:none;background:#000}
 #bIdle{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:calc(10px + clamp(150px,24vw,210px)*0.37 + 10px)}
@@ -227,7 +228,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.38</div>
+    <div class="ver2">Version 1.39</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -248,7 +249,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.38</div>
+  <div class="ver">Earth Empire · V1.39</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -282,7 +283,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="toast hidden" id="toast"></div>
 </section>
 
-<script src="audio.js?v=1.38"></script>
+<script src="audio.js?v=1.39"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -446,7 +447,7 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.38"></script>
-<script src="game.js?v=1.38"></script>
+<script src="three.min.js?v=1.39"></script>
+<script src="game.js?v=1.39"></script>
 </body>
 </html>

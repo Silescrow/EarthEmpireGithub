@@ -741,46 +741,6 @@ function checkEnd(){
   if(G.players.slice(1).every(p=>p.out)){ G.over=true; try{localStorage.removeItem(SAVE_KEY)}catch(e){} setTimeout(()=>{ EE.toast('Sieg! Alle Gegner sind besiegt'); EE.sfx('fanfare'); }, 600); }
 }
 // KI: Kriegerhütte bauen, Krieger ausbilden, im Krieg angreifen
-function updateAIWar(p, mine, tc){
-  const d=G.dip[p.id], atWar = d && d.state==='enemy';
-  const barr = G.builds.find(b=>b.owner===p.id && b.kind==='barracks');
-  const workers = mine.filter(u=>u.kind==='worker').length;
-  if(!barr && workers>=8 && p.res.wood>=120 && p.res.stone>=40 && !G.builds.some(b=>b.owner===p.id && b.built<1)){
-    for(let t=0;t<25;t++){ const a=G.rand()*6.28, r=10+G.rand()*6; const x=tc.x+Math.cos(a)*r, z=tc.z+Math.sin(a)*r;
-      if(validPlace('barracks',x,z,p.id)){ p.res.wood-=120; p.res.stone-=40; const b=addBuilding('barracks',p.id,x,z,false); mine.filter(u=>u.kind==='worker').slice(0,3).forEach(w=>cmdBuild(w,b)); break; } }
-  }
-  if(barr && barr.built>=1 && barr.queue.length<2 && p.pop<p.popCap){
-    const army = mine.filter(isSoldier).length, want = atWar ? 6+Math.floor(G.t/240) : 3;
-    if(army<want){ const k=['club','spear','bow'][(G.rand()*3)|0], c=UNIT[k].cost; if(canPay(p,c)){ pay(p,c); barr.queue.push(k); } }
-  }
-  // Wachturm vor der Stadt bauen und mit 2 Kriegern besetzen
-  const tower = G.builds.find(b=>b.owner===p.id && b.kind==='tower');
-  if(!tower && barr && barr.built>=1 && G.t>420 && canPay(p,BUILD.tower.cost) && !G.builds.some(b=>b.owner===p.id && b.built<1)){
-    for(let t=0;t<25;t++){ const a=G.rand()*6.28, r=9+G.rand()*6, x=tc.x+Math.cos(a)*r, z=tc.z+Math.sin(a)*r;
-      if(validPlace('tower',x,z,p.id)){ pay(p,BUILD.tower.cost); const b=addBuilding('tower',p.id,x,z,false); mine.filter(u=>u.kind==='worker').slice(0,2).forEach(w=>cmdBuild(w,b)); break; } } }
-  if(tower && tower.built>=1 && crew(tower).length<2){ const s=mine.find(u=>isSoldier(u) && u.state==='idle' && !u.inside); if(s) cmdGarrison(s,tower); }
-  // Land erweitern: neues Stadtzentrum am Rand des Gebiets
-  p.expT = (p.expT ?? (300 + G.rand()*240)) - 1.5;
-  if(p.expT<=0 && workers>=10 && canPay(p, BUILD.tc.cost) && !G.builds.some(b=>b.owner===p.id && b.kind==='tc' && b.built<1)){
-    p.expT = 240 + G.rand()*200;
-    const cand=[]; for(const [id,ow] of G.reg.owner) if(ow===p.id) for(const n of regNeighbors(id)) if(regOwner(n.id)<0) cand.push(n);
-    for(let t=0;t<40 && cand.length;t++){ const n=cand[(G.rand()*cand.length)|0], a=G.rand()*6.28, r=G.rand()*REG_S*.3, x=n.x+Math.cos(a)*r, z=n.z+Math.sin(a)*r;
-      if(rawLand(x,z)<.7) continue;
-      if(validPlace('tc',x,z,p.id)){ pay(p, BUILD.tc.cost); const b=addBuilding('tc',p.id,x,z,false); mine.filter(u=>u.kind==='worker').slice(0,4).forEach(w=>cmdBuild(w,b)); break; } }
-  }
-  // Angriff: nur im Krieg und frühestens nach 8 Minuten
-  const soldiers = mine.filter(u=>isSoldier(u) && !u.inside && u.state!=='garrison');
-  p.waveT = (p.waveT ?? (480 + G.rand()*120)) - 1.5;
-  if(atWar && p.waveT<=0 && soldiers.length>=4){
-    p.waveT = 240 + G.rand()*120;
-    const targets = G.builds.filter(b=>b.owner===0 && b.kind!=='road');
-    if(targets.length){ const t = targets.sort((a,b)=>Math.hypot(a.x-tc.x,a.z-tc.z)-Math.hypot(b.x-tc.x,b.z-tc.z))[0];
-      soldiers.forEach(s=>cmdAttack(s,t)); EE.toast('Die '+p.civ[0]+' greifen an!'); EE.sfx('error',.8); EE.vib(60); }
-  }
-  // Verteidigung: Krieger greifen Feinde nahe der eigenen Stadt an
-  for(const s of soldiers){ if(s.state==='idle'){ const f=nearestFoe(s, 18); if(f && Math.hypot(f.x-tc.x,f.z-tc.z)<30) cmdAttack(s,f); } }
-}
-
 const swordSVG = () => '<svg viewBox="0 0 24 24"><path d="M5 4l10 10M19 4L9 14M7 13l-3 3 2 2 3-3M17 13l3 3-2 2-3-3" stroke="#e8b64a" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>';
 const towerSVG = () => '<svg viewBox="0 0 24 24"><path d="M7 22l2-12h6l2 12M9 14h6M8.4 18h7.2" stroke="#a86d36" stroke-width="1.8" fill="none"/><rect x="6" y="6" width="12" height="4" fill="#c9a46a" stroke="#5a3818"/><path d="M8 6V3M16 6V3" stroke="#5a3818" stroke-width="1.6"/></svg>';
 const roadSVG = () => '<svg viewBox="0 0 24 24"><path d="M8 22L11 2h2l3 20z" fill="#b08a58"/><path d="M12 4v3M12 10v3M12 16v3" stroke="#f3e2b8" stroke-width="1.4"/><circle cx="6" cy="18" r="1.3" fill="#9aa3ad"/><circle cx="18" cy="9" r="1" fill="#9aa3ad"/></svg>';
@@ -1090,11 +1050,13 @@ function rawH(x,z){
     const hl = fbm(x*.011+9, z*.011+9, H_SEED+31); h += land*hl*hl*2.4;
     // Gebirge: Grate, Gipfel und Täler (geriffeltes Rauschen) statt runder Buckel
     const mt = mountainAt(lon,lat);
-    if(mt>0){ const rg = ridged(x*.085, z*.085, H_SEED+21), rg2 = ridged(x*.21+3, z*.21+3, H_SEED+41);
+    if(mt>0){ const rg = ridged(x*.045, z*.045, H_SEED+21), rg2 = fbm(x*.11+3, z*.11+3, H_SEED+41);
       const m2 = Math.min(mt, 1.2) + Math.max(0, mt-1.2)*.55, mm = clamp(mt*1.5,0,1);
-      h += land*(m2*2.0 + mm*Math.pow(rg,1.5)*m2*16 + mm*rg2*m2*2.0); }
+      // breite Massive mit abgerundeten Graten (keine Nadelspitzen): Grat weich geglättet, dazu sanfte Hänge
+      const ridge = rg*rg*(3-2*rg);
+      h += land*(m2*2.4 + mm*ridge*m2*13 + mm*(rg2-.5)*m2*2.2); }
     // berühmte Gipfel an ihrem echten Ort (Höhe in Spiel-Metern, Radius in Grad)
-    for(const p of PEAKS){ const dl=(lon-p[0])*Math.cos(lat*Math.PI/180), dd=Math.hypot(dl, lat-p[1]); if(dd<p[3]*2.2){ const q=dd/p[3], f=Math.exp(-q*q*2.2); h = Math.max(h, WATER_Y + p[2]*f*(.82+.18*ridged(x*.12,z*.12,H_SEED+5)) ); } }
+    for(const p of PEAKS){ const dl=(lon-p[0])*Math.cos(lat*Math.PI/180), dd=Math.hypot(dl, lat-p[1]); if(dd<p[3]*2.2){ const q=dd/p[3], f=Math.exp(-q*q*2.2); h = Math.max(h, WATER_Y + p[2]*f*(.9+.1*fbm(x*.08,z*.08,H_SEED+5)) ); } }
     const ds = desertAt(lon,lat);
     if(ds>0) h += ds*land*Math.sin(x*.9+Math.sin(z*.35)*2)*.12;   // Dünen
   }
@@ -1142,7 +1104,7 @@ function ensureTile(ti,tj){
     const gi=gi0+ci, gj=gj0+cj, x=x0+ci+.5, z=z0+cj+.5, hh=tileH(t,x,z);
     const edge = gi<2||gj<2||gi>NX-3||gj>NZ-3;
     const steep = Math.abs(tileH(t,x+.5,z)-tileH(t,x-.5,z))+Math.abs(tileH(t,x,z+.5)-tileH(t,x,z-.5)) > 1.8;
-    const high = hh > WATER_Y+6.5;   // Hochgebirge: nicht begehbar, nur am Fuß des Bergs kann man laufen und bauen
+    const high = hh > WATER_Y+6.5 && !G.bases.some(b=>Math.abs(b.x-x)<40 && Math.abs(b.z-z)<40);   // Hochland um eine Startstadt bleibt begehbar   // Hochgebirge: nicht begehbar, nur am Fuß des Bergs kann man laufen und bauen
     if(hh<WATER_Y+.15 || edge || steep || high) G.grid[gj*NX+gi]=1;
   }
   return t;
@@ -1172,8 +1134,9 @@ function genChunk(ci,cj){
     const forest = fbm(x*.03,z*.03,H_SEED+40);
     const r = R();
     if(ds>.5){ if(r<.02) placeCluster('tree',x,z,3,1.5); else if(r<.05) placeCluster('stone',x,z,2,1); }
-    else if(bd>24 && forest>.6 && cold<.85 && r<.2 && getH(x,z)<WATER_Y+11) placeCluster('tree',x,z,G.gfx===0?3+(R()*4|0):5+(R()*6|0),(3+R()*3)*2.1);
-    else if(bd>18 && r<.008 && cold<.85 && getH(x,z)<WATER_Y+11) placeCluster('tree',x,z,1,3);
+    else if(bd>24 && forest>.6 && cold<.85 && r<.2 && getH(x,z)<WATER_Y+snowLineAt(x,z)-7) placeCluster('tree',x,z,G.gfx===0?3+(R()*4|0):5+(R()*6|0),(3+R()*3)*2.1);
+    else if(mt>.2 && cold<.85 && r<.16 && getH(x,z)>WATER_Y+3.5 && getH(x,z)<WATER_Y+snowLineAt(x,z)-7) placeCluster('tree',x,z,G.gfx===0?2+(R()*3|0):4+(R()*4|0),5);   // Bergwald
+    else if(bd>18 && r<.008 && cold<.85 && getH(x,z)<WATER_Y+snowLineAt(x,z)-7) placeCluster('tree',x,z,1,3);
     else if(r<.05) placeCluster('bush',x,z,3,1.6);
     else if(r<.075 && mt>.4) placeCluster('stone',x,z,3,1.5);
     else if(r<.085) placeCluster('gold',x,z,2,1.2);
@@ -1300,6 +1263,9 @@ function makeGroundTex(kind){
   const t=new T.CanvasTexture(cv); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; t.generateMipmaps=true; t.minFilter=T.LinearMipmapLinearFilter;
   return t;
 }
+// Höhenstufen wie in echten Gebirgen (z. B. Kilimandscharo): unten Grün, dann Bergwald bis zur Baumgrenze,
+// darüber Bergwiese und Fels, ganz oben Schnee. In den Tropen liegen Baum- und Schneegrenze viel höher.
+function snowLineAt(x,z){ const al=Math.abs(toLat(z)), t=clamp((al-15)/35,0,1); return 14 + 11*(1-t*t*(3-2*t)) + (vnoise(x*.08,z*.08,5)-.5)*3; }
 function groundW(x,z,h,out,o){
   const lon=toLon(x), lat=toLat(z);
   let sand=0;
@@ -1308,9 +1274,11 @@ function groundW(x,z,h,out,o){
   const ds = desertAt(lon,lat); sand = Math.max(sand, ds);
   for(const b of G.bases){ const d=Math.hypot(x-b.x,z-b.z); if(d<9) dirt=Math.max(dirt, clamp((9-d)/5,0,1)*.85); }
   if(h<WATER_Y+.45) sand = Math.max(sand, clamp((WATER_Y+.45-h)/.4,0,1));
-  const rock = clamp((h-(WATER_Y+3.6))/3,0,1)*.85;
+  const hh = h-WATER_Y, sl = snowLineAt(x,z), tl = sl-7;
+  const rock = clamp((hh-(tl+1))/(sl-tl-1),0,1)*.8 + clamp((hh-sl+2)/2,0,1)*.15;   // über der Baumgrenze Fels
+  if(hh>tl-1 && hh<sl) dirt = Math.max(dirt, clamp((hh-tl+1)/3,0,1)*.45);          // Bergwiese mit Erde
   const cold = coldAt(lat);
-  const sn = WATER_Y + 14 + (vnoise(x*.08,z*.08,5)-.5)*4;
+  const sn = WATER_Y + sl;
   // Sibirien und Nordkanada: Schneedecke mit grünen Flecken
   const sib = lon>45&&lat>52 ? clamp((lat-52)/5,0,1) : lon<-55&&lat>54 ? clamp((lat-54)/5,0,1) : 0;
   const snow = Math.max(clamp((h-sn)/1.2,0,1), cold>.55 ? clamp((cold-.55)*2.5,0,1) : 0, sib*clamp(.55+(vnoise(x*.05,z*.05,17)-.5)*1.6,0,1));
@@ -1321,7 +1289,8 @@ function groundW(x,z,h,out,o){
   const wd = dirt*rest; rest -= wd;
   out.wA[o*4]=rest; out.wA[o*4+1]=wd; out.wA[o*4+2]=wsa; out.wA[o*4+3]=wr; out.wB[o]=ws;
   const v = .9+hash2(x,z,9)*.2, tn = cold*.25;
-  out.tint[o*3]=v*(1-tn*.4); out.tint[o*3+1]=v; out.tint[o*3+2]=v*(1+tn*.3);
+  const forest = clamp((hh-3)/2,0,1)*(1-clamp((hh-tl+1)/2,0,1));   // Bergwald-Gürtel: dunkleres, satteres Grün
+  out.tint[o*3]=v*(1-tn*.4)*(1-forest*.3); out.tint[o*3+1]=v*(1-forest*.12); out.tint[o*3+2]=v*(1+tn*.3)*(1-forest*.3);
 }
 const TERRAIN_T = {value:0};
 function terrainMat(coarse){
@@ -2329,7 +2298,7 @@ function placeCluster(type, cx, cz, count, spread, minB){
   for(let i=0,tries=0;i<count && tries<count*6;tries++){
     const a=R()*6.28, r=Math.sqrt(R())*spread;
     const x=Math.round(cx+Math.cos(a)*r)+.5, z=Math.round(cz+Math.sin(a)*r)+.5;
-    if(!freeCell(x,z)) continue;
+    if(!freeCell(x,z) && !(type==='tree' && getH(x,z)>WATER_Y+3.5)) continue;   // Bergwald auch am unbegehbaren Hang
     if(G.bases.some(b=>Math.hypot(b.x-x,b.z-z)<(minB||6.5))) continue;
     if(getH(x,z)<WATER_Y+.3) continue;
     if(type==='tree' && treeTooClose(x,z)) continue;
@@ -2553,7 +2522,7 @@ function updateWorker(u,dt){
   if(u.dead) return;
   const p = G.players[u.owner];
   u.moving=false; u.working=false;
-  const gatherRate = (u.owner===0 && G.civ[0]==='Chinesen') ? 1.15 : 1;
+  const gatherRate = ((u.owner===0 && G.civ[0]==='Chinesen') ? 1.15 : 1) * (u.owner!==0 ? aiD().gather : 1);
   if(u.inside && u.inside.kind==='tower'){ updateTowerCrew(u,dt); u.ring.visible=false; return; }
   if(isSoldier(u)){ u.scanT=(u.scanT||0)-dt; if(u.scanT<=0){ u.scanT=.5; if(u.state==='idle'){ const f=nearestFoe(u, UNIT[u.kind].ranged?10:7); if(f) cmdAttack(u,f); } } }
   if(u.inside){ u.x=u.inside.x; u.z=u.inside.z; u.mesh.position.set(u.x,-100,u.z); u.ring.visible=false; if(u.inside.dead){ u.inside=null; } return; }
@@ -2777,17 +2746,106 @@ function updateBuilding(b,dt){
 }
 
 /* ---------- einfache Gegner-KI (Wirtschaft) ---------- */
+/* ============================================================
+   KI (Computer-Gegner): Wirtschaft verteilen, Lager an Rohstoffen, Häuser rechtzeitig, Land erweitern,
+   Armee in Wellen sammeln und angreifen, Stadt verteidigen, zurückziehen wenn die Welle verloren ist.
+   Schwierigkeit (Leicht/Mittel/Schwer) bestimmt Tempo, Armeegröße und Sammel-Bonus.
+   ============================================================ */
+const AI_DIFF = [ {gather:.9, army:.7, wave:1.35, first:600, workers:16}, {gather:1.1, army:1, wave:1, first:420, workers:22}, {gather:1.3, army:1.4, wave:.75, first:300, workers:30} ];
+const aiD = () => AI_DIFF[clamp(EE.S.diff|0,0,2)];
+function aiPlace(p, kind, cx, cz, r0, r1, workers, n){
+  if(!canPay(p,BUILD[kind].cost)) return null;
+  for(let t=0;t<30;t++){ const a=G.rand()*6.28, r=r0+G.rand()*(r1-r0), x=cx+Math.cos(a)*r, z=cz+Math.sin(a)*r;
+    if(validPlace(kind,x,z,p.id)){ pay(p,BUILD[kind].cost); const b=addBuilding(kind,p.id,x,z,false); workers.slice(0,n||2).forEach(w=>cmdBuild(w,b)); return b; } }
+  return null;
+}
 function updateAI(p,dt){
   p.aiT = (p.aiT||0) - dt; if(p.aiT>0) return; p.aiT = 1.5;
   const tc = p.tc; if(!tc) return;
-  const mine = G.units.filter(u=>u.owner===p.id);
+  const D=aiD(), mine = G.units.filter(u=>u.owner===p.id && !u.dead);
+  const workers = mine.filter(u=>u.kind==='worker' && !u.inside);
   updateAIWar(p, mine, tc);
-  const want = ['food','wood','food','wood','stone','gold','wood','food'];
-  mine.forEach((u,i)=>{ if(u.kind==='worker' && u.state==='idle'){ const r=nearestRes(want[i%want.length], u.x,u.z, 30, p.id); if(r) cmdGather(u,r); } });
-  if(mine.filter(u=>u.kind==='worker').length<10 && !tc.queue.length && p.res.food>=WORKER_COST.food && p.pop<p.popCap){ p.res.food-=WORKER_COST.food; tc.queue.push('worker'); }
-  if(p.pop>=p.popCap-1 && p.res.wood>=30 && !G.builds.some(b=>b.owner===p.id && b.built<1)){
-    for(let t=0;t<20;t++){ const a=G.rand()*6.28, r=6+G.rand()*4; const x=tc.x+Math.cos(a)*r, z=tc.z+Math.sin(a)*r;
-      if(validPlace('house',x,z,p.id)){ p.res.wood-=30; const b=addBuilding('house',p.id,x,z,false); const w=mine.find(u=>u.kind==='worker' && u.state!=='build'); if(w) cmdBuild(w,b); break; } }
+  // --- Wirtschaft: Bauern nach Bedarf verteilen (Nahrung/Holz zuerst, Stein und Gold für Kaserne, Turm, Stadtzentrum)
+  const count={food:0,wood:0,stone:0,gold:0}; for(const w of workers){ const k=w.state==='gather'||w.state==='hunt'||w.state==='drop' ? (w.lastType||'') : ''; if(k in count) count[k]++; }
+  const share={food:.4, wood:.35, stone:.13, gold:.12};
+  if(p.res.food>600) share.food=.25; if(p.res.wood>600) share.wood=.22; if(p.res.stone<120) share.stone+=.06; if(p.res.gold<80) share.gold+=.05; if(p.res.stone>350) share.stone=.04; if(p.res.gold>300) share.gold=.04; if(p.res.food<150) share.food+=.12;
+  const need = k => share[k]*workers.length - count[k];
+  const pickType = () => Object.keys(share).sort((a,b)=>need(b)-need(a))[0];
+  for(const w of workers){ if(w.state!=='idle') continue; let k=pickType(), r=nearestRes(k,w.x,w.z,45,p.id)||nearestRes(k,w.x,w.z,110,p.id); if(!r){ k='wood'; r=nearestRes('wood',w.x,w.z,80,p.id); } if(r){ cmdGather(w,r); count[k]++; } }
+  // alle 20 s einen Bauern vom Überschuss zum größten Mangel umsetzen
+  p.rebT=(p.rebT||0)-1.5; if(p.rebT<=0){ p.rebT=20; const ks=Object.keys(share).sort((a,b)=>need(b)-need(a)), lack=ks[0], over=ks[ks.length-1];
+    if(need(lack)>1.2 && need(over)<-1.2){ const w=workers.find(u=>u.lastType===over && u.carry.amt<1); const r=w&&nearestRes(lack,w.x,w.z,45,p.id); if(r) cmdGather(w,r); } }
+  // Bauern ausbilden bis zur Zielzahl (wächst mit dem Land)
+  const regions=[...G.reg.owner.values()].filter(o=>o===p.id).length, wantW=Math.min(D.workers+regions*4, 45);
+  for(const b of G.builds){ if(b.owner!==p.id || b.kind!=='tc' || b.built<1 || b.queue.length) continue;
+    if(workers.length<wantW && p.res.food>=WORKER_COST.food && p.pop<p.popCap){ p.res.food-=WORKER_COST.food; b.queue.push('worker'); } }
+  // Hütten rechtzeitig (2 Plätze Puffer)
+  const building = G.builds.filter(b=>b.owner===p.id && b.built<1);
+  if(p.pop>=p.popCap-2 && building.filter(b=>b.kind==='house').length<1){
+    for(const b of G.builds.filter(b=>b.owner===p.id && b.kind==='tc' && b.built>=1)){ if(aiPlace(p,'house',b.x,b.z,6,12,workers.filter(u=>u.state!=='build'),1)) break; } }
+  // Lager nah an weit entfernten Rohstoffen (Holz, Stein, Gold)
+  p.storeT=(p.storeT||60)-1.5;
+  if(p.storeT<=0 && !building.some(b=>b.kind==='store')){ p.storeT=50;
+    for(const k of ['wood','stone','gold']){ const w=workers.find(u=>u.lastType===k && u.target && u.target.alive); if(!w) continue;
+      const r=w.target, drop=G.builds.filter(b=>b.owner===p.id && b.built>=1 && BUILD[b.kind].drop).reduce((m,b)=>Math.min(m,Math.hypot(b.x-r.x,b.z-r.z)),1e9);
+      if(drop>18 && aiPlace(p,'store',r.x,r.z,4,8,[w],1)) break; } }
+}
+function updateAIWar(p, mine, tc){
+  const D=aiD(), d=G.dip[p.id], atWar = d && d.state==='enemy';
+  const barrs = G.builds.filter(b=>b.owner===p.id && b.kind==='barracks');
+  const workers = mine.filter(u=>u.kind==='worker' && !u.inside), free=workers.filter(u=>u.state!=='build');
+  const building = G.builds.some(b=>b.owner===p.id && b.built<1 && b.kind!=='house');
+  // Kasernen: erste ab 6 Bauern, zweite im mittleren Spiel, dritte auf Schwer
+  const wantB = 1 + (G.t>900?1:0) + ((EE.S.diff|0)===2 && G.t>1500?1:0);
+  if(barrs.length<wantB && workers.length>=6 && !building) aiPlace(p,'barracks',tc.x,tc.z,10,16,free,3);
+  // Armee: gemischt (Axt 40 %, Speer 30 %, Bogen 30 %), Größe wächst mit der Zeit
+  const soldiers = mine.filter(u=>isSoldier(u) && !u.inside && u.state!=='garrison');
+  const want = Math.round((atWar ? 5 + G.t/100 : 3 + G.t/300) * D.army);
+  for(const b of barrs){ if(b.built<1 || b.queue.length>=2 || p.pop>=p.popCap) continue;
+    if(soldiers.length + b.queue.length < want){ const r=G.rand(), k = r<.4?'club':r<.7?'spear':'bow', c=UNIT[k].cost; if(canPay(p,c)){ pay(p,c); b.queue.push(k); } } }
+  // Wachtürme vor der Stadt, mit Kriegern besetzt
+  const towers = G.builds.filter(b=>b.owner===p.id && b.kind==='tower');
+  if(towers.length < (G.t>360?1:0) + (G.t>1200?1:0) && barrs.some(b=>b.built>=1) && !building) aiPlace(p,'tower',tc.x,tc.z,9,15,free,2);
+  for(const tw of towers){ if(tw.built>=1 && typeof crew==='function' && crew(tw).length<2){ const s=soldiers.find(u=>u.state==='idle'); if(s && typeof cmdGarrison==='function') cmdGarrison(s,tw); } }
+  // Land erweitern: Stadtzentrum im freien Nachbargebiet
+  p.expT = (p.expT ?? (240 + G.rand()*180)/D.wave) - 1.5;
+  if(p.expT<=0 && workers.length>=10 && canPay(p, BUILD.tc.cost) && !G.builds.some(b=>b.owner===p.id && b.kind==='tc' && b.built<1)){
+    p.expT = (200 + G.rand()*160)*D.wave;
+    const cand=[]; for(const [id,ow] of G.reg.owner) if(ow===p.id) for(const n of regNeighbors(id)) if(regOwner(n.id)<0) cand.push(n);
+    for(let t=0;t<40 && cand.length;t++){ const n=cand[(G.rand()*cand.length)|0], a=G.rand()*6.28, r=G.rand()*REG_S*.3, x=n.x+Math.cos(a)*r, z=n.z+Math.sin(a)*r;
+      if(rawLand(x,z)<.7) continue;
+      if(validPlace('tc',x,z,p.id)){ pay(p, BUILD.tc.cost); const b=addBuilding('tc',p.id,x,z,false); free.slice(0,4).forEach(w=>cmdBuild(w,b)); break; } }
+  }
+  // Verteidigung: Feinde nahe irgendeinem eigenen Gebäude → alle Krieger in der Nähe hin; bei Übermacht helfen Bauern mit
+  const mineB = G.builds.filter(b=>b.owner===p.id && b.kind!=='road');
+  let threat=null, tn=0;
+  for(const e of G.units){ if(e.dead || !hostile(p.id,e.owner) || !isSoldier(e)) continue; const b=mineB.find(b=>Math.abs(b.x-e.x)<22 && Math.abs(b.z-e.z)<22); if(b){ tn++; if(!threat) threat=e; } }
+  if(threat){ for(const s of soldiers){ if(s.wave) continue; if(s.state!=='attack' || !alive(s.target)) cmdAttack(s, threat); }
+    if(tn > soldiers.length*1.5 && tn>=3) for(const w of workers.slice(0,Math.min(workers.length, tn))) if(w.state!=='attack') cmdAttack(w, threat); }
+  else for(const w of workers) if(w.state==='attack'){ w.state='idle'; }
+  // Angriffswellen (nur im Krieg): erst sammeln, dann gemeinsam losziehen; Rückzug wenn die Welle stark geschrumpft ist
+  p.waveT = (p.waveT ?? D.first + G.rand()*120) - 1.5;
+  if(!atWar) return;
+  const wave = soldiers.filter(s=>s.wave);
+  if(p.wave){
+    if(wave.length < Math.max(2, p.wave.n*.3)){ for(const s of wave){ s.wave=false; cmdMove(s, tc.x+(G.rand()-.5)*8, tc.z+(G.rand()-.5)*8); } p.wave=null; p.waveT=180*D.wave; return; }
+    if(p.wave.phase==='gather'){
+      const ready = wave.filter(s=>Math.hypot(s.x-p.wave.rx,s.z-p.wave.rz)<7).length;
+      if(ready>=wave.length*.8 || G.t-p.wave.t0>40){ p.wave.phase='go'; EE.toast('Die '+p.civ[0]+' greifen an!'); EE.sfx('error',.8); EE.vib(60); G.alarmT=6; }
+    }
+    if(p.wave.phase==='go') for(const s of wave){ if(s.state==='attack' && alive(s.target)) continue;
+      const f=nearestFoe(s, 16); if(f){ cmdAttack(s,f); continue; }
+      const tg=G.builds.filter(b=>b.owner===0 && b.kind!=='road' && !b.dead).sort((a,b)=>Math.hypot(a.x-s.x,a.z-s.z)-Math.hypot(b.x-s.x,b.z-s.z))[0];
+      if(tg) cmdAttack(s,tg); else { s.wave=false; } }
+    return;
+  }
+  if(p.waveT<=0 && soldiers.length>=Math.max(4, want*.8)){
+    const tgt = G.builds.filter(b=>b.owner===0 && b.kind!=='road').sort((a,b)=>Math.hypot(a.x-tc.x,a.z-tc.z)-Math.hypot(b.x-tc.x,b.z-tc.z))[0];
+    if(!tgt){ p.waveT=60; return; }
+    const keep = Math.ceil(soldiers.length*.25), go = soldiers.slice(keep);   // ein Viertel bleibt zur Verteidigung
+    const dx=tgt.x-tc.x, dz=tgt.z-tc.z, L=Math.hypot(dx,dz)||1, rx=tc.x+dx/L*14, rz=tc.z+dz/L*14;
+    for(const s of go){ s.wave=true; cmdMove(s, rx+(G.rand()-.5)*5, rz+(G.rand()-.5)*5); }
+    p.wave={n:go.length, phase:'gather', rx, rz, t0:G.t}; p.waveT = (240 + G.rand()*120)*D.wave;
   }
 }
 
@@ -2944,14 +3002,39 @@ function buildMinimapBase(){
       c = mix(c, tundra, sm(62,68,al));                // Tundra
       const ds=desertAt(lon,lat); c = mix(c, steppe, sm(.2,.45,ds)); c = mix(c, desert, sm(.45,.6,ds));
       const hh=h-WATER_Y; c = mix(c, [150,138,118], sm(3.5,6.5,hh)); c = mix(c, [118,112,104], sm(8,14,hh));   // Gebirge
-      const snowLine = 14 + 8*(1-sm(25,55,al));              // Schneegrenze: in den Tropen viel höher
-      c = mix(c, [240,244,248], Math.max(sm(snowLine,snowLine+.5,hh)*.85, sm(.62,.75,coldAt(lat))));   // Gipfelschnee nur auf hohen Bergen, Eis an den Polen
-      const sh=clamp((getH(px-st,pz)-getH(px+st,pz))*.6,-.25,.25); c=c.map(v=>v*(1+sh)); // leichte Hangschattierung
+      
+      const sh=clamp((getH(px-st,pz)-getH(px+st,pz))*.2,-.12,.12); c=c.map(v=>v*(1+sh)); // leichte Hangschattierung
+      c = mix(c, [238,243,248], sm(.6,.66,coldAt(lat)));   // Eis: Land der Polgebiete einfach weiß, ohne Schattierung
     }
     img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=255;
   }
   x.putImageData(img,0,0); G.miniBase=c;
   const cv=$('#mini'); cv.width=Math.min(640,W); cv.height=Math.round(cv.width*NZ/NX);
+}
+// Große Weltkarte: Gelände, alle Gebiete (eigene und fremde) in Teamfarbe, Städte mit Namen, Legende
+function openBigMap(){
+  EE.click(); let ov=$('#bigmap');
+  if(!ov){ ov=document.createElement('div'); ov.id='bigmap';
+    ov.innerHTML='<div class="bm-head"><b>Weltkarte</b><button class="bm-x" aria-label="Schließen">✕</button></div><canvas></canvas><div class="bm-leg"></div><small class="bm-tip">Tippe auf die Karte, um dorthin zu springen</small>';
+    document.body.appendChild(ov);
+    ov.querySelector('.bm-x').onclick=()=>{ EE.click(); ov.classList.add('hidden'); };
+    ov.querySelector('canvas').addEventListener('pointerup', e=>{ const c=e.currentTarget, r=c.getBoundingClientRect(); G.camS.x=(e.clientX-r.left)/r.width*G.NX-G.NX/2; G.camS.z=(e.clientY-r.top)/r.height*G.NZ-G.NZ/2; if(G.farView) G.camS.dist=Math.min(G.camS.dist,60); ov.classList.add('hidden'); });
+  }
+  ov.classList.remove('hidden');
+  const c=ov.querySelector('canvas'), W=Math.min(1600, G.miniBase.width*2.5), H=Math.round(W*G.NZ/G.NX); c.width=W; c.height=H;
+  const x=c.getContext('2d'), s=W/G.NX, px=v=>(v+G.NX/2)*s, pz=v=>(v+G.NZ/2)*s;
+  x.imageSmoothingEnabled=true; x.drawImage(G.miniBase,0,0,W,H);
+  if(G.reg) drawRegionsMini(x, px, pz);
+  x.font='bold '+Math.round(W/90)+'px system-ui'; x.textAlign='center';
+  for(const b of G.builds){ if(b.kind!=='tc' || b.built<1) continue; const col='#'+COLORS[b.owner].toString(16).padStart(6,'0');
+    x.fillStyle=col; x.strokeStyle='#000'; x.lineWidth=2; x.beginPath(); x.arc(px(b.x),pz(b.z),Math.max(4,W/260),0,7); x.fill(); x.stroke();
+    if(b===G.players[b.owner].tc){ x.lineWidth=3; x.strokeStyle='rgba(0,0,0,.75)'; x.strokeText(G.players[b.owner].civ[0], px(b.x), pz(b.z)-W/110); x.fillStyle='#fff'; x.fillText(G.players[b.owner].civ[0], px(b.x), pz(b.z)-W/110); } }
+  // Sichtbereich der Kamera
+  const pts=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([a,b2])=>groundAtNDC(a,b2)).filter(Boolean);
+  if(pts.length===4){ x.strokeStyle='#fff'; x.lineWidth=2; x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(px(p.x),pz(p.z)):x.moveTo(px(p.x),pz(p.z))); x.closePath(); x.stroke(); }
+  // Legende: jedes Volk mit Farbe und Zahl der Gebiete
+  const cnt={}; if(G.reg) for(const o of G.reg.owner.values()) cnt[o]=(cnt[o]||0)+1;
+  ov.querySelector('.bm-leg').innerHTML = G.players.map((p,i)=>`<span><i style="background:#${COLORS[i].toString(16).padStart(6,'0')}"></i>${p.civ[0]}${i===0?' (du)':''} · ${cnt[i]||0} ${(cnt[i]||0)===1?'Gebiet':'Gebiete'}</span>`).join('');
 }
 function drawMinimap(){
   const cv=$('#mini'); if(!cv) return; const x=cv.getContext('2d'), W=cv.width, H=cv.height, s=W/G.NX;
@@ -3030,8 +3113,9 @@ function initInput(){
   c.addEventListener('contextmenu', e=>e.preventDefault());
   const mini = $('#mini');
   const miniGo = e=>{ const r=mini.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width*G.NX-G.NX/2, z=(e.clientY-r.top)/r.height*G.NZ-G.NZ/2; G.camS.x=x; G.camS.z=z; };
-  mini.addEventListener('pointerdown', e=>{ e.preventDefault(); mini.setPointerCapture(e.pointerId); miniGo(e); mini.onpointermove=miniGo; });
-  mini.addEventListener('pointerup', ()=>{ mini.onpointermove=null; });
+  let md=null;
+  mini.addEventListener('pointerdown', e=>{ e.preventDefault(); mini.setPointerCapture(e.pointerId); md={x:e.clientX,y:e.clientY,drag:false}; mini.onpointermove=ev=>{ if(Math.hypot(ev.clientX-md.x,ev.clientY-md.y)>8) md.drag=true; if(md.drag) miniGo(ev); }; });
+  mini.addEventListener('pointerup', e=>{ mini.onpointermove=null; if(md && !md.drag) openBigMap(); md=null; });
 }
 function pDown(e){
   e.preventDefault(); $('#gc').setPointerCapture(e.pointerId);
@@ -3492,5 +3576,5 @@ function endPlace(){
   G.place=null; G.costH=null; $('#pCost').innerHTML=''; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
