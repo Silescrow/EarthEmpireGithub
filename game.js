@@ -1386,20 +1386,31 @@ function buildWater(){
         vec2 p = vW.xz;
         float depth = texture2D(tD, (p + uWorld*.5)/uWorld).r * 6.0;
         // Wellen: zwei Normalen-Ebenen, die gegeneinander ziehen, dazu große Dünung
-        vec3 n1 = nmap(p*.045 + vec2(uTime*.018, uTime*.011));
+        vec3 n1 = nmap(p*.045 + vec2(uTime*.045, uTime*.028));
         #ifdef LOWQ
         vec3 n2 = vec3(0.0), n3 = vec3(0.0);
         #else
-        vec3 n2 = nmap(p*.11 + vec2(-uTime*.025, uTime*.03));
-        vec3 n3 = nmap(p*.012 + vec2(uTime*.004, -uTime*.006));
+        vec3 n2 = nmap(p*.11 + vec2(-uTime*.06, uTime*.07));
+        vec3 n3 = nmap(p*.012 + vec2(uTime*.012, -uTime*.016));
         #endif
-        vec3 N = normalize(vec3((n1.x+n2.x*.7+n3.x*1.2)*.55, 1.0, (n1.y+n2.y*.7+n3.y*1.2)*.55));
+        // laufende Wellenzüge (sichtbare Bewegung): drei Richtungen, Steigung als Normale
+        vec2 d1=vec2(.83,.55), d2=vec2(-.42,.91), d3=vec2(.2,-.98);
+        float k1=.55, k2=.9, k3=.33;
+        vec2 sw = d1*cos(dot(p,d1)*k1 - uTime*1.6)*.32 + d2*cos(dot(p,d2)*k2 - uTime*2.1)*.2 + d3*cos(dot(p,d3)*k3 - uTime*1.2)*.26;
+        float calm = .35 + .65*smoothstep(.1, 1.2, depth);   // am Ufer flacher
+        vec3 N = normalize(vec3((n1.x+n2.x*.7+n3.x*1.2)*.55 + sw.x*calm, 1.0, (n1.y+n2.y*.7+n3.y*1.2)*.55 + sw.y*calm));
         vec3 V = normalize(cameraPosition - vW);
         float fres = .03 + .97*pow(1.0-max(dot(N,V),0.0), 5.0);
         vec3 Rf = reflect(-V, N);
         vec3 sky = mix(cSkyH, cSkyZ, clamp(Rf.y*1.6,0.0,1.0));
         float dk = smoothstep(.15, 1.35, depth);
-        vec3 body = mix(cShallow, cDeep, dk);
+        // Tropen (z. B. Malediven, Karibik): helles türkises Wasser, zum Rand der Tropen hin fließender Übergang
+        float lat = 76.0 - (p.y + uWorld.y*.5)/uWorld.y*132.0;
+        float trop = 1.0 - smoothstep(20.0, 30.0, abs(lat));
+        vec3 shallowC = mix(cShallow, vec3(.42,.93,.9), trop);
+        vec3 deepC = mix(cDeep, vec3(.05,.48,.72), trop*.85);
+        dk = mix(dk, smoothstep(.4, 2.2, depth), trop);       // in den Tropen bleibt es länger hell
+        vec3 body = mix(shallowC, deepC, dk);
         float sss = max(dot(N, uSun),0.0);
         vec3 col = body*(.55+.45*sss);
         col = mix(col, sky, clamp(fres*1.15,0.0,.85));
@@ -1408,6 +1419,9 @@ function buildWater(){
         // Schaum auf flachem Wasser
         float fn = texture2D(tN, p*.07 + vec2(uTime*.02,0.0)).z;
         float foam = (1.0-smoothstep(.03, .3, depth)) * smoothstep(.62, .9, fn + .25*sin(uTime*1.5 + p.x*.3 + p.y*.2));
+        // Brandung: Schaumstreifen laufen aufs Ufer zu und verlaufen
+        float surf = sin(depth*16.0 + uTime*2.0 + fn*3.0);
+        foam = max(foam, (1.0-smoothstep(.05, .7, depth)) * smoothstep(.75, .98, surf) * (.6+.4*fn));
         col = mix(col, vec3(1.0), foam*.4);
         float a = mix(.48, .95, smoothstep(.0, 1.2, depth));
         a = max(a, fres*.9);
