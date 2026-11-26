@@ -1423,8 +1423,9 @@ function buildWater(){
         float surf = sin(depth*16.0 + uTime*2.0 + fn*3.0);
         foam = max(foam, (1.0-smoothstep(.05, .7, depth)) * smoothstep(.75, .98, surf) * (.6+.4*fn));
         col = mix(col, vec3(1.0), foam*.4);
-        float a = mix(.48, .95, smoothstep(.0, 1.2, depth));
-        a = max(a, fres*.9);
+        // klares Wasser: am Rand sieht man den Boden, in den Tropen besonders weit hinaus
+        float a = mix(mix(.4, .12, trop), .95, smoothstep(.0, mix(1.2, 3.0, trop), depth));
+        a = max(a, fres*mix(.9, .6, trop));
         gl_FragColor = vec4(col, a);
         #include <colorspace_fragment>
         #include <fog_fragment>
