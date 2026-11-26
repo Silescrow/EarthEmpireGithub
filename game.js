@@ -22,6 +22,7 @@ function ridged(x,y,s){ let f=0,a=.55,fr=1,w=1; for(let i=0;i<5;i++){ let n=1-Ma
 function fbm(x,y,s){ let f=0,a=.5,fr=1; for(let i=0;i<4;i++){ f+=a*vnoise(x*fr,y*fr,s+i*13); fr*=2; a*=.5; } return f; }
 
 /* ---------- Daten ---------- */
+const BASE_COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61];
 const COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61];
 const COLNAMES = ['Blau','Rot','Gelb','Grün','Lila','Orange','Türkis','Pink','Braun','Weiß','Schwarz','Hellgrün','Dunkelblau','Weinrot','Ocker','Waldgrün','Violett','Koralle'];
 const RES = ['food','wood','stone','gold'];
@@ -72,6 +73,15 @@ async function start(sv){
         players:[], sel:[], selB:null, place:null, running:true, raf:0, msgT:0 };
   G.rand = rng(G.seed);
   [civ, ...others.slice(0,foes)].forEach((c,i)=>G.players.push({id:i, civ:c, res:{...START_RES}, pop:0, popCap:0, tc:null, color:COLORS[i]}));
+  // Teamfarbe = Hauptfarbe der eigenen Flagge (Osmanen rot …); ist sie einem anderen Volk zu ähnlich, eine gut unterscheidbare Ersatzfarbe
+  { const rgb=h=>[h>>16&255,h>>8&255,h&255], dist=(a,b)=>{ const A=rgb(a),B=rgb(b); return Math.hypot(A[0]-B[0],A[1]-B[1],A[2]-B[2]); }, used=[];
+    const okL = c=>{ const L=rgb(c).reduce((a,b)=>a+b,0)/765; return L>.1 && L<.85; };
+    G.players.forEach((p,i)=>{
+      const fl=[...String(p.civ[2]).matchAll(/fill="(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})"/g)].map(m=>new T.Color(m[1]).getHex()).filter(okL);
+      // zuerst die Hauptfarbe der Flagge, dann die anderen Flaggenfarben, erst zuletzt eine Ersatzfarbe
+      let c = fl.find(f=>!used.some(u=>dist(u,f)<70));
+      if(c==null) c = BASE_COLORS.filter(okL).filter(b=>!used.some(u=>dist(u,b)<70))[0] ?? BASE_COLORS[i];
+      used.push(c); COLORS[i]=c; p.color=c; flagCache[p.civ[0]]=c; }); }
   initDip();
   buildUI();
   initRenderer();
@@ -254,7 +264,7 @@ function drawPanel(){
   if(G.place){ el.innerHTML=''; el.className='hidden'; return; }
   if(G.selB){
     const b = G.selB, d = BUILD[b.kind];
-    let h = `<div class="info"><b>${d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):'Gegner ('+COLNAMES[b.owner]+')'}</small></div>`;
+    let h = `<div class="info"><b>${d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):G.players[b.owner].civ[0]}</small></div>`;
     if(b.owner===0 && homeCap(b)) h += `<div class="info"><small>${residentsTxt(b)}</small></div>`;
     if(b.owner===0 && b.built>=1 && d.drop){ const R=b.recv||{}, keys=d.drop.filter(k=>k in RES_DE);
       const chip=(o)=>keys.map(k=>`<span class="c">${ICON[k]||''}${Math.floor(o[k]||0)}</span>`).join('');
