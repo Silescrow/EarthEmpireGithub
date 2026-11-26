@@ -229,13 +229,29 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 /* Diplomatie */
 #dip{position:absolute;inset:0;display:grid;place-items:center;background:#060a1aa8;z-index:4}
 #dip.hidden{display:none}
-#dip .dcard{width:min(94vw,640px);max-height:92vh;overflow:auto;border:2px solid var(--gold);border-radius:14px;background:linear-gradient(180deg,#141d44f4,#0a1030f4);padding:10px 12px;color:var(--ink)}
+#dip .dcard{width:min(94vw,640px);max-height:96vh;overflow:hidden;border:2px solid var(--gold);border-radius:14px;background:linear-gradient(180deg,#141d44f4,#0a1030f4);padding:10px 12px;color:var(--ink)}
 #dip .dhead{display:flex;gap:6px;align-items:center;margin-bottom:8px}
 #dip .dtab{padding:7px 12px;border-radius:9px;border:1.5px solid #e8b64a88;background:#0b1130;color:var(--gold2);font:700 14px "Cinzel",Georgia,serif;cursor:pointer}
 #dip .dtab.on{background:var(--gold);color:#2b1a02}
 #dip .dx{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1.5px solid var(--gold);background:#4a1420;color:#fff;font:800 16px sans-serif;cursor:pointer}
 #dip .dnote{margin:0 0 6px;font-size:12.5px;color:#ffe9b0}
 #dip .drows{display:flex;flex-direction:column;gap:5px}
+#dip .drows.two{display:grid;grid-template-columns:1fr 1fr;gap:3px 6px}
+#dip .drows.two .drow{padding:2px 6px;gap:6px}
+#dip .drows.two .drow>i{height:22px;width:8px}
+#dip .drows.two .dn b{font-size:12px}
+#dip .drows.two .dn small{display:none}
+#dip .drows.two .dst button{padding:4px 6px;font-size:11px}
+#dip .dcard:has(.drows.two){width:min(96vw,860px)}
+#dip .dn em.hard{font-style:normal;color:#ff7a7a;font-size:.9em}
+#dip .dbribe{display:flex;align-items:center;gap:8px;margin:0 0 7px;padding:7px 9px;border-radius:10px;background:linear-gradient(90deg,#3a2a08,#1a1430);border:1.5px solid var(--gold);font-size:13.5px;color:#ffe9b0;animation:bribeIn .3s ease}
+#dip .dbribe>i{width:8px;height:26px;border-radius:3px;flex:none}
+#dip .dbribe span{flex:1}
+#dip .dbribe b{color:var(--gold2)}
+#dip .dbribe b.ok{color:#7dff9a} #dip .dbribe b.miss{color:#ff7a7a}
+#dip .dbribe b svg{width:15px;height:15px;vertical-align:-2px}
+#dip .dbribe .btn{width:auto;margin:0}
+@keyframes bribeIn{from{transform:scale(.96);opacity:0}to{transform:none;opacity:1}}
 #dip .drow{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:9px;background:#ffffff0d}
 #dip .drow>i,#dip .dciv i,#offer i{width:12px;height:30px;border-radius:3px;flex:none;display:inline-block}
 #dip .dn{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -297,7 +313,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.67</div>
+    <div class="ver2">Version 1.68</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -318,7 +334,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="corner2">
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V1.67</div>
+  <div class="ver">Siles Empire · V1.68</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -347,7 +363,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.67"></script>
+<script src="audio.js?v=1.68"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -519,7 +535,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={VER:'1.67',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={VER:'1.68',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -544,10 +560,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.67"></script>
-<script src="game.js?v=1.67"></script>
-<script src="silescrow.js?v=1.67"></script>
-<script src="online.js?v=1.67"></script>
+<script src="three.min.js?v=1.68"></script>
+<script src="game.js?v=1.68"></script>
+<script src="silescrow.js?v=1.68"></script>
+<script src="online.js?v=1.68"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,
