@@ -381,7 +381,7 @@ function renderThumb(obj, portrait){
   if(obj.rig) poseRig(obj,'idle',0);
   sc.add(obj); obj.updateMatrixWorld(true);
   const box=new T.Box3().setFromObject(obj), c=box.getCenter(new T.Vector3()), sz=box.getSize(new T.Vector3());
-  let rad; if(portrait){ c.y=box.max.y-sz.y*.24; rad=sz.y*.3; } else if(obj.rig){ const H=1.55; c.set(0,H*.52,0); rad=H*.62; } else rad=Math.max(sz.x,sz.y,sz.z)*.6;
+  let rad; if(portrait){ c.y=box.max.y-sz.y*.24; rad=sz.y*.3; } else if(obj.rig){ const H=1.55*HUMAN; c.set(0,H*.52,0); rad=H*.62; } else rad=Math.max(sz.x,sz.y,sz.z)*.6;
   const cam=new T.PerspectiveCamera(30,1,.02,500);
   cam.position.set(c.x+rad*1.1, c.y+rad*(portrait||obj.rig?.35:1.05), c.z+rad*2.4); cam.lookAt(c);
   const old=r.getRenderTarget(), oc=r.getClearColor(new T.Color()), oa=r.getClearAlpha(), sh=r.shadowMap.enabled;
@@ -579,7 +579,7 @@ function setBowSlot(g, inHand){
 }
 function makeSoldier(kind, color){
   const key = MODELS.warrior ? 'warrior' : (Math.random()<.5?'cavem':'cavef');
-  const g = makeRigged(key, 1.5, color); if(!g) return makeWorker(color);
+  const g = makeRigged(key, 1.5*HUMAN, color); if(!g) return makeWorker(color);
   g.rig.hips.userData.y0 = g.rig.hips.position.y; g.userData.key=key;
   attachWeapon(g, kind);
   return g;
@@ -596,7 +596,7 @@ function updateBar(u){
   if(!u.bar){ u.bar=makeBar(); G.scene.add(u.bar); }
   const f=clamp(u.hp/u.maxHp,0,1), show=!G.farView && (u.ring.visible || f<.999);
   u.bar.visible=show; if(!show) return;
-  u.bar.position.set(u.x, u.mesh.position.y+2.05, u.z); u.bar.quaternion.copy(G.cam.quaternion); u.bar.fg.scale.x=.86*f;
+  u.bar.position.set(u.x, u.mesh.position.y+2.05*HUMAN+.1, u.z); u.bar.quaternion.copy(G.cam.quaternion); u.bar.fg.scale.x=.86*f;
   u.bar.fg.material.color.setHex(f>.5?0x5fe36a:f>.25?0xf2c230:0xe23b3b);
 }
 const alive = t => t && t.hp>0 && !t.dead;
@@ -1098,9 +1098,9 @@ function followCam(){
   const m=u.mesh, f=m ? m.rotation.y : (u.face||0);
   const fx=Math.sin(f), fz=Math.cos(f), rx=Math.cos(f), rz=-Math.sin(f);
   const gy=getH(u.x,u.z);
-  const tx=u.x-fx*3.1-rx*.6, tz=u.z-fz*3.1-rz*.6;
-  const ty=Math.max(getH(tx,tz)+.6, gy+1.95, WATER_Y+.5);
-  const lx=u.x+fx*5, lz=u.z+fz*5, ly=gy+1.25;
+  const tx=u.x-fx*2.6-rx*.5, tz=u.z-fz*2.6-rz*.5;
+  const ty=Math.max(getH(tx,tz)+.6, gy+1.65, WATER_Y+.5);
+  const lx=u.x+fx*5, lz=u.z+fz*5, ly=gy+1.05;
   if(!G.fcam) G.fcam={x:tx,y:ty,z:tz,lx,ly,lz};
   const c=G.fcam, k=Math.min(1,(G.dtW||.016)*5);
   c.x+=(tx-c.x)*k; c.y+=(ty-c.y)*k; c.z+=(tz-c.z)*k; c.lx+=(lx-c.lx)*k; c.ly+=(ly-c.ly)*k; c.lz+=(lz-c.lz)*k;
@@ -1793,7 +1793,7 @@ function makeWorker(color){
   geos();
   const sx = G && G.nextSex; if(G) G.nextSex=null;
   const key = sx==='f' ? 'cavef' : sx==='m' ? 'cavem' : Math.random()<.5 ? 'cavem' : 'cavef';
-  if(MODELS[key]){ const g = makeRigged(key, 1.45, color); if(g){ g.rig.hips.userData.y0 = g.rig.hips.position.y; g.userData.key=key; return g; } }
+  if(MODELS[key]){ const g = makeRigged(key, 1.45*HUMAN, color); if(g){ g.rig.hips.userData.y0 = g.rig.hips.position.y; g.userData.key=key; return g; } }
   const g = new T.Group();
   const skin = mat(0xe0b088), fur = mat(0x7d4f2a), hair = mat(0x3a2414), team = mat(color);
   const body = mesh(GEO.body, fur, 0,.72,0); g.add(body);
@@ -1871,6 +1871,7 @@ function buildRig(key){
   return RIGS[key] = {geo:g2, mat:m.mat, J, BONES, H, restZ};
 }
 let HEADBAND_Y = .042, PALM = .5;
+const HUMAN = .8;   // Menschen kleiner, damit Türen und Hütten zur Körpergröße passen (V1.72)
 function makeRigged(key, height, color){
   const r = RIGS[key] || buildRig(key); if(!r) return null;
   const bones = r.BONES.map(([name,par,j])=>{ const b=new T.Bone(); b.name=name; return b; });
@@ -2053,7 +2054,7 @@ function makeHouse(color, owner){
   geos();
   const g = new T.Group();
   const hk = variant(((owner|0)*3+G.builds.length)%97, ['house','tent']);
-  if(hk){ g.add(modelMesh(hk, hk==='tent'?3.1:3.3)); return g; }   // Hütten ohne Fahne
+  if(hk){ g.add(modelMesh(hk, hk==='tent'?3.3:3.6)); return g; }   // Hütten ohne Fahne
   const tent = mesh(new T.ConeGeometry(1.05,1.9,7), mat(0xb98b56), 0,.95,0); g.add(tent);
   const hide = mesh(new T.ConeGeometry(.75,1.1,7,1,true,0,2.2), mat(0x8a5a2e,{side:T.DoubleSide}), 0,.7,0); hide.rotation.y=1; g.add(hide);
   for(let i=0;i<4;i++){ const a=i*1.57+.4; const p=mesh(GEO.box, mat(0x5a3818), Math.cos(a)*.18,2,Math.sin(a)*.18); p.scale.set(.05,.6,.05); p.rotation.set(Math.sin(a)*.4,0,-Math.cos(a)*.4); g.add(p); }
@@ -2064,7 +2065,7 @@ function makeStore(color, owner){
   geos();
   const g = new T.Group();
   const sk = variant(((owner|0)*5+G.builds.length)%97, ['store','store2','store3']);
-  if(sk){ const m=modelMesh(sk, 3.7); g.add(m); return g; }
+  if(sk){ const m=modelMesh(sk, 4.3); g.add(m); return g; }
   const base = mesh(GEO.box, mat(0x7a4d28), 0,.15,0); base.scale.set(2.6,.3,2.4); g.add(base);
   for(let i=0;i<4;i++){ const l=mesh(new T.CylinderGeometry(.16,.16,1.6,6), mat(0x9a6232), -.4,.48+i*.0,-.7+i*.34); l.rotation.z=Math.PI/2; g.add(l); }
   for(let i=0;i<3;i++){ const l=mesh(new T.CylinderGeometry(.16,.16,1.6,6), mat(0x8a5428), -.4,.78,-.53+i*.34); l.rotation.z=Math.PI/2; g.add(l); }
