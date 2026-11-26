@@ -229,7 +229,6 @@ function buildUI(){
   </div>
   <canvas id="mini" width="150" height="150"></canvas>
   <div id="kinds"></div>
-  <button class="hb" id="bIdle" aria-label="Untätige Bauern"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="#f0d3a8"/><path d="M4 21q1-8 8-8t8 8z" fill="#8a5a2b"/><text x="18" y="9" font-size="9" fill="#ffd24a" font-weight="700">z</text></svg><i id="idleN">0</i></button>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
   <div id="panel"></div>
   <div id="placebar" class="hidden"><span id="pCost"></span><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">+ Tore</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
@@ -251,7 +250,6 @@ function buildUI(){
   $('#pSet').onclick = () => { EE.click(); const d=document.getElementById('dSet'); d.style.zIndex=20; d.style.position='fixed'; document.body.appendChild(d); d.classList.remove('hidden');
     const done = () => { if(!d.classList.contains('hidden')) return; mo.disconnect(); if(G && (EE.S.gfx|0)!==G.gfx) applyGfx(EE.S.gfx|0); };
     const mo = new MutationObserver(done); mo.observe(d,{attributes:true, attributeFilter:['class']}); };
-  $('#bIdle').onclick = () => { EE.click(); selectIdle(); };
   $('#kinds').onclick = e => { const b=e.target.closest('[data-k]'); if(b) selectKind(b.dataset.k); };
   $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); select([],tc); } };
   $('#pOk').onclick = confirmPlace;
@@ -268,7 +266,7 @@ function updateHUD(){
   $('#r-pop b').textContent = p.pop+'/'+p.popCap;
   $('#r-pop').classList.toggle('full', p.pop>=p.popCap);
   const idle = G.units.filter(u=>u.owner===0 && u.state==='idle' && u.kind!=='kid' && !u.inside).length;
-  $('#idleN').textContent = idle; $('#bIdle').classList.toggle('dim', idle===0);
+  // Knopf für untätige Bauern entfernt (V1.61)
   updateKinds();
 }
 // Sorten-Leiste oben links: je Einheiten-Sorte ein Knopf mit Anzahl – antippen wählt alle dieser Sorte aus

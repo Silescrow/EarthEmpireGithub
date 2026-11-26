@@ -138,8 +138,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 #kinds .kb{display:flex;align-items:center;gap:3px;height:34px;padding:0 8px 0 3px;border-radius:10px;border:2px solid var(--gold);background:#0b1130d8;color:#fff;font:700 13px system-ui,sans-serif;cursor:pointer}
 #kinds .kb svg{width:26px;height:26px}
 #kinds .kb.all{border-color:#e85a4a}
-#bIdle{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:calc(10px + clamp(150px,24vw,210px)*0.37 + 10px)}
-#bHome{position:absolute;left:calc(max(10px,env(safe-area-inset-left)) + 54px);bottom:calc(10px + clamp(150px,24vw,210px)*0.37 + 10px)}
+#bHome{position:absolute;left:calc(max(10px,env(safe-area-inset-left)) + clamp(150px,24vw,210px) + 8px);bottom:10px}   /* neben der Minikarte, nichts überlappt */
 #panel{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:10px;display:flex;align-items:stretch;gap:6px;
   padding:6px;border-radius:12px;background:#0b1130e6;border:2px solid #e8b64a90;max-width:calc(100vw - clamp(150px,24vw,210px) - 40px);flex-wrap:wrap;justify-content:flex-end}
 #panel.hidden{display:none}
@@ -293,7 +292,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.60</div>
+    <div class="ver2">Version 1.61</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -312,7 +311,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V1.60</div>
+  <div class="ver">Siles Empire · V1.61</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -341,7 +340,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.60"></script>
+<script src="audio.js?v=1.61"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -513,7 +512,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={VER:'1.60',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={VER:'1.61',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -538,10 +537,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.60"></script>
-<script src="game.js?v=1.60"></script>
-<script src="silescrow.js?v=1.60"></script>
-<script src="online.js?v=1.60"></script>
+<script src="three.min.js?v=1.61"></script>
+<script src="game.js?v=1.61"></script>
+<script src="silescrow.js?v=1.61"></script>
+<script src="online.js?v=1.61"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,
