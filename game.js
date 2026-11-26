@@ -157,7 +157,8 @@ function applySave(sv){
   let maxW = 0; const made=[];
   for(const s of sv.builds){
     let b;
-    if(s.seg){ b = addWall(s.o, s.seg, s.seg.ang, s.w, s.k==='road'); maxW=Math.max(maxW,s.w|0); if(s.b>=1) finishBuilding(b); else b.built=s.b; }
+    if(s.seg && s.k==='tower'){ b = addWallTower(s.o, s.seg, s.w, s.b>=1); maxW=Math.max(maxW,s.w|0); if(s.b<1) b.built=s.b; }
+    else if(s.seg){ b = addWall(s.o, s.seg, s.seg.ang, s.w, s.k==='road'); maxW=Math.max(maxW,s.w|0); if(s.b>=1) finishBuilding(b); else b.built=s.b; }
     else { b = addBuilding(s.k, s.o, s.x, s.z, s.b>=1); if(s.b<1){ b.built=s.b; b.mesh.scale.y=.25+.75*s.b; } if(b.kind==='tc' && b.built>=1){ claimRegion(b); const p=G.players[b.owner]; if(!p.tc) p.tc=b; } }
     made.push(b); b.hp = s.hp; b.slow = !!s.s; if(s.r) b.recv=s.r; if(s.q) b.queue = s.q.slice();
   }
@@ -321,6 +322,7 @@ function drawPanel(){
       h += `<button class="ab lock" data-a="age"><span class="ai"><svg viewBox="0 0 24 24"><path d="M12 3l8 9h-5v9H9v-9H4z" fill="#e8b64a"/></svg></span>Bronzezeit<span class="ac">${costText({food:500,wood:300})}</span></button>`;
       if(q) h += `<div class="bar"><div style="width:${(b.qT/WORKER_TIME*100)|0}%"></div></div>`;
     }
+    if(b.owner===0 && b.built>=1 && b.kind==='wall' && b.seg){ const pl=wallTowerPlan(b); h += `<button class="ab${pl.length?'':' lock'}" data-a="wtowers"><span class="ai">${towerSVG()}</span>Türme einbauen<span class="ac">${pl.length?pl.length+' × '+costText(WT_COST):'schon fertig'}</span></button>`; }
     if(b.owner===0 && b.built>=1 && b.kind==='wall' && b.seg) h += `<button class="ab" data-a="togate"><span class="ai"><svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13h-5v-7H9v7z" fill="#a8743e"/></svg></span>Zu Tor machen<span class="ac">${costText(BUILD.gate.cost)}</span></button>`;
     if(b.owner===0 && b.built>=1 && b.kind==='tower'){ const c=crew(b).length;
       h += `<div class="info"><small>Besatzung ${c}/${TOWER_MAX} · Krieger oben sind geschützt und schießen weiter</small></div>`;
@@ -851,6 +853,7 @@ const hutSVG = () => '<svg viewBox="0 0 24 24"><path d="M12 3L3 18h18z" fill="#c
 const storeSVG = () => '<svg viewBox="0 0 24 24"><rect x="3" y="15" width="18" height="4" fill="#8a5a2b"/><rect x="4" y="10" width="7" height="5" rx="2" fill="#a86d36"/><rect x="12" y="11" width="8" height="4" rx="2" fill="#a86d36"/><path d="M8 10l2-4 3 3z" fill="#9aa3ad"/></svg>';
 
 function action(a){
+  if(a==='wtowers'){ buildWallTowers(G.selB); return; }
   if(a==='follow'){ startFollow(G.sel[0]); return; }
   const p = G.players[0];
   EE.click();
@@ -875,8 +878,12 @@ function action(a){
     s.forEach(u=>cmdGarrison(u,b)); EE.toast(s.length+' Krieger '+(s.length>1?'gehen':'geht')+' in den Wachturm');
   } else if(a==='crewout'){ crewOut(G.selB); drawPanel();
   } else if(a==='togate'){ const w=G.selB; if(!canPay(p,BUILD.gate.cost)){ EE.sfx('error'); EE.toast('Tor: '+missingTxt(p,BUILD.gate.cost)); return; }
-    pay(p,BUILD.gate.cost); w.quietRemove=true; destroyBuilding(w); G.scene.remove(w.ring);
-    const g=addWall(0, {...w.seg, gate:true}, w.seg.ang, w.wallId, false);
+    // Breites Tor: das angetippte Stück und seine Nachbarn werden zu EINEM Tor (Steinzeit ca. 5 m, später breiter für Panzer)
+    const parts=gateParts(w);
+    pay(p,BUILD.gate.cost);
+    const ks=[], a0=w.seg.ang||0; let sx=0, sz=0, len=0;
+    for(const q of parts){ q.seg.ks.forEach(k=>ks.push(k)); sx+=q.x; sz+=q.z; len+=q.seg.len||1; q.quietRemove=true; destroyBuilding(q); G.scene.remove(q.ring); }
+    const g=addWall(0, {ks:[...new Set(ks)], x:sx/parts.length, z:sz/parts.length, len, gate:true}, a0, w.wallId, false);
     G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.inside && !u.dead).sort((a,b)=>Math.hypot(a.x-g.x,a.z-g.z)-Math.hypot(b.x-g.x,b.z-g.z)).slice(0,2).forEach(u=>cmdBuild(u,g));
     G.selB=null; EE.toast('Tor wird gebaut'); EE.sfx('place');
   } else if(a==='b-tc'){ if(!canPay(p,BUILD.tc.cost)){ EE.sfx('error'); EE.toast('Stadtzentrum: '+missingTxt(p,BUILD.tc.cost)); return; } startPlace('tc');
@@ -2729,6 +2736,10 @@ function followPath(u,dt){
   const [tx,tz] = u.path[u.pi];
   const dx=tx-u.x, dz=tz-u.z, d=Math.hypot(dx,dz);
   const ck = cellIdx(u.x,u.z), step = u.speed*dt*(ck>=0 && G.road[ck] ? 1.5 : 1);
+  // Tore: eigene und Verbündete gehen durch, Feinde bleiben vor dem geschlossenen Tor stehen (und greifen es an)
+  if(G.gateAt){ const nk=cellIdx(u.x+dx/d*Math.max(step,.35), u.z+dz/d*Math.max(step,.35)), gt=nk>=0 && nk!==ck ? G.gateAt[nk] : null;
+    if(gt && alive(gt) && gt.built>=1 && hostile(gt.owner,u.owner)){ u.path=null; u.moving=false;
+      if(isSoldier(u) && u.owner!==0){ cmdAttack(u,gt); } return true; } }
   if(d<=step+.05){ u.x=tx; u.z=tz; u.pi++; return u.pi>=u.path.length; }
   u.x += dx/d*step; u.z += dz/d*step; u.face = Math.atan2(dx,dz); u.moving=true;
   return false;
@@ -2907,7 +2918,7 @@ function updateBBar(b){
     const bg=new T.Sprite(new T.SpriteMaterial({color:0x111111, depthTest:false, transparent:true, opacity:.85})); bg.scale.set(W+.08,.16,1);
     const fg=new T.Sprite(new T.SpriteMaterial({color:0x4fb3ff, depthTest:false})); fg.center.set(0,.5); fg.scale.set(W,.1,1); fg.position.x=-W/2;
     bg.renderOrder=8; fg.renderOrder=9; g.add(bg); g.add(fg); g.fg=fg; b.bar=g; G.scene.add(g); }
-  b.bar.visible=true; b.bar.position.set(b.x, b.mesh.position.y + (b.kind==='tc'?5.2:small?2.3:b.size*.9+1), b.z);
+  b.bar.visible=true; b.bar.position.set(b.x, b.mesh.position.y + (b.kind==='tc'?5.2:small?2.3:b.wallT?3.9:b.size*.9+1), b.z);
   b.bar.quaternion.copy(G.cam.quaternion);
   b.bar.fg.scale.x=Math.max(.001,W*clamp(f,0,1)); b.bar.fg.material.color.setHex(col);
   if(G.selB===b){ const el=document.querySelector('#panel .bar div'); if(el) el.style.width=(clamp(f,0,1)*100).toFixed(1)+'%'; }
@@ -2945,6 +2956,11 @@ function updateBuilding(b,dt){
   // Rohstoffe: im Stadtzentrum unsichtbar, im Lager wachsen die Vorräte sichtbar IM Gebäude (V1.59)
   if(b.kind==='store'){ b.pileT=(b.pileT||0)-dt; if(b.pileT<=0){ b.pileT=1; updatePiles(b); } }
   if(b.owner===0) updateBBar(b);
+  if(b.kind==='tower' && b.built>=1) towerAutoFire(b,dt);
+  if(b.kind==='gate' && b.built>=1 && b.mesh.doors){ b.gT=(b.gT||0)-dt;
+    if(b.gT<=0){ b.gT=.25; b.want = G.units.some(u=>!u.dead && !u.inside && !hostile(b.owner,u.owner) && Math.abs(u.x-b.x)<3.2 && Math.abs(u.z-b.z)<3.2) ? 1 : 0; }
+    const m=b.mesh, o=m.open + Math.sign((b.want||0)-m.open)*Math.min(Math.abs((b.want||0)-m.open), dt*1.6);
+    if(o!==m.open){ m.open=o; const e=o*o*(3-2*o); m.doors[0].rotation.y=-e*1.75; m.doors[1].rotation.y=e*1.75; } }
   if(b.kind==='tc' && b.mesh.fireFx && !G.farView) animateFire(b.mesh.fireFx, G.t+b.x, dt);
 
   if(b.built<1 || !b.queue.length) return;
@@ -3585,9 +3601,16 @@ function makeWallPiece(color, gate, len){
   geos();
   const g = new T.Group();
   if(gate){
-    for(const x of [-.5*len,.5*len]){ const p=mesh(GEO.box, mat(0x5a3818), x, 1.1, 0); p.scale.set(.24,2.2,.24); g.add(p); }
-    const top=mesh(GEO.box, mat(0x6a4422), 0, 2.15, 0); top.scale.set(len*1.3,.2,.28); g.add(top);
-    const fl=mesh(GEO.box, mat(color), 0, 1.85, .16); fl.scale.set(.45,.28,.03); g.add(fl);
+    for(const x of [-.5*len,.5*len]){ const p=mesh(GEO.box, mat(0x5a3818), x, 1.2, 0); p.scale.set(.3,2.4,.3); g.add(p); }
+    const top=mesh(GEO.box, mat(0x6a4422), 0, 2.25, 0); top.scale.set(len+.4,.22,.3); g.add(top);
+    // Zwei Torflügel aus Holzbohlen, an den Pfosten eingehängt – öffnen sich wie bei einer Burg (V1.74)
+    g.doors=[];
+    for(const sd of [-1,1]){ const piv=new T.Group(); piv.position.set(sd*.5*len,0,0); g.add(piv);
+      const w=len*.5-.1, wood=mat(0x6b4524), dark=mat(0x3e2612);
+      for(let i=0;i<3;i++){ const pl=mesh(GEO.box, wood, -sd*(.06+(i+.5)*w/3), .95, 0); pl.scale.set(w/3-.02,1.8,.09); piv.add(pl); }
+      for(const y of [.45,1.5]){ const q=mesh(GEO.box, dark, -sd*(.06+w/2), y, .06); q.scale.set(w,.12,.04); piv.add(q); }
+      g.doors.push(piv); }
+    g.open=0;
     return g;
   }
   if(MODELS.palisade){ const m=modelMesh('palisade', len*1.08); const bb=MODELS.palisade.geo.boundingBox; m.scale.y = 1.95/(bb.max.y-bb.min.y); m.scale.z*=1.6; g.add(m); }
@@ -3701,17 +3724,86 @@ function confirmWall(){
   EE.sfx('place'); EE.vib(20);
   endPlace(); updateHUD(); select(ws,null);
 }
+/* ===== Mauertürme (wie Empire Earth II): in die Palisade/Mauer eingebaut, ca. alle 10 m, Ecken und Enden immer.
+   Sie schießen selbst (Steinzeit: Pfeile, später andere Munition). Krieger darauf kämpfen von oben mit. ===== */
+const WT_COST = BUILD.tower.cost, WT_GAP = 10;   // kostet so viel wie ein einzelner Wachturm
+const GATE_W = 4.6;   // Torbreite (Steinzeit); spätere Epochen breiter, damit mehrere Panzer durchpassen
+function gateParts(w){
+  const a=w.seg.ang||0, ux=Math.cos(a), uz=Math.sin(a), pr=o=>(o.x-w.x)*ux+(o.z-w.z)*uz;
+  const L=wallLine(w).sort((p,q)=>pr(p)-pr(q)); let i=L.indexOf(w), lo=i, hi=i, len=w.seg.len||1;
+  while(len<GATE_W-.3){ const l=L[lo-1], h=L[hi+1];
+    const okL=l&&l.kind==='wall'&&Math.abs(pr(L[lo])-pr(l))<(l.seg.len||1)*1.3, okH=h&&h.kind==='wall'&&Math.abs(pr(h)-pr(L[hi]))<(h.seg.len||1)*1.3;
+    if(!okL && !okH) break;
+    if(okH && (!okL || hi-i<=i-lo)){ hi++; len+=h.seg.len||1; } else { lo--; len+=l.seg.len||1; } }
+  return L.slice(lo,hi+1);
+}
+function wallLine(b){ return G.builds.filter(o=>o.owner===b.owner && o.wallId===b.wallId && o.seg && !o.dead && (o.kind==='wall'||o.kind==='gate'||o.kind==='tower')); }
+function wallTowerPlan(b){
+  const L=wallLine(b); if(!L.length) return [];
+  const a=b.seg.ang||0, ux=Math.cos(a), uz=Math.sin(a);
+  const pr=o=>(o.x-b.x)*ux+(o.z-b.z)*uz;
+  L.sort((p,q)=>pr(p)-pr(q));
+  const towers=L.filter(o=>o.kind==='tower').map(pr), out=[];
+  const near=t=>towers.some(x=>Math.abs(x-t)<WT_GAP*.55);
+  const walls=L.filter(o=>o.kind==='wall');
+  if(!walls.length) return [];
+  const t0=pr(L[0]), t1=pr(L[L.length-1]);
+  const want=[t0]; for(let t=t0+WT_GAP; t<t1-WT_GAP*.5; t+=WT_GAP) want.push(t); want.push(t1);
+  // Ecken: Enden, die an eine andere Palisade stoßen, bekommen ohnehin einen Turm (t0/t1)
+  for(const t of want){ if(near(t)) continue;
+    let best=null, bd=1e9; for(const w of walls){ const d=Math.abs(pr(w)-t); if(d<bd && !out.includes(w)){ bd=d; best=w; } }
+    if(best && bd<WT_GAP*.5){ out.push(best); towers.push(pr(best)); } }
+  return out;
+}
+function buildWallTowers(b){
+  if(!b || !b.seg) return; const p=G.players[0]; let plan=wallTowerPlan(b);
+  if(!plan.length){ EE.toast('Diese Palisade hat schon genug Türme'); return; }
+  // So viele Türme wie die Rohstoffe reichen – zuerst die Enden, dann die Mitte
+  const all=plan.length, can=Math.min(all, ...Object.keys(WT_COST).map(r=>Math.floor(p.res[r]/WT_COST[r])));
+  if(can<1){ EE.sfx('error'); EE.toast('Mauerturm: '+missingTxt(p,WT_COST)); return; }
+  if(can<all){ const ends=[plan[0], plan[plan.length-1]], mid=plan.slice(1,-1); plan=[...new Set([...ends, ...mid])].slice(0,can); }
+  const cost={}; for(const r in WT_COST) cost[r]=WT_COST[r]*plan.length;
+  pay(p,cost);
+  if(can<all) EE.toast('Rohstoffe reichen für '+can+' von '+all+' Türmen – tippe später nochmal für den Rest');
+  const made=[];
+  for(const w of plan){ const seg={...w.seg}, id=w.wallId; w.quietRemove=true; destroyBuilding(w); made.push(addWallTower(0, seg, id, false)); }
+  const ws=G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.inside && !u.dead);
+  made.forEach(t=>{ ws.sort((a,c)=>Math.hypot(a.x-t.x,a.z-t.z)-Math.hypot(c.x-t.x,c.z-t.z)); ws.slice(0,2).forEach(u=>cmdBuild(u,t)); });
+  G.selB=null; if(plan.length===all) EE.toast(plan.length+' Mauertürme werden gebaut'); EE.sfx('place'); updateHUD(); drawPanel();
+}
+function addWallTower(owner, seg, id, done){
+  const inner=makeTower(COLORS[owner], owner), S=.6; inner.scale.setScalar(S);
+  const m=new T.Group(); m.add(inner); m.platY=(inner.platY||4.9)*S; m.slotX=(inner.slotX||.55)*S; m.slotZ=(inner.slotZ||.55)*S;
+  m.position.set(seg.x, getH(seg.x,seg.z)-.05, seg.z); m.rotation.y=-(seg.ang||0); G.scene.add(m);
+  const cells=(seg.ks||[]).filter(k=>k>=0); for(const k of cells) G.grid[k]=1;
+  const ring=new T.Mesh(new T.RingGeometry(.95,1.08,28), new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.85, depthWrite:false}));
+  ring.rotation.x=-Math.PI/2; ring.position.set(seg.x, m.position.y+.08, seg.z); ring.visible=false; G.scene.add(ring);
+  const b={kind:'tower', wallT:true, owner, x:seg.x, z:seg.z, size:1.6, mesh:m, ring, cells, built:done?1:0, hp:done?BUILD.tower.hp:1, queue:[], qT:0, wallId:id, seg:{...seg, gate:false}};
+  if(!done){ m.scale.y=.25; m.traverse(o=>{ if(o.material && o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; } }); }
+  G.builds.push(b); return b;
+}
+function towerAutoFire(b,dt){
+  b.shotT=(b.shotT||G.rand()*1.5)-dt; if(b.shotT>0) return;
+  const R=b.wallT?13:15, t=nearestFoe(b,R);
+  if(!alive(t)){ b.shotT=.6; return; }
+  b.shotT=2.2;
+  const y=b.mesh.position.y+(b.mesh.platY||4.9)*b.mesh.scale.y+.6;
+  shootArrow(b, t, (t.size?3:7)*(.85+G.rand()*.3), y);
+  if(b.owner===0 || (G.follow && Math.hypot(b.x-G.camS.x,b.z-G.camS.z)<30)) sfxAt('bow',b.x,b.z,.5);
+}
 function addWall(owner, c, ang, id, road){
   const kind = road?'road':c.gate?'gate':'wall', d=BUILD[kind];
   const m = road ? makeRoadPiece(c.x,c.z,c.len,ang) : makeWallPiece(COLORS[owner], c.gate, c.len);
   if(!road){ m.position.set(c.x, getH(c.x,c.z)-.03, c.z); m.rotation.y = -ang; }
   G.scene.add(m);
   if(!c.gate && !road) for(const k of c.ks) if(k>=0) G.grid[k]=1;
+  if(c.gate && !road){ G.gateAt=G.gateAt||{}; }
   const ring = new T.Mesh(new T.RingGeometry(.55,.68,20), new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.85, depthWrite:false}));
   ring.rotation.x=-Math.PI/2; ring.position.set(c.x, m.position.y+.08, c.z); ring.visible=false; G.scene.add(ring);
   const b = {kind, owner, x:c.x, z:c.z, size:1, mesh:m, ring, cells:(c.gate||road)?[]:c.ks.filter(k=>k>=0), roadCells:road?c.ks.filter(k=>k>=0):null, built:0, hp:1, queue:[], qT:0, wallId:id, seg:{ks:c.ks, x:c.x, z:c.z, len:c.len, gate:!!c.gate, ang}};
   if(!road) m.scale.y=.25;
   m.traverse(o=>{ if(o.material && o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=road?.35:.55; } });
+  if(c.gate && !road) for(const k of c.ks) if(k>=0) G.gateAt[k]=b;
   G.builds.push(b);
   return b;
 }
@@ -4005,5 +4097,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { gift, quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { gift, quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();

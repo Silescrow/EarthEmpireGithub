@@ -83,6 +83,7 @@ function sfx(name, vol){
     case 'error': { const g=gain(0,B); env(g,t,.01,.25,.25); osc('square',140,t,.3,filt('lowpass',600,1,g)); osc('square',147,t,.3,filt('lowpass',600,1,g)); break; }
     case 'fanfare': { [67,72,76,79].forEach((m,i)=>{ const g=gain(0,B); env(g,t+i*.13,.02,.22,.55); const lp=filt('lowpass',2400,1,g); osc('sawtooth',mtof(m),t+i*.13,.6,lp,-5); osc('sawtooth',mtof(m),t+i*.13,.6,lp,5); });
       const g=gain(0,B); env(g,t,.005,.6,.7); const o=osc('sine',130,t,.8,g); o.frequency.exponentialRampToValueAtTime(50,t+.15); break; }
+    case 'bow': { const g=gain(0,B); env(g,t,.002,.28,.16); const o=osc('triangle',220,t,.18,g); o.frequency.exponentialRampToValueAtTime(90,t+.15); break; }   // Pfeil vom Turm
     case 'chop': { // Holz hacken
       const g=gain(0,B); env(g,t,.002,.7,.16); const o=osc('sine',210,t,.2,g); o.frequency.exponentialRampToValueAtTime(95,t+.08);
       const ng=gain(0,B); env(ng,t,.001,.55,.09); noise(t,.12,filt('bandpass',1300+Math.random()*300,1.4,ng)); break; }
