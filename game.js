@@ -413,7 +413,7 @@ function updatePopulation(dt){
 const UNIT = {
   worker:{name:'Bauer', hp:40, atk:2, range:.9, cd:1.3, speed:3.1, bld:.2},
   club:  {name:'Axtkrieger', hp:95, atk:9, range:1.1, cd:1.15, speed:3.0, bld:.6, cost:{food:50,wood:20}, time:12, weapon:'w_axe', wlen:.85},
-  spear: {name:'Speerträger', hp:85, atk:7, range:1.7, cd:1.0, speed:3.2, bld:.4, cost:{food:45,wood:30}, time:12, weapon:'w_spear', wlen:2.0},
+  spear: {name:'Speerträger', hp:85, atk:7, range:1.7, cd:1.0, speed:3.2, bld:.4, cost:{food:45,wood:30}, time:12, weapon:'w_spear', wlen:1.6},
   bow:   {name:'Bogenschütze', hp:55, atk:6, range:9, cd:1.7, speed:3.0, bld:.25, cost:{food:40,wood:45}, time:14, weapon:'w_bow', wlen:1.25, ranged:true},
 };
 UNIT_DE.club='Axtkrieger'; UNIT_DE.spear='Speerträger'; UNIT_DE.bow='Bogenschützen';
@@ -425,7 +425,9 @@ function attachWeapon(g, kind){
   const w=new T.Mesh(m.geo, m.mat); w.castShadow=true;
   const k=U.wlen/L/s; w.scale.setScalar(k);
   if(kind==='bow'){ g.bowK=k; g.bowL=L; g.bowS=s; g.weapon=w; setBowSlot(g,false); if(g.club) g.club.visible=false; return; }
-  else { const grip = kind==='spear' ? .42 : .12; w.position.set(0,-L*k*grip,.02/s); w.rotation.set(kind==='spear'?1.45:1.25,0,0); g.rig.handR.add(w); }
+  else { const grip = kind==='spear' ? .35 : .12; w.rotation.set(kind==='spear'?.15:1.25,0,0);
+    // Griffpunkt der Waffe genau in die Hand legen (Verschiebung in gedrehter Richtung)
+    w.position.copy(new T.Vector3(0,bb.min.y+L*grip,0).applyEuler(w.rotation).multiplyScalar(-k)); w.position.z+=.02/s; g.rig.handR.add(w); }
   g.weapon=w;
   if(g.club) g.club.visible=false;
 }
@@ -1373,7 +1375,7 @@ function geos(){
   GEO.rock = new T.DodecahedronGeometry(.8,0);
   GEO.nug = new T.OctahedronGeometry(.16,0);
   GEO.box = new T.BoxGeometry(1,1,1);
-  GEO.ring = new T.RingGeometry(.48,.62,24); GEO.ring.rotateX(-Math.PI/2);
+  GEO.ring = new T.RingGeometry(.5,.56,32); GEO.ring.rotateX(-Math.PI/2);
   GEO.head = new T.IcosahedronGeometry(.19,1);
   GEO.limb = new T.CylinderGeometry(.065,.06,.42,5); GEO.limb.translate(0,-.21,0);
   GEO.body = new T.CylinderGeometry(.17,.23,.52,7);
@@ -1540,6 +1542,7 @@ function buildRig(key){
   const restZ=[Math.atan2(-dL.x,-dL.y)-.18, -(Math.atan2(dR.x,-dR.y)-.18)];
   return RIGS[key] = {geo:g2, mat:m.mat, J, BONES, H, restZ};
 }
+let HEADBAND_Y = .042;
 function makeRigged(key, height, color){
   const r = RIGS[key] || buildRig(key); if(!r) return null;
   const bones = r.BONES.map(([name,par,j])=>{ const b=new T.Bone(); b.name=name; return b; });
@@ -1550,8 +1553,9 @@ function makeRigged(key, height, color){
   const g = new T.Group(); const sc = height/r.H; sk.scale.setScalar(sc); g.add(sk);
   const B = {}; r.BONES.forEach(([name],i)=>B[name]=bones[i]);
   // Teamfarbe: Band über der Brust, Keule in der rechten Hand, Last auf dem Rücken
-  const band = new T.Mesh(new T.TorusGeometry(.13*r.H,.018*r.H,6,16), new T.MeshLambertMaterial({color}));
-  band.rotation.set(Math.PI/2,0,.5); band.position.set(0,.02*r.H,0); band.scale.set(1.2,.85,1); B.chest.add(band);
+  // Teamfarbe als Stirnband (statt Ring um die Brust)
+  const band = new T.Mesh(new T.TorusGeometry(.052*r.H,.009*r.H,6,18), new T.MeshLambertMaterial({color}));
+  band.rotation.set(Math.PI/2+.12,0,0); band.position.set(0,HEADBAND_Y*r.H,.012*r.H); band.scale.set(1,1.18,1); B.head.add(band); g.band=band;
   const club = new T.Mesh(new T.CylinderGeometry(.012*r.H,.028*r.H,.28*r.H,6), new T.MeshLambertMaterial({color:0x6a4020}));
   club.position.set(0,-.06*r.H,.08*r.H); club.rotation.x=1.4; B.handR.add(club);
   const load = new T.Mesh(new T.BoxGeometry(.2*r.H,.12*r.H,.1*r.H), new T.MeshLambertMaterial({color:0x9a6232}));
@@ -1723,7 +1727,7 @@ function makeStore(color, owner){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
+const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -1755,7 +1759,7 @@ function parseGLB(buf){
   return texP.then(()=>({geo, mat}));
 }
 // Grafik „Niedrig“: Gebäude in einfacher Fassung (models/niedrig/), ab „Mittel“ volle Qualität
-const MODEL_LOW = new Set(['bigtc','tent','store2','store3','barr1','barr2','barr3']);
+const MODEL_LOW = new Set(['warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
 let modelsLow = null;
 function loadModels(gfx){
   const low = gfx===0;
@@ -2148,7 +2152,7 @@ function spawnWorker(owner,x,z,kind){
   const m = (kind==='worker'||kind==='kid') ? makeWorker(COLORS[owner]) : makeSoldier(kind, COLORS[owner]);
   m.position.set(x,getH(x,z),z);
   G.scene.add(m);
-  const ring = new T.Mesh(GEO.ring, new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.9, depthWrite:false}));
+  const ring = new T.Mesh(GEO.ring, new T.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:.6, depthWrite:false}));
   ring.visible=false; G.scene.add(ring);
   const U = UNIT[kind];
   const u = {kind, hp:U.hp, maxHp:U.hp, cd:0, sex:(m.userData.key==='cavef'?'f':'m'), owner, x, z, mesh:m, ring, state:'idle', path:null, pi:0, carry:{type:null,amt:0},
@@ -2426,7 +2430,7 @@ function updateWorker(u,dt){
   }
   m.load.visible = u.carry.amt>0.5;
   if(m.load.visible) m.load.material = mat(LOADCOL[u.carry.type]);
-  u.ring.position.set(u.x, m.position.y+.06, u.z); u.ring.scale.setScalar(1.3);
+  u.ring.position.set(u.x, m.position.y+.06, u.z); u.ring.scale.setScalar(1);
   updateBar(u);
 }
 let panelT = 0; function drawPanelSoon(){ panelT = .25; }
@@ -3169,5 +3173,5 @@ function endPlace(){
   G.place=null; G.costH=null; $('#pCost').innerHTML=''; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
