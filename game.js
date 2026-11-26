@@ -296,7 +296,7 @@ function drawPanel(){
       h += `<div class="info"><small>Tempo ${tm?'+'+tm+' %':'normal'} · Hütten im Gebiet +5 % je Hütte · Helfer +10 %</small></div>`;
       h += `<button class="ab" data-a="helpin"><span class="ai">${ICON.pop}</span>Helfer rein<span class="ac">${hn}/${HELP_MAX}</span></button>`;
       if(hn) h += `<button class="ab" data-a="helpout"><span class="ai">${ICON.pop}</span>Helfer raus<span class="ac">${hn}</span></button>`;
-      h += `<button class="ab" data-a="worker"><span class="ai">${ICON.pop}</span>Bauer<span class="ac">${costText(WORKER_COST)}</span>${q?'<i class="q">'+q+'</i>':''}</button>`;
+      h += `<button class="ab" data-a="worker"><span class="ai">${unitPic({owner:0,kind:'worker',sex:'m'})}</span>Bauer<span class="ac">${costText(WORKER_COST)}</span>${q?'<i class="q">'+q+'</i>':''}</button>`;
       h += `<button class="ab" data-a="dip"><span class="ai">${dipSVG()}</span>Diplomatie<span class="ac">Bündnis · Handel</span></button>`;
       h += `<button class="ab lock" data-a="age"><span class="ai"><svg viewBox="0 0 24 24"><path d="M12 3l8 9h-5v9H9v-9H4z" fill="#e8b64a"/></svg></span>Bronzezeit<span class="ac">${costText({food:500,wood:300})}</span></button>`;
       if(q) h += `<div class="bar"><div style="width:${(b.qT/WORKER_TIME*100)|0}%"></div></div>`;
@@ -327,13 +327,13 @@ function drawPanel(){
     if(ws.length>MAXP) h += `<span class="more">+${ws.length-MAXP}</span>`;
     h += `</div>${ws.length===1?`<small>${job}${carry}</small>`:''}</div>`;
     if(ws[0].owner===0 && ws.every(u=>u.kind==='worker')){
-      h += `<button class="ab" data-a="b-tc"><span class="ai">${hutSVG()}</span>Stadtzentrum<span class="ac">${costText(BUILD.tc.cost)}</span></button>`;
-      h += `<button class="ab" data-a="b-house"><span class="ai">${hutSVG()}</span>Hütte<span class="ac">${costText(BUILD.house.cost)}</span></button>`;
-      h += `<button class="ab" data-a="b-store"><span class="ai">${storeSVG()}</span>Lager<span class="ac">${costText(BUILD.store.cost)}</span></button>`;
-      h += `<button class="ab" data-a="b-wall"><span class="ai">${wallSVG()}</span>Palisade<span class="ac">${costText(BUILD.wall.cost)}/Stück</span></button>`;
+      h += `<button class="ab" data-a="b-tc"><span class="ai">${buildPic('tc',hutSVG())}</span>Stadtzentrum<span class="ac">${costText(BUILD.tc.cost)}</span></button>`;
+      h += `<button class="ab" data-a="b-house"><span class="ai">${buildPic('house',hutSVG())}</span>Hütte<span class="ac">${costText(BUILD.house.cost)}</span></button>`;
+      h += `<button class="ab" data-a="b-store"><span class="ai">${buildPic('store',storeSVG())}</span>Lager<span class="ac">${costText(BUILD.store.cost)}</span></button>`;
+      h += `<button class="ab" data-a="b-wall"><span class="ai">${buildPic('wall',wallSVG())}</span>Palisade<span class="ac">${costText(BUILD.wall.cost)}/Stück</span></button>`;
       h += `<button class="ab" data-a="b-road"><span class="ai">${roadSVG()}</span>Weg<span class="ac">kostenlos</span></button>`;
-      h += `<button class="ab" data-a="b-barracks"><span class="ai">${swordSVG()}</span>Kriegerhütte<span class="ac">${costText(BUILD.barracks.cost)}</span></button>`;
-      h += `<button class="ab" data-a="b-tower"><span class="ai">${towerSVG()}</span>Wachturm<span class="ac">${costText(BUILD.tower.cost)}</span></button>`;
+      h += `<button class="ab" data-a="b-barracks"><span class="ai">${buildPic('barracks',swordSVG())}</span>Kriegerhütte<span class="ac">${costText(BUILD.barracks.cost)}</span></button>`;
+      h += `<button class="ab" data-a="b-tower"><span class="ai">${buildPic('tower',towerSVG())}</span>Wachturm<span class="ac">${costText(BUILD.tower.cost)}</span></button>`;
     }
     el.innerHTML = h; el.className='';
   } else {
@@ -345,7 +345,49 @@ function drawPanel(){
   if(G.sel.length){ const ws=G.sel.slice(); el.querySelectorAll('.pic').forEach(b=>b.onclick=()=>{ EE.click(); const u=ws[+b.dataset.u]; if(u){ select([u],null); } }); }
 }
 const UNIT_DE = {worker:'Bauern'};
+/* ---------- Kleine Bilder (Icons) aus den echten 3D-Modellen ---------- */
+const THUMB = {}; let thumbRT = null;
+function renderThumb(obj, portrait){
+  const S=256, r=G.renderer;
+  if(!thumbRT){ thumbRT=new T.WebGLRenderTarget(S,S,{samples:4}); thumbRT.texture.colorSpace=T.SRGBColorSpace; }
+  const sc=new T.Scene(); sc.add(new T.HemisphereLight(0xfff6e8,0x5a4a38,1.7)); const d=new T.DirectionalLight(0xffffff,2.3); d.position.set(3,6,5); sc.add(d);
+  if(obj.rig) poseRig(obj,'idle',0);
+  sc.add(obj); obj.updateMatrixWorld(true);
+  const box=new T.Box3().setFromObject(obj), c=box.getCenter(new T.Vector3()), sz=box.getSize(new T.Vector3());
+  let rad; if(portrait){ c.y=box.max.y-sz.y*.24; rad=sz.y*.3; } else if(obj.rig){ rad=sz.y*.5; } else rad=Math.max(sz.x,sz.y,sz.z)*.6;
+  const cam=new T.PerspectiveCamera(30,1,.02,500);
+  cam.position.set(c.x+rad*1.1, c.y+rad*(portrait?.35:1.05), c.z+rad*2.4); cam.lookAt(c);
+  const old=r.getRenderTarget(), oc=r.getClearColor(new T.Color()), oa=r.getClearAlpha(), sh=r.shadowMap.enabled;
+  r.shadowMap.enabled=false; r.setRenderTarget(thumbRT); r.setClearColor(0x000000,0); r.clear(); r.render(sc,cam);
+  const px=new Uint8Array(S*S*4); r.readRenderTargetPixels(thumbRT,0,0,S,S,px);
+  r.setRenderTarget(old); r.setClearColor(oc,oa); r.shadowMap.enabled=sh;
+  const cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d'), im=x.createImageData(S,S);
+  for(let j=0;j<S;j++) im.data.set(px.subarray((S-1-j)*S*4,(S-j)*S*4), j*S*4);
+  x.putImageData(im,0,0); sc.remove(obj); return cv.toDataURL();
+}
+function thumb(key, make, portrait){
+  if(key in THUMB) return THUMB[key];
+  try{ const o=make(); THUMB[key] = o ? renderThumb(o, portrait) : null; }catch(e){ console.warn('Icon', key, e); THUMB[key]=null; }
+  return THUMB[key];
+}
+const img = src => `<img class="th" src="${src}" alt="">`;
+// Gebäude-Icon aus dem echten Modell, sonst das alte Zeichen
+function buildPic(kind, fallback){
+  const col=COLORS[0];
+  const src = thumb('b:'+kind, ()=> kind==='tc'?makeTC(col, G.players[0].civ, 0) : kind==='house'?makeHouse(col,0) : kind==='store'?makeStore(col,0) :
+    kind==='barracks'?makeBarracks(col,0) : kind==='tower'?makeTower(col,0) : kind==='wall'?makeWallPiece(col,false,2.4) : null);
+  return src ? img(src) : fallback;
+}
 function unitPic(u){
+  const ks = u.kind==='worker' ? (u.sex==='f'?'f':'m') : u.kind;
+  if(UNIT[u.kind] && u.kind!=='kid' && G && G.renderer){
+    const col=COLORS[u.owner];
+    const src = thumb('u:'+ks+':'+u.owner, ()=>{ if(u.kind==='worker'){ G.nextSex=ks; return makeWorker(col); } return makeSoldier(u.kind, col); }, false);
+    if(src) return img(src);
+  }
+  return unitPicSVG(u);
+}
+function unitPicSVG(u){
   const col='#'+COLORS[u.owner].toString(16).padStart(6,'0'), f=u.sex==='f';
   return `<svg viewBox="0 0 24 28"><path d="M5 27q0-11 7-11t7 11z" fill="#8a5a2b"/><path d="M6 21l12-3v3l-12 3z" fill="${col}"/>`+
     (f?`<path d="M6.5 11q0-7 5.5-7t5.5 7v5h-2v-4h-7v4h-2z" fill="#3a2414"/>`:'')+

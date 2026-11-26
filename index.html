@@ -140,6 +140,8 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .ab .ai{width:24px;height:24px;display:grid;place-items:center;font-size:18px}
 .ab .ai svg{width:24px;height:24px}
 .ab .ac{display:flex;gap:4px;font-size:11.5px;color:#ffe9b0}
+img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}.ab .ai:has(img.th){width:44px;height:44px}.ab .ai img.th{width:40px;height:40px}#kinds .kb img.th{width:28px;height:28px}
+.ab .ac{flex-wrap:wrap;justify-content:center;row-gap:0}
 .ab .c{display:flex;align-items:center;gap:1px}.ab .c svg{width:13px;height:13px}.ab .c.ok{color:#7ee87a}.ab .c.miss{color:#ff5a5a}
 .ab .q{position:absolute;right:-6px;top:-6px;min-width:20px;height:20px;border-radius:10px;background:var(--gold);color:#2b1a02;font:800 12px/20px sans-serif;font-style:normal}
 #panel .bar{flex-basis:100%;height:6px;border-radius:3px;background:#0006;overflow:hidden}
@@ -228,7 +230,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.42</div>
+    <div class="ver2">Version 1.43</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -248,7 +250,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.42</div>
+  <div class="ver">Earth Empire · V1.43</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -276,7 +278,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="toast hidden" id="toast"></div>
 </section>
 
-<script src="audio.js?v=1.42"></script>
+<script src="audio.js?v=1.43"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -432,7 +434,7 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.42"></script>
-<script src="game.js?v=1.42"></script>
+<script src="three.min.js?v=1.43"></script>
+<script src="game.js?v=1.43"></script>
 </body>
 </html>
