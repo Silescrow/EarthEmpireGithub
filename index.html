@@ -93,10 +93,6 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
  .card.wide .row{grid-template-columns:6.6em minmax(0,1fr);margin:6px 0}.seg button{min-height:34px}.card.wide .seg{flex-wrap:nowrap}.card.wide .seg button{padding:4px 3px;font-size:13.5px}}
 @media (max-width:480px){.nat span{font-size:9.5px}.nats{gap:3px}}
 @media (max-height:430px){.card.wide{padding:10px 14px}.card.wide h2{margin-bottom:6px;font-size:19px}.nat{padding:3px 1px}.nat svg{width:20px;height:24px}.acts{margin-top:8px}}
-.mis{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:6px 0;border:1.5px solid #e8b64a60;border-radius:10px;background:#0b1130}
-.mis b{font:800 18px "Cinzel",Georgia,serif;color:var(--gold);width:1.4em;text-align:center}
-.mis div{flex:1}.mis small{display:block;color:#fff9}
-.mis.lock{opacity:.45}
 .toast{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:10px;
   background:#0b1130ee;border:1.5px solid var(--gold);color:var(--gold2);font-weight:700;transition:opacity .3s;white-space:nowrap}
 
@@ -232,7 +228,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.41</div>
+    <div class="ver2">Version 1.42</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -244,7 +240,6 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="panel">
     <button class="btn main hidden" id="bResume">Weiterspielen</button>
     <button class="btn main" data-open="dPlay">Spielen</button>
-    <button class="btn" data-open="dCamp">Kampagne</button>
     <button class="btn" id="bTut">Tutorial</button>
     <button class="btn" data-open="dSet">Einstellungen</button>
   </div>
@@ -253,7 +248,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.41</div>
+  <div class="ver">Earth Empire · V1.42</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -266,12 +261,6 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
         <div class="acts"><button class="btn small" data-close>Zurück</button><button class="btn main small" id="bStart">Schlacht starten</button></div>
       </div>
     </div>
-  </div></div>
-
-  <div class="dlg hidden" id="dCamp"><div class="card">
-    <h2>Kampagne</h2>
-    <div id="mlist"></div>
-    <div class="acts"><button class="btn small" data-close>Zurück</button></div>
   </div></div>
 
   <div class="dlg hidden" id="dSet"><div class="card">
@@ -287,7 +276,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="toast hidden" id="toast"></div>
 </section>
 
-<script src="audio.js?v=1.41"></script>
+<script src="audio.js?v=1.42"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -415,14 +404,6 @@ $('#aiPlus').addEventListener('click',()=>{ S.ai=Math.min(17,(S.ai||3)+1); save(
 $('#aiAll').addEventListener('click',()=>{ S.ai=17; save(); drawAI(); click(); });
 if(!S.ai) S.ai=3; if(S.map>3) S.map=1; drawAI();
 
-// Kampagne
-const MIS=[['Das erste Feuer','Steinzeit · Gründe dein Dorf'],['Der Bronzepakt','Bronzezeit · Verteidige den Tempel'],
-  ['Die Belagerung','Mittelalter · Erobere die Burg'],['Neue Welten','Renaissance · Überquere das Meer'],
-  ['Stahl und Dampf','Industriezeitalter · Halte die Fabriken']];
-$('#mlist').innerHTML=MIS.map((m,i)=>`<div class="mis${i?' lock':''}"><b>${i+1}</b><div>${m[0]}<small>${m[1]}</small></div><span>${i?'Gesperrt':'Bereit'}</span></div>`).join('');
-$('#mlist').addEventListener('click',e=>{const m=e.target.closest('.mis');if(!m)return;
-  click();toast(m.classList.contains('lock')?'Erst die vorherige Mission schaffen':'Missionen kommen im nächsten Update')});
-
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
 window.EE={S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
@@ -451,7 +432,7 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.41"></script>
-<script src="game.js?v=1.41"></script>
+<script src="three.min.js?v=1.42"></script>
+<script src="game.js?v=1.42"></script>
 </body>
 </html>
