@@ -1074,6 +1074,11 @@ function climateAt(x,z){
    WELT
    ============================================================ */
 let H_SEED = 1;
+const PEAKS = [ // [Länge, Breite, Höhe, Radius°, Name]
+  [86.93,27.99,46,1.62,'Mount Everest'], [76.51,35.88,43,1.44,'K2'], [-70.01,-32.65,38,1.44,'Aconcagua'], [-151.0,63.07,33,1.62,'Denali'],
+  [37.35,-3.07,30,0.99,'Kilimandscharo'], [42.44,43.35,29,1.08,'Elbrus'], [44.30,39.70,27,0.99,'Ararat'], [6.86,45.83,26,0.90,'Mont Blanc'],
+  [7.66,45.98,24,0.63,'Matterhorn'], [138.73,35.36,22,0.90,'Fuji'], [37.31,-0.15,25,0.81,'Mount Kenya'], [-77.4,-9.12,32,1.08,'Huascarán'],
+  [22.36,40.09,16,0.72,'Olymp'], [148.26,-36.46,14,0.81,'Kosciuszko'], [-121.76,46.85,22,0.81,'Mount Rainier'], [-98.62,19.02,26,0.90,'Popocatépetl'] ];
 function rawH(x,z){
   const lon=toLon(x), lat=toLat(z);
   const m = landAt(lon,lat);
@@ -1087,7 +1092,9 @@ function rawH(x,z){
     const mt = mountainAt(lon,lat);
     if(mt>0){ const rg = ridged(x*.085, z*.085, H_SEED+21), rg2 = ridged(x*.21+3, z*.21+3, H_SEED+41);
       const m2 = Math.min(mt, 1.2) + Math.max(0, mt-1.2)*.55, mm = clamp(mt*1.5,0,1);
-      h += land*(m2*.9 + mm*Math.pow(rg,1.5)*m2*8.5 + mm*rg2*m2*1.1); }
+      h += land*(m2*2.0 + mm*Math.pow(rg,1.5)*m2*16 + mm*rg2*m2*2.0); }
+    // berühmte Gipfel an ihrem echten Ort (Höhe in Spiel-Metern, Radius in Grad)
+    for(const p of PEAKS){ const dl=(lon-p[0])*Math.cos(lat*Math.PI/180), dd=Math.hypot(dl, lat-p[1]); if(dd<p[3]*2.2){ const q=dd/p[3], f=Math.exp(-q*q*2.2); h = Math.max(h, WATER_Y + p[2]*f*(.82+.18*ridged(x*.12,z*.12,H_SEED+5)) ); } }
     const ds = desertAt(lon,lat);
     if(ds>0) h += ds*land*Math.sin(x*.9+Math.sin(z*.35)*2)*.12;   // Dünen
   }
@@ -1134,8 +1141,9 @@ function ensureTile(ti,tj){
   for(let cj=0;cj<TILE;cj++) for(let ci=0;ci<TILE;ci++){
     const gi=gi0+ci, gj=gj0+cj, x=x0+ci+.5, z=z0+cj+.5, hh=tileH(t,x,z);
     const edge = gi<2||gj<2||gi>NX-3||gj>NZ-3;
-    const steep = Math.abs(tileH(t,x+.5,z)-tileH(t,x-.5,z))+Math.abs(tileH(t,x,z+.5)-tileH(t,x,z-.5)) > 2.2;
-    if(hh<WATER_Y+.15 || edge || steep) G.grid[gj*NX+gi]=1;
+    const steep = Math.abs(tileH(t,x+.5,z)-tileH(t,x-.5,z))+Math.abs(tileH(t,x,z+.5)-tileH(t,x,z-.5)) > 1.8;
+    const high = hh > WATER_Y+6.5;   // Hochgebirge: nicht begehbar, nur am Fuß des Bergs kann man laufen und bauen
+    if(hh<WATER_Y+.15 || edge || steep || high) G.grid[gj*NX+gi]=1;
   }
   return t;
 }
@@ -2935,8 +2943,8 @@ function buildMinimapBase(){
       c = mix(c, taiga, sm(48,56,al));                 // Nadelwald
       c = mix(c, tundra, sm(62,68,al));                // Tundra
       const ds=desertAt(lon,lat); c = mix(c, steppe, sm(.2,.45,ds)); c = mix(c, desert, sm(.45,.6,ds));
-      const hh=h-WATER_Y; c = mix(c, [138,128,112], sm(3.0,3.8,hh));   // Gebirge
-      const snowLine = 5.2 + 1.6*(1-sm(25,55,al));              // Schneegrenze: in den Tropen viel höher
+      const hh=h-WATER_Y; c = mix(c, [150,138,118], sm(3.5,6.5,hh)); c = mix(c, [118,112,104], sm(8,14,hh));   // Gebirge
+      const snowLine = 14 + 8*(1-sm(25,55,al));              // Schneegrenze: in den Tropen viel höher
       c = mix(c, [240,244,248], Math.max(sm(snowLine,snowLine+.5,hh)*.85, sm(.62,.75,coldAt(lat))));   // Gipfelschnee nur auf hohen Bergen, Eis an den Polen
       const sh=clamp((getH(px-st,pz)-getH(px+st,pz))*.6,-.25,.25); c=c.map(v=>v*(1+sh)); // leichte Hangschattierung
     }
