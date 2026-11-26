@@ -2923,12 +2923,23 @@ function buildMinimapBase(){
   const x=c.getContext('2d'), img=x.createImageData(W,H);
   for(let j=0;j<H;j++) for(let i=0;i<W;i++){
     const px=i*st-NX/2+.5, pz=j*st-NZ/2+.5, h=getH(px,pz), o=(j*W+i)*4, lat=toLat(pz), lon=toLon(px);
-    let r=96,g=158,b=58;
-    if(h<WATER_Y+.05){ r=40;g=110;b=185; }
-    else if(desertAt(lon,lat)>.5){ r=222;g=190;b=120; }
-    else if(h>WATER_Y+4.6 || coldAt(lat)>.7){ r=235;g=240;b=245; }
-    else if(h>WATER_Y+3.3){ r=140;g=138;b=126; }
-    img.data[o]=r; img.data[o+1]=g; img.data[o+2]=b; img.data[o+3]=255;
+    // Vegetationszonen wie auf einer echten Weltkarte: Regenwald, Savanne, Wüste, gemäßigt, Taiga, Tundra, Eis
+    const al=Math.abs(lat), sm=(a,b2,v)=>{ const t=clamp((v-a)/(b2-a),0,1); return t*t*(3-2*t); }, mix=(A,B,t)=>[A[0]+(B[0]-A[0])*t, A[1]+(B[1]-A[1])*t, A[2]+(B[2]-A[2])*t];
+    let c;
+    if(h<WATER_Y+.05){ const dep=clamp((WATER_Y-h)/5,0,1), trop=1-sm(20,30,al);
+      c=mix(mix([62,140,200],[80,205,200],trop), mix([24,72,140],[26,84,150],trop*.4), sm(0,.45,dep)); }
+    else {
+      const rain=[28,92,36], sav=[158,160,72], temp=[92,152,58], taiga=[50,98,66], tundra=[150,148,118], desert=[224,192,124], steppe=[178,170,98];
+      c = mix(rain, sav, sm(9,15,al));                 // Äquator: Regenwald → Savanne
+      c = mix(c, temp, sm(20,28,al));                  // gemäßigte Zone
+      c = mix(c, taiga, sm(48,56,al));                 // Nadelwald
+      c = mix(c, tundra, sm(62,68,al));                // Tundra
+      const ds=desertAt(lon,lat); c = mix(c, steppe, sm(.2,.45,ds)); c = mix(c, desert, sm(.45,.6,ds));
+      const hh=h-WATER_Y; c = mix(c, [138,128,112], sm(3.0,3.8,hh));   // Gebirge
+      c = mix(c, [240,244,248], Math.max(sm(4.4,5.0,hh), sm(.62,.75,coldAt(lat))));   // Schnee und Eis
+      const sh=clamp((getH(px-st,pz)-getH(px+st,pz))*.6,-.25,.25); c=c.map(v=>v*(1+sh)); // leichte Hangschattierung
+    }
+    img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=255;
   }
   x.putImageData(img,0,0); G.miniBase=c;
   const cv=$('#mini'); cv.width=Math.min(640,W); cv.height=Math.round(cv.width*NZ/NX);
