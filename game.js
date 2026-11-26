@@ -2013,7 +2013,7 @@ function makeStore(color, owner){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/monolith.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb', tower:'models/wachturm.glb', dolphin:'models/delfin.glb', fish:'models/fisch.glb' };
+const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/monolith.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb', tower:'models/wachturm.glb', dolphin:'models/delfin.glb', fish:'models/fisch.glb', bird:'models/vogel.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -2045,7 +2045,7 @@ function parseGLB(buf){
   return texP.then(()=>({geo, mat}));
 }
 // Grafik „Niedrig“: Gebäude in einfacher Fassung (models/niedrig/), ab „Mittel“ volle Qualität
-const MODEL_LOW = new Set(['dolphin','fish','tower','warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
+const MODEL_LOW = new Set(['bird','dolphin','fish','tower','warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
 let modelsLow = null;
 window.EE_MODEL_LIST=()=>{ const l=[]; for(const [k,f] of Object.entries(MODEL_FILES)){ l.push(f); if(MODEL_LOW.has(k)) l.push(f.replace('models/','models/niedrig/')); } return [...new Set(l)]; };   // für das Offline-Spielen
 function loadModels(gfx){
@@ -3133,7 +3133,7 @@ async function applyGfx(g){
 }
 let fpsN=0, fpsT=0;
 function fpsTick(now){ fpsN++; if(now-fpsT>=500){ const el=document.getElementById('fps'); if(el){ const on=!!(EE.S.fps|0); el.classList.toggle('hidden',!on); if(on) el.textContent=Math.round(fpsN*1000/(now-fpsT))+' FPS'; } fpsN=0; fpsT=now; } }
-function render(){ updateCam(); updateWeather(G.dtW||.016); updateRegionOverlay(); G.fr=(G.fr||0)+1; if(G.renderer.shadowMap.enabled && (G.fr%2===0 || G.camMoved)) G.renderer.shadowMap.needsUpdate=true; G.camMoved=false; G.renderer.render(G.scene, G.cam); }
+function render(){ updateCam(); updateWeather(G.dtW||.016); updateRegionOverlay(); updateBirds(G.dtW||.016); G.fr=(G.fr||0)+1; if(G.renderer.shadowMap.enabled && (G.fr%2===0 || G.camMoved)) G.renderer.shadowMap.needsUpdate=true; G.camMoved=false; G.renderer.render(G.scene, G.cam); }
 
 /* ============================================================
    MINIKARTE
@@ -3789,6 +3789,45 @@ function regOverlayMat(lines){
     uniforms:{ uMask:{value:G.landTex}, uSize:{value:new T.Vector2(G.NX,G.NZ)}, uA:{value:0} },
     vertexShader:`varying vec3 vC; varying vec2 vUv; uniform vec2 uSize; void main(){ vC=color; vUv=(position.xz+uSize*.5)/uSize; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
     fragmentShader:`varying vec3 vC; varying vec2 vUv; uniform sampler2D uMask; uniform float uA; void main(){ if(texture2D(uMask,vUv).r<.5) discard; gl_FragColor=vec4(vC,uA*${lines?'1.0':'.42'}); }` });
+}
+/* ---------- Vogelschwärme: Vogel mit automatischem Skelett (Körper, Flügel, Flügelspitzen), schlägt mit den Flügeln ---------- */
+function birdGeo(){
+  const M=MODELS.bird; if(M.skinGeo) return M.skinGeo;
+  const g=M.geo.clone(); g.computeBoundingBox(); const bb=g.boundingBox, P=g.attributes.position, n=P.count;
+  const cx=(bb.min.x+bb.max.x)/2, half=(bb.max.x-bb.min.x)/2, sh=half*.13;
+  const si=new Uint16Array(n*4), sw=new Float32Array(n*4);
+  for(let i=0;i<n;i++){ const x=P.getX(i)-cx, ax=Math.abs(x), side=x<0?0:1, w=T.MathUtils.smoothstep(ax, sh*.6, sh*1.6), tip=T.MathUtils.smoothstep(ax, half*.45, half*.7);
+    si[i*4]=0; si[i*4+1]=side?3:1; si[i*4+2]=side?4:2; si[i*4+3]=0;
+    sw[i*4]=1-w; sw[i*4+1]=w*(1-tip); sw[i*4+2]=w*tip; sw[i*4+3]=0; }
+  g.setAttribute('skinIndex', new T.Uint16BufferAttribute(si,4)); g.setAttribute('skinWeight', new T.Float32BufferAttribute(sw,4));
+  M.skinGeo=g; M.bird={cx, half, sh, y0:(bb.min.y+bb.max.y)/2}; return g;
+}
+function makeBird(){
+  const g=birdGeo(), B=MODELS.bird.bird;
+  const root=new T.Bone(); root.position.set(B.cx,B.y0,0);
+  const lw=new T.Bone(); lw.position.set(-B.sh,0,0); root.add(lw); const lt=new T.Bone(); lt.position.set(-B.half*.55+B.sh,0,0); lw.add(lt);
+  const rw=new T.Bone(); rw.position.set(B.sh,0,0); root.add(rw); const rt=new T.Bone(); rt.position.set(B.half*.55-B.sh,0,0); rw.add(rt);
+  const m=new T.SkinnedMesh(g, MODELS.bird.mat); m.add(root); m.bind(new T.Skeleton([root,lw,lt,rw,rt])); m.frustumCulled=false;
+  const k=1.1/(B.half*2); const o=new T.Group(); o.add(m); m.scale.setScalar(k); o.wings=[lw,lt,rw,rt]; return o;
+}
+function updateBirds(dt){
+  if(!MODELS.bird || !G.cam) return;
+  if(!G.birds){ G.birds=[]; const NF=G.gfx===0?2:3; for(let f=0;f<NF;f++) G.birds.push({x:0,z:0,t:0,new:true,members:[]}); }
+  const s=G.camS, show=!G.farView;
+  for(const F of G.birds){
+    if(F.new || Math.hypot(F.x-s.x,F.z-s.z)>110){ F.new=false; const a=G.rand()*6.28, r=25+G.rand()*45; F.x=s.x+Math.cos(a)*r; F.z=s.z+Math.sin(a)*r; F.dir=G.rand()*6.28; F.turn=(G.rand()-.5)*.35; F.sp=7+G.rand()*4; F.h=7+G.rand()*4;
+      if(!F.members.length){ const n=(G.gfx===0?5:8)+(G.rand()*6|0); for(let i=0;i<n;i++){ const b=makeBird(); b.off=[(G.rand()-.5)*9,(G.rand()-.5)*3,(G.rand()-.5)*9]; b.ph=G.rand()*6.28; b.rate=7+G.rand()*2; G.scene.add(b); F.members.push(b); } } }
+    F.t+=dt; F.dir+=F.turn*dt+Math.sin(F.t*.4)*.12*dt; F.x+=Math.sin(F.dir)*F.sp*dt; F.z+=Math.cos(F.dir)*F.sp*dt;
+    const gy=Math.max(getH(F.x,F.z),WATER_Y);
+    for(const b of F.members){ b.visible=show; if(!show) continue;
+      const o=b.off, wob=Math.sin(F.t*1.3+b.ph);
+      b.position.set(F.x+o[0]+Math.sin(F.t*.9+b.ph)*1.2, gy+F.h+o[1]+wob*.6, F.z+o[2]+Math.cos(F.t*.8+b.ph)*1.2);
+      b.rotation.y=F.dir+(G.birdFlip||0); b.rotation.z=-F.turn*1.2;
+      const glide=Math.sin(F.t*.5+b.ph*.3)>.45, fl=glide? .15+Math.sin(F.t*2+b.ph)*.05 : Math.sin(F.t*b.rate+b.ph);
+      const A=glide?0:.75, base=-.35;
+      const [lw,lt,rw,rt]=b.wings; lw.rotation.z=-(base+fl*A); rw.rotation.z=(base+fl*A); lt.rotation.z=-(fl*A*.5); rt.rotation.z=(fl*A*.5);
+    }
+  }
 }
 function updateRegionOverlay(){
   if(!G.reg || !G.cam) return;
