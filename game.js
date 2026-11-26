@@ -342,8 +342,9 @@ function drawPanel(){
     }
     el.innerHTML = h; el.className='';
   } else {
-    el.innerHTML = `<div class="info hint"><b>Tipp</b><small>Ein Finger ziehen: Auswahlrahmen · Zwei Finger: Karte bewegen und zoomen</small></div>`;
-    el.className='';
+    // Kleiner Tipp nur in den ersten 30 Sekunden, danach ist unten frei
+    if(G.t<30){ el.innerHTML = `<div class="tipmini">☝ Ziehen: auswählen · ✌ Zwei Finger: bewegen & zoomen</div>`; el.className='tiphint'; }
+    else { el.innerHTML=''; el.className='hidden'; }
   }
   el.querySelectorAll('.ab').forEach(b=>b.onclick=()=>action(b.dataset.a));
   el.querySelectorAll('.sx').forEach(b=>b.onclick=()=>{ EE.click(); select([],null); });
@@ -2957,7 +2958,7 @@ function update(dt){
   G.hudT = (G.hudT||0)-dt; if(G.hudT<=0){ G.hudT=.5; updateHUD();
     // Kosten-Farben aktuell halten: neu zeichnen, wenn sich ändert, was bezahlbar ist
     const p0=G.players[0], aff=[...Object.values(BUILD),...Object.values(UNIT),{cost:WORKER_COST}].map(d=>d.cost?(canPay(p0,d.cost)?1:0):'').join('');
-    if(G.sel.length===1 || aff!==G.affSig){ G.affSig=aff; drawPanel(); } }
+    if(G.sel.length===1 || aff!==G.affSig || (!G.sel.length && !G.selB && (G.t>=30)!==!!G.tipGone)){ G.affSig=aff; G.tipGone=G.t>=30; drawPanel(); } }
   G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=.25; drawMinimap(); }
   if(G.place && !G.place.line) updateGhost();
   updateDip(dt);
