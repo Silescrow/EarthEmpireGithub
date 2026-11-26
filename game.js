@@ -230,6 +230,7 @@ function buildUI(){
   <canvas id="mini" width="150" height="150"></canvas>
   <div id="kinds"></div>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
+  <button class="hb" id="bNorth" aria-label="Kameradrehung zurücksetzen"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" stroke="currentColor" stroke-width="1.6" fill="none" opacity=".7"/><g id="needle"><path d="M12 4.2l3 7.8h-6z" fill="#e2453b"/><path d="M12 19.8l3-7.8h-6z" fill="currentColor"/></g></svg></button>
   <div id="panel"></div>
   <div id="placebar" class="hidden"><span id="pCost"></span><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">+ Tore</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
   <div id="fps" class="hidden"></div>
@@ -251,6 +252,7 @@ function buildUI(){
     const done = () => { if(!d.classList.contains('hidden')) return; mo.disconnect(); if(G && (EE.S.gfx|0)!==G.gfx) applyGfx(EE.S.gfx|0); };
     const mo = new MutationObserver(done); mo.observe(d,{attributes:true, attributeFilter:['class']}); };
   $('#kinds').onclick = e => { const b=e.target.closest('[data-k]'); if(b) selectKind(b.dataset.k); };
+  $('#bNorth').onclick = () => { EE.click(); G.camReset = true; };
   $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); } };
   $('#pOk').onclick = confirmPlace;
   $('#pGate').onclick = ()=>{ if(G.place&&G.place.kind==='wall'){ G.place.gate=!G.place.gate; $('#pGate').classList.toggle('on',G.place.gate); EE.click(); } };
@@ -3159,7 +3161,15 @@ async function applyGfx(g){
 }
 let fpsN=0, fpsT=0;
 function fpsTick(now){ fpsN++; if(now-fpsT>=500){ const el=document.getElementById('fps'); if(el){ const on=!!(EE.S.fps|0); el.classList.toggle('hidden',!on); if(on) el.textContent=Math.round(fpsN*1000/(now-fpsT))+' FPS'; } fpsN=0; fpsT=now; } }
-function render(){ updateCam(); updateWeather(G.dtW||.016); updateRegionOverlay(); updateBirds(G.dtW||.016); G.fr=(G.fr||0)+1; if(G.renderer.shadowMap.enabled && (G.fr%2===0 || G.camMoved)) G.renderer.shadowMap.needsUpdate=true; G.camMoved=false; G.renderer.render(G.scene, G.cam); }
+function camResetStep(dt){
+  const S=G.camS, n=$('#needle');
+  // Zurück zur Achse der Weltkarte: Norden oben, wie auf der Minikarte
+  if(G.camReset){ const dy=Math.atan2(Math.sin(-S.yaw),Math.cos(-S.yaw)), k=Math.min(1,dt*7);
+    S.yaw+=dy*k; G.camMoved=true;
+    if(Math.abs(dy)<.003){ S.yaw=0; G.camReset=false; } }
+  if(n){ const deg=Math.round(S.yaw*57.3); if(deg!==G.needleDeg){ G.needleDeg=deg; n.setAttribute('transform','rotate('+deg+' 12 12)'); } }
+}
+function render(){ camResetStep(G.dtW||.016); updateCam(); updateWeather(G.dtW||.016); updateRegionOverlay(); updateBirds(G.dtW||.016); G.fr=(G.fr||0)+1; if(G.renderer.shadowMap.enabled && (G.fr%2===0 || G.camMoved)) G.renderer.shadowMap.needsUpdate=true; G.camMoved=false; G.renderer.render(G.scene, G.cam); }
 
 /* ============================================================
    MINIKARTE
@@ -3398,7 +3408,7 @@ function pMove(e){
   const p = P.get(e.pointerId); if(!p) return;
   const px=p.x, py=p.y; p.x=e.clientX; p.y=e.clientY;
   if(!gesture) return;
-  if(gesture.type==='rotate'){ G.camS.yaw -= (p.x-px)*.008; return; }
+  if(gesture.type==='rotate'){ G.camReset=false; G.camS.yaw -= (p.x-px)*.008; return; }
   if(gesture.type==='rclick'){ if(Math.hypot(p.x-p.sx,p.y-p.sy)>6) gesture.type='rpan'; }
   if(gesture.type==='rpan'){ panBy(p.x-px, p.y-py); return; }
   if(gesture.type==='tap' && Math.hypot(p.x-p.sx,p.y-p.sy)>10){
@@ -3414,7 +3424,7 @@ function pMove(e){
     const [a,b]=[...P.values()];
     const d=Math.hypot(a.x-b.x,a.y-b.y), ang=Math.atan2(b.y-a.y,b.x-a.x), mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
     G.camS.dist *= gesture.d/d;
-    let da = ang-gesture.ang; da=Math.atan2(Math.sin(da),Math.cos(da)); G.camS.yaw -= da;
+    let da = ang-gesture.ang; da=Math.atan2(Math.sin(da),Math.cos(da)); G.camReset=false; G.camS.yaw -= da;
     panBy(mx-gesture.mx, my-gesture.my);
     gesture.d=d; gesture.ang=ang; gesture.mx=mx; gesture.my=my;
   }
