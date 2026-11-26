@@ -25,9 +25,9 @@ html,body{margin:0;height:100%;background:#050814;color:var(--ink);overflow:hidd
 .hidden{opacity:0;pointer-events:none}
 
 /* ---------- Ladebildschirm ---------- */
-#load .blur{position:absolute;inset:-40px;background:url(laden.jpg) center/cover;filter:blur(22px) brightness(.55)}
+#load .blur{position:absolute;inset:-40px;background:url(laden.jpg?v=2) center/cover;filter:blur(22px) brightness(.55)}
 #load .stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:min(100vw,177.68vh);aspect-ratio:1672/941;background:url(laden.jpg) center/100% 100%;box-shadow:0 0 60px #000}
+  width:min(100vw,177.68vh);aspect-ratio:1672/941;background:url(laden.jpg?v=2) center/100% 100%;box-shadow:0 0 60px #000}
 .bar{position:absolute;left:9.7%;width:80.6%;top:87.5%;height:4.6%;border-radius:3px;overflow:hidden}
 .fill{position:absolute;inset:0;width:0%;background:linear-gradient(180deg,#fff3b0,#e8b64a 45%,#9a6414);
   box-shadow:0 0 18px #ffc95a;transition:width .25s}
@@ -42,7 +42,7 @@ html,body{margin:0;height:100%;background:#050814;color:var(--ink);overflow:hidd
 @keyframes pulse{50%{opacity:.35}}
 
 /* ---------- Hauptmenü ---------- */
-#menu .bg{position:absolute;inset:0;background:url(menue.jpg) 18% top/cover;transform-origin:20% 0;animation:pan 30s ease-in-out infinite alternate}
+#menu .bg{position:absolute;inset:0;background:url(menue.jpg?v=2) 18% top/cover;transform-origin:20% 0;animation:pan 30s ease-in-out infinite alternate}
 @keyframes pan{to{transform:scale(1.05)}}
 #menu .shade{position:absolute;inset:0;background:linear-gradient(90deg,transparent 45%,#0a0f22c0 80%)}
 .panel{position:absolute;right:max(4vw,env(safe-area-inset-right));top:50%;transform:translateY(-50%);
@@ -61,7 +61,7 @@ html,body{margin:0;height:100%;background:#050814;color:var(--ink);overflow:hidd
 #updBar.tap{border-color:#7ee87a}
 .ver{position:absolute;left:max(12px,env(safe-area-inset-left));bottom:8px;font-size:12px;color:#fff9;text-shadow:0 1px 2px #000}
 .ico.quit{color:#ff8a8a}
-.corner{position:absolute;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));display:flex;gap:8px}
+.corner{position:absolute;bottom:max(30px,calc(env(safe-area-inset-bottom) + 24px));left:max(10px,env(safe-area-inset-left));display:flex;gap:8px}
 .ico{width:44px;height:44px;border-radius:50%;border:2px solid var(--gold);background:#0b1130cc;color:var(--gold2);
   display:grid;place-items:center;cursor:pointer}
 .ico svg{width:22px;height:22px}
@@ -276,8 +276,8 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   font:800 20px "Cinzel",Georgia,serif;color:var(--gold2);text-align:center;padding:30px}}
 
 @media (orientation:portrait){
-  #menu::before{content:"";position:absolute;inset:-40px;background:url(menue.jpg) 30% center/cover;filter:blur(18px) brightness(.6)}
-  #menu .bg{background:url(menue.jpg) center top/100% auto no-repeat;top:max(8vh,env(safe-area-inset-top));animation:none}
+  #menu::before{content:"";position:absolute;inset:-40px;background:url(menue.jpg?v=2) 30% center/cover;filter:blur(18px) brightness(.6)}
+  #menu .bg{background:url(menue.jpg?v=2) center top/100% auto no-repeat;top:max(8vh,env(safe-area-inset-top));animation:none}
   #menu .shade{background:linear-gradient(180deg,transparent 40%,#0a0f22d0 75%)}
   .panel{left:6vw;right:6vw;width:auto;top:auto;bottom:calc(5vh + env(safe-area-inset-bottom));transform:none}
   .btn{font-size:clamp(15px,2.4vh,20px)}
@@ -293,7 +293,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.56</div>
+    <div class="ver2">Version 1.57</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -312,7 +312,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V1.56</div>
+  <div class="ver">Siles Empire · V1.57</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -341,7 +341,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.56"></script>
+<script src="audio.js?v=1.57"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -376,7 +376,7 @@ const tipTimer=setInterval(()=>{ti=(ti+1)%TIPS.length;tip.textContent=TIPS[ti]},
 // echte Ladeschritte: Menübild + Schrift, dazu Aufbau-Schritte
 const loadImg=src=>new Promise(r=>{const i=new Image();i.onload=i.onerror=r;i.src=src});
 let real=0;
-Promise.all([loadImg('menue.jpg'),loadImg('laden.jpg'),(document.fonts?document.fonts.ready:Promise.resolve())]).then(()=>real=1);
+Promise.all([loadImg('menue.jpg?v=2'),loadImg('laden.jpg?v=2'),(document.fonts?document.fonts.ready:Promise.resolve())]).then(()=>real=1);
 let p=0;
 const tick=setInterval(()=>{
   const cap=real?100:85;
@@ -513,7 +513,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={VER:'1.56',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={VER:'1.57',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -538,10 +538,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.56"></script>
-<script src="game.js?v=1.56"></script>
-<script src="silescrow.js?v=1.56"></script>
-<script src="online.js?v=1.56"></script>
+<script src="three.min.js?v=1.57"></script>
+<script src="game.js?v=1.57"></script>
+<script src="silescrow.js?v=1.57"></script>
+<script src="online.js?v=1.57"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,

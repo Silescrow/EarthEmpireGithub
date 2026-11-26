@@ -1956,8 +1956,8 @@ function makeBarracks(color, owner){
   geos();
   const g = new T.Group();
   const bk = variant(owner, ['barr1','barr2','barr3','barracks']);
-  if(bk){ g.add(modelMesh(bk, 4.6)); addDecor(g,'barrikade', 0, 2.9, 2.2, 0); teamFlag(g, color, 2, 0, 1.8, 3.2); return g; }
-  const hut = mesh(new T.ConeGeometry(1.9,2.6,8), mat(0x7a5230), 0,1.3,0); g.add(hut); teamFlag(g, color, 1.6, 0, 1.4, 2.8); return g;
+  if(bk){ g.add(modelMesh(bk, 4.6)); addDecor(g,'barrikade', 0, 2.9, 2.2, 0); return g; }
+  const hut = mesh(new T.ConeGeometry(1.9,2.6,8), mat(0x7a5230), 0,1.3,0); g.add(hut); return g;
 }
 // Wachturm: Krieger stehen oben auf der Plattform, sind geschützt und schießen weiter
 // Das kleine Dach über der Plattform weglassen, damit man die Krieger oben sieht
@@ -1972,10 +1972,10 @@ function makeTower(color, owner){
   const g = new T.Group();
   if(MODELS.tower){ const m=modelMesh('tower', 3.0), bb=MODELS.tower.geo.boundingBox, s=m.scale.x; m.geometry=towerGeo(); g.add(m);
     g.platY = (bb.min.y + (bb.max.y-bb.min.y)*.75)*s; g.slotX=(bb.max.x-bb.min.x)*s*.2; g.slotZ=(bb.max.z-bb.min.z)*s*.22;
-    teamFlag(g, color, (bb.max.x-bb.min.x)*s*.42, g.platY+.3, (bb.max.z-bb.min.z)*s*.42, 2.4); return g; }
+ return g; }
   for(const [x,z] of [[-1,-1],[1,-1],[-1,1],[1,1]]){ const p=mesh(GEO.box, mat(0x6b4a2a), x,2.4,z); p.scale.set(.25,4.8,.25); g.add(p); }
   const pl=mesh(GEO.box, mat(0x8a6238), 0,4.8,0); pl.scale.set(2.6,.2,2.6); g.add(pl);
-  g.platY=4.9; g.slotX=.55; g.slotZ=.55; teamFlag(g, color, 1.1, 4.9, 1.1, 2.2); return g;
+  g.platY=4.9; g.slotX=.55; g.slotZ=.55; return g;
 }
 function makeHouse(color, owner){
   geos();
@@ -1992,7 +1992,7 @@ function makeStore(color, owner){
   geos();
   const g = new T.Group();
   const sk = variant(((owner|0)*5+G.builds.length)%97, ['store','store2','store3']);
-  if(sk){ const m=modelMesh(sk, 3.7); g.add(m); teamFlag(g, color, 1.6, 0, 1.4, 2.8); return g; }
+  if(sk){ const m=modelMesh(sk, 3.7); g.add(m); return g; }
   const base = mesh(GEO.box, mat(0x7a4d28), 0,.15,0); base.scale.set(2.6,.3,2.4); g.add(base);
   for(let i=0;i<4;i++){ const l=mesh(new T.CylinderGeometry(.16,.16,1.6,6), mat(0x9a6232), -.4,.48+i*.0,-.7+i*.34); l.rotation.z=Math.PI/2; g.add(l); }
   for(let i=0;i<3;i++){ const l=mesh(new T.CylinderGeometry(.16,.16,1.6,6), mat(0x8a5428), -.4,.78,-.53+i*.34); l.rotation.z=Math.PI/2; g.add(l); }
@@ -2310,8 +2310,50 @@ function treeInstance(x,z,force){
   const d=new T.Object3D(); d.inst=batchAdd(B, chunkKeyOf(x,z), o.matrix, c); return d;
 }
 const civTexCache = {};
+/* Steinzeit: keine Länderflaggen, sondern ein Fell-Banner mit dem Stammeszeichen der Zivilisation (mit Ocker/Farbe aufgemalt) */
+const stoneAge = () => !G || !G.age || G.age<=1;
+function hideCanvas(W,H,seed){
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d'); let s=seed||7; const rnd=()=>((s=(s*16807)%2147483647)/2147483647);
+  // unregelmäßiger Fellumriss
+  x.beginPath(); const pts=[]; const N=28;
+  for(let i=0;i<N;i++){ const t=i/N, edge=Math.floor(t*4); let px,py; const k=(t*4)%1;
+    if(edge===0){ px=6+k*(W-12); py=4; } else if(edge===1){ px=W-6; py=4+k*(H-8); } else if(edge===2){ px=W-6-k*(W-12); py=H-4; } else { px=6; py=H-4-k*(H-8); }
+    const j=edge===0?2:9; pts.push([px+(rnd()-.5)*j*(edge%2?2:1), py+(rnd()-.5)*j*(edge%2?1:2)]); }
+  pts.forEach((p,i)=>i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1])); x.closePath();
+  const gr=x.createLinearGradient(0,0,W,H); gr.addColorStop(0,'#c39a66'); gr.addColorStop(.5,'#b08452'); gr.addColorStop(1,'#8e6438');
+  x.fillStyle=gr; x.fill(); x.save(); x.clip();
+  for(let i=0;i<900;i++){ x.fillStyle=`rgba(${rnd()<.5?'70,45,20':'235,210,170'},${.05+rnd()*.08})`; const r=1+rnd()*5; x.beginPath(); x.ellipse(rnd()*W,rnd()*H,r*2,r,rnd()*3,0,6.3); x.fill(); }
+  const vg=x.createRadialGradient(W/2,H/2,Math.min(W,H)*.25,W/2,H/2,Math.max(W,H)*.65); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(40,22,8,.55)'); x.fillStyle=vg; x.fillRect(0,0,W,H);
+  x.restore();
+  x.strokeStyle='rgba(60,36,14,.9)'; x.lineWidth=3; x.stroke();
+  // Lederschnüre am Mast
+  x.fillStyle='#3a2410'; for(let i=0;i<4;i++){ x.fillRect(2,14+i*(H-28)/3,10,4); }
+  return [c,x];
+}
 function civFlagTex(civ, color){
-  const key = civ[0]+color;
+  const key = (stoneAge()?'S':'')+civ[0]+color;
+  if(civTexCache[key]) return civTexCache[key];
+  if(stoneAge()){
+    const W=256, H=184, [c,x]=hideCanvas(W,H,(civ[0].charCodeAt(0)*131+civ[0].length*17)|0);
+    const t=new T.CanvasTexture(c); t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; civTexCache[key]=t;
+    const hex='#'+color.toString(16).padStart(6,'0');
+    // Farbstreifen oben und unten wie aufgemalt
+    x.globalAlpha=.85; x.fillStyle=hex; x.fillRect(16,14,W-34,9); x.fillRect(16,H-24,W-34,9); x.globalAlpha=1;
+    // Stammeszeichen: das Wappenbild ohne Hintergrund, als Silhouette in der Volksfarbe aufgemalt
+    const body=civ[2].replace(/cp/g,'cpz').replace(/clip-path="url\(#cpz\)"/,'');
+    const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 36" width="120" height="144">'+body+'</svg>';
+    const img=new Image(); img.onload=()=>{
+      const e=document.createElement('canvas'); e.width=120; e.height=144; const ex=e.getContext('2d'); ex.drawImage(img,0,0,120,144);
+      const d=ex.getImageData(0,0,120,144), p=d.data; const bg=[p[(70*120+6)*4],p[(70*120+6)*4+1],p[(70*120+6)*4+2]];
+      for(let i=0;i<p.length;i+=4){ const diff=Math.abs(p[i]-bg[0])+Math.abs(p[i+1]-bg[1])+Math.abs(p[i+2]-bg[2]); const y=((i/4)/120)|0, xx=(i/4)%120;
+        const edge = xx<10||xx>110||y<6||y>100;   // Wappenrand weglassen
+        p[i+3] = (!edge && diff>90) ? 255 : 0; p[i]=p[i+1]=p[i+2]=255; }
+      ex.putImageData(d,0,0); ex.globalCompositeOperation='source-in'; ex.fillStyle=hex; ex.fillRect(0,0,120,144);
+      x.save(); x.globalAlpha=.92; x.shadowColor='rgba(30,15,5,.6)'; x.shadowBlur=3; x.drawImage(e, W/2-60+6, H/2-80, 120, 144); x.restore();
+      t.needsUpdate=true; };
+    img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+    return t;
+  }
   if(civTexCache[key]) return civTexCache[key];
   const c=document.createElement('canvas'); c.width=128; c.height=96; const x=c.getContext('2d');
   x.fillStyle='#'+color.toString(16).padStart(6,'0'); x.fillRect(0,0,128,96);
@@ -2346,7 +2388,8 @@ function clothMat(opts){
 function clothGeo(w,h){ const g=new T.PlaneGeometry(w,h,14,8); g.translate(w/2,0,0); return g; }
 function civFlag(g, civ, color, x, y, z, h){
   const pole = mesh(GEO.box, mat(0x5a3818), x, y+h/2, z); pole.scale.set(.1,h,.1); g.add(pole);
-  const fl = new T.Mesh(clothGeo(1.6,1.15), clothMat({map:civFlagTex(civ,color)}));
+  const fl = new T.Mesh(clothGeo(1.6,1.15), clothMat(stoneAge()?{map:civFlagTex(civ,color), alphaTest:.5}:{map:civFlagTex(civ,color)}));
+  if(stoneAge()){ const top=mesh(GEO.box, mat(0xe8dcc4), x, y+h+.08, z); top.scale.set(.18,.16,.18); g.add(top); }   // Knochenkappe oben
   fl.position.set(x+.05, y+h-.62, z); fl.castShadow=true; g.add(fl);
   return fl;
 }
@@ -2374,9 +2417,14 @@ function animateFire(fx, t, dt){
   for(const sp of fx.smoke){ sp.userData.t=(sp.userData.t+dt*.22)%1; const k=sp.userData.t;
     sp.position.set(Math.sin(k*5+sp.id)*.35*k, 1+k*4.5, Math.cos(k*4)*.25*k); const sc=.6+k*2.4; sp.scale.set(sc,sc,1); sp.material.opacity=.45*(1-k)*Math.min(1,k*5); }
 }
+// kleiner Fellwimpel in der Volksfarbe (Steinzeit)
+function teamHideTex(color){ const key='H'+color; if(civTexCache[key]) return civTexCache[key];
+  const [c,x]=hideCanvas(128,80,color%997+3); const hex='#'+color.toString(16).padStart(6,'0');
+  x.globalAlpha=.88; x.fillStyle=hex; x.fillRect(14,24,104,32); x.globalAlpha=1;
+  const t=new T.CanvasTexture(c); t.colorSpace=T.SRGBColorSpace; civTexCache[key]=t; return t; }
 function teamFlag(g, color, x, y, z, h){
   const pole = mesh(GEO.box, mat(0x5a3818), x, y+h/2, z); pole.scale.set(.08,h,.08); g.add(pole);
-  const flag = new T.Mesh(clothGeo(.75,.45), clothMat({color})); flag.position.set(x+.04, y+h-.27, z); flag.castShadow=true; g.add(flag);
+  const flag = new T.Mesh(clothGeo(.75,.45), stoneAge()?clothMat({map:teamHideTex(color), alphaTest:.5}):clothMat({color})); flag.position.set(x+.04, y+h-.27, z); flag.castShadow=true; g.add(flag);
   return flag;
 }
 
