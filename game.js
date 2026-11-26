@@ -210,6 +210,7 @@ function buildUI(){
     <button class="hb" id="bPause" aria-label="Menü"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
   </div>
   <canvas id="mini" width="150" height="150"></canvas>
+  <div id="kinds"></div>
   <button class="hb" id="bIdle" aria-label="Untätige Bauern"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="#f0d3a8"/><path d="M4 21q1-8 8-8t8 8z" fill="#8a5a2b"/><text x="18" y="9" font-size="9" fill="#ffd24a" font-weight="700">z</text></svg><i id="idleN">0</i></button>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
   <div id="panel"></div>
@@ -233,6 +234,7 @@ function buildUI(){
     const done = () => { if(!d.classList.contains('hidden')) return; mo.disconnect(); if(G && (EE.S.gfx|0)!==G.gfx) applyGfx(EE.S.gfx|0); };
     const mo = new MutationObserver(done); mo.observe(d,{attributes:true, attributeFilter:['class']}); };
   $('#bIdle').onclick = () => { EE.click(); selectIdle(); };
+  $('#kinds').onclick = e => { const b=e.target.closest('[data-k]'); if(b) selectKind(b.dataset.k); };
   $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); select([],tc); } };
   $('#pOk').onclick = confirmPlace;
   $('#pGate').onclick = ()=>{ if(G.place&&G.place.kind==='wall'){ G.place.gate=!G.place.gate; $('#pGate').classList.toggle('on',G.place.gate); EE.click(); } };
@@ -249,9 +251,29 @@ function updateHUD(){
   $('#r-pop').classList.toggle('full', p.pop>=p.popCap);
   const idle = G.units.filter(u=>u.owner===0 && u.state==='idle' && u.kind!=='kid' && !u.inside).length;
   $('#idleN').textContent = idle; $('#bIdle').classList.toggle('dim', idle===0);
+  updateKinds();
+}
+// Sorten-Leiste oben links: je Einheiten-Sorte ein Knopf mit Anzahl – antippen wählt alle dieser Sorte aus
+// (später auch für Reiter, Schiffe, Panzer, Flugzeuge, Hubschrauber …)
+const KIND_ORDER = ['worker','club','spear','bow'];
+function updateKinds(){
+  const el=$('#kinds'); if(!el) return;
+  const n={}; let sol=0;
+  for(const u of G.units){ if(u.owner!==0 || u.dead || u.inside || u.kind==='kid') continue; n[u.kind]=(n[u.kind]||0)+1; if(isSoldier(u)) sol++; }
+  const ks=Object.keys(n).sort((a,b)=>(KIND_ORDER.indexOf(a)+99)%99-(KIND_ORDER.indexOf(b)+99)%99);
+  let h=ks.map(k=>`<button class="kb" data-k="${k}" aria-label="Alle ${UNIT_DE[k]||k}">${unitPic({owner:0,kind:k,hp:1,maxHp:1})}<b>${n[k]}</b></button>`).join('');
+  if(ks.filter(k=>k!=='worker').length>1) h+=`<button class="kb all" data-k="army" aria-label="Alle Krieger">${swordSVG()}<b>${sol}</b></button>`;
+  if(el._h!==h){ el._h=h; el.innerHTML=h; }
+}
+function selectKind(k){
+  const us=G.units.filter(u=>u.owner===0 && !u.dead && !u.inside && u.kind!=='kid' && (k==='army'?isSoldier(u):u.kind===k));
+  if(!us.length) return;
+  EE.click(); select(us,null);
+  EE.toast(us.length+' '+(k==='army'?'Krieger':(UNIT_DE[k]||k))+' ausgewählt');
 }
 
-function costText(c){ return Object.keys(c).map(k=>`<span class="c">${ICON[k]}${c[k]}</span>`).join(''); }
+// Kosten auf Knöpfen: grün = genug im Lager, rot = fehlt noch
+function costText(c){ const p=G&&G.players&&G.players[0]; return Object.keys(c).map(k=>`<span class="c ${p&&p.res[k]!=null?(p.res[k]>=c[k]?'ok':'miss'):''}">${ICON[k]}${c[k]}</span>`).join(''); }
 // Kosten in der Bauleiste wie in Empire Earth 2: Symbol + Menge, rot wenn es noch fehlt
 function setCost(c){ const p=G.players[0], h=Object.keys(c).filter(k=>c[k]>0).map(k=>`<span class="c${p.res[k]<c[k]?' miss':''}">${ICON[k]}${c[k]}</span>`).join(''); if(G.costH!==h){ G.costH=h; $('#pCost').innerHTML=h; } }
 function canPay(p,c){ return Object.keys(c).every(k=>p.res[k]>=c[k]); }
@@ -981,7 +1003,7 @@ function centerCamOn(x,z){ G.camS.x=x; G.camS.z=z+4; }
 /* ============================================================
    WELTKARTE
    ============================================================ */
-const LAT0 = 76, LAT1 = -56;              // Kartenausschnitt (Breitengrade)
+const LAT0 = 90, LAT1 = -90;                // Kartenausschnitt (Breitengrade)
 const CIV_POS = { 'Osmanen':[32.5,39.5], 'Römer':[12.5,42], 'Griechen':[22,39], 'Ägypter':[31,27], 'Babylonier':[44.5,33],
   'Germanen':[10,51], 'Briten':[-1.5,52.5], 'Franken':[2.5,47], 'Wikinger':[10,60.5], 'Mongolen':[105,47],
   'Chinesen':[113,34], 'Japaner':[138,36], 'Koreaner':[127.5,37], 'Azteken':[-99,19.5], 'Inka':[-72,-13.5],
@@ -1010,7 +1032,7 @@ function loadWorldMask(){
       const d=x.getImageData(0,0,c.width,c.height).data; WMW=c.width; WMH=c.height; WMASK=new Float32Array(WMW*WMH);
       for(let i=0;i<WMASK.length;i++) WMASK[i]=d[i*4]/255; res(); };
     img.onerror = ()=>res();
-    img.src = window.EE_WORLD || 'weltkarte.png?v=134';
+    img.src = window.EE_WORLD || 'weltkarte.png?v=141';
   });
 }
 function landAt(lon,lat){
@@ -1499,7 +1521,7 @@ function buildWater(){
         vec3 sky = mix(cSkyH, cSkyZ, clamp(Rf.y*1.6,0.0,1.0));
         float dk = smoothstep(.15, 1.35, depth);
         // Tropen (z. B. Malediven, Karibik): helles türkises Wasser, zum Rand der Tropen hin fließender Übergang
-        float lat = 76.0 - (p.y + uWorld.y*.5)/uWorld.y*132.0;
+        float lat = 90.0 - (p.y + uWorld.y*.5)/uWorld.y*180.0;
         float trop = 1.0 - smoothstep(20.0, 30.0, abs(lat));
         vec3 shallowC = mix(cShallow, vec3(.42,.93,.9), trop);
         vec3 deepC = mix(cDeep, vec3(.05,.48,.72), trop*.85);
@@ -2880,7 +2902,10 @@ function update(dt){
   FLAG_T.value = G.t;
   updateOverview();
   if(panelT>0){ panelT-=dt; if(panelT<=0) drawPanel(); }
-  G.hudT = (G.hudT||0)-dt; if(G.hudT<=0){ G.hudT=.5; updateHUD(); if(G.sel.length===1) drawPanel(); }
+  G.hudT = (G.hudT||0)-dt; if(G.hudT<=0){ G.hudT=.5; updateHUD();
+    // Kosten-Farben aktuell halten: neu zeichnen, wenn sich ändert, was bezahlbar ist
+    const p0=G.players[0], aff=[...Object.values(BUILD),...Object.values(UNIT),{cost:WORKER_COST}].map(d=>d.cost?(canPay(p0,d.cost)?1:0):'').join('');
+    if(G.sel.length===1 || aff!==G.affSig){ G.affSig=aff; drawPanel(); } }
   G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=.25; drawMinimap(); }
   if(G.place && !G.place.line) updateGhost();
   updateDip(dt);
@@ -3353,13 +3378,13 @@ function updateWallGhost(){
   pl.cost = cost; pl.ok = okCount>0;
   const pay = G.players[0].res.wood >= cost; setCost({wood:cost});
   $('#pTxt').textContent = okCount ? (road ? 'Weg: '+Math.round(okCount*seg)+' m · kostenlos' : okCount+' Stück · '+cost+' Holz'+(pay?'':' – es fehlen '+Math.ceil(cost-G.players[0].res.wood)+' Holz')) : 'Mit dem Finger eine Linie ziehen';
-  $('#pOk').classList.toggle('dim', !pl.ok || !pay); $('#pOk').disabled = !pl.ok || !pay;
+  $('#pOk').classList.toggle('dim', !pl.ok || !pay); $('#pOk').disabled = false;
 }
 function confirmWall(){
   const pl=G.place, p=G.players[0];
   if(!pl.ok){ EE.toast(pl.kind==='road'?'Hier kann kein Weg entstehen':'Hier kann keine Palisade stehen'); return; }
   if(pl.kind==='road' && !pl.workers.length){ EE.toast('Wähle zuerst Bauern aus, die den Weg anlegen'); return; }
-  if(p.res.wood < pl.cost){ EE.toast('Nicht genug Holz ('+pl.cost+' nötig)'); return; }
+  if(p.res.wood < pl.cost){ EE.toast('Es fehlen '+Math.ceil(pl.cost-p.res.wood)+' Holz ('+pl.cost+' nötig)'); EE.sfx('error'); EE.vib(30); return; }
   p.res.wood -= pl.cost;
   const id = WALL_ID++, ang = pl.ang||0, segs=[];
   for(const c of pl.cells){ if(!c.ok) continue; segs.push(addWall(0, c, ang, id, pl.kind==='road')); }
@@ -3562,13 +3587,13 @@ function updateGhost(){
   const pay = canPay(G.players[0], BUILD[pl.kind].cost); setCost(BUILD[pl.kind].cost);
   if(pl.ok && !pay) $('#pTxt').textContent = missingTxt(G.players[0], BUILD[pl.kind].cost);
   pl.pad.material.color.setHex(!pl.ok||!pay?0xff4444:slow?0xffcc33:0x44ff66);
-  $('#pOk').classList.toggle('dim', !pl.ok || !pay); $('#pOk').disabled = !pl.ok || !pay;
+  $('#pOk').classList.toggle('dim', !pl.ok || !pay); $('#pOk').disabled = false;
 }
 function confirmPlace(){
   if(G.place && G.place.line) return confirmWall();
   const pl=G.place, p=G.players[0];
   if(!pl.ok){ EE.toast(pl.why || 'Hier kann nicht gebaut werden'); EE.sfx('error'); return; }
-  if(!canPay(p,BUILD[pl.kind].cost)){ EE.sfx('error'); return; }
+  if(!canPay(p,BUILD[pl.kind].cost)){ EE.toast(BUILD[pl.kind].name+': '+missingTxt(p,BUILD[pl.kind].cost)); EE.sfx('error'); EE.vib(30); return; }
   if(!pl.workers.length){ const w=G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.inside && !u.dead).sort((a,b)=>Math.hypot(a.x-pl.x,a.z-pl.z)-Math.hypot(b.x-pl.x,b.z-pl.z)).slice(0,3); pl.workers=w; }
   pay(p,BUILD[pl.kind].cost);
   const b = addBuilding(pl.kind,0,pl.x,pl.z,false);
