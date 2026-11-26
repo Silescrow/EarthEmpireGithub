@@ -83,10 +83,13 @@ async function start(sv){
       if(c==null) c = BASE_COLORS.filter(okL).filter(b=>!used.some(u=>dist(u,b)<70))[0] ?? BASE_COLORS[i];
       used.push(c); COLORS[i]=c; p.color=c; flagCache[p.civ[0]]=c; }); }
   initDip();
+  // Online: Teams aus dem Raum – gleiches Team = verbündet, sonst Krieg; Namen der Mitspieler
+  if(sv && sv.online){ G.online=sv; G.players.forEach((p,i)=>{ const sl=sv.slots[i]; p.netName=sl.name; p.human=sl.kind==='human'; p.team=sl.team;
+      if(i>0 && G.dip[i]){ G.dip[i].state = sl.team===sv.slots[0].team ? 'ally' : 'enemy'; G.dip[i].mood = sl.team===sv.slots[0].team ? 80 : 0; } }); }
   buildUI();
   initRenderer();
   genWorld();
-  if(sv) applySave(sv);
+  if(sv && !sv.online) applySave(sv);
   buildOverview();
   for(const b of G.builds) if(b.kind==='tc' && b.built>=1) claimRegion(b);
   buildBorders();
@@ -2032,6 +2035,7 @@ function parseGLB(buf){
 // Grafik „Niedrig“: Gebäude in einfacher Fassung (models/niedrig/), ab „Mittel“ volle Qualität
 const MODEL_LOW = new Set(['dolphin','fish','tower','warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
 let modelsLow = null;
+window.EE_MODEL_LIST=()=>{ const l=[]; for(const [k,f] of Object.entries(MODEL_FILES)){ l.push(f); if(MODEL_LOW.has(k)) l.push(f.replace('models/','models/niedrig/')); } return [...new Set(l)]; };   // für das Offline-Spielen
 function loadModels(gfx){
   const low = gfx===0;
   if(modelsReady && modelsLow===low) return modelsReady;
@@ -2938,6 +2942,7 @@ function updateAIWar(p, mine, tc){
    UPDATE & RENDER
    ============================================================ */
 function update(dt){
+  pcUpdate(dt);
   G.t += dt;
   if((G.saveT-=dt)<=0){ G.saveT=30; saveGame(); }
   for(const u of G.units.slice()) updateWorker(u,dt);
@@ -3193,7 +3198,7 @@ function toScreen(x,y,z){ _v3.set(x,y,z).project(G.cam); return {x:(_v3.x+1)/2*G
 const P = new Map(); let gesture=null, lastTap={t:0,u:null}, longT=0;
 function initInput(){
   const c = $('#gc');
-  c.addEventListener('pointerdown', pDown);
+  c.addEventListener('pointerdown', pDown); initPC(c);
   c.addEventListener('pointermove', pMove);
   c.addEventListener('pointerup', pUp);
   c.addEventListener('pointercancel', pUp);
@@ -3205,8 +3210,92 @@ function initInput(){
   mini.addEventListener('pointerdown', e=>{ e.preventDefault(); mini.setPointerCapture(e.pointerId); md={x:e.clientX,y:e.clientY,drag:false}; mini.onpointermove=ev=>{ if(Math.hypot(ev.clientX-md.x,ev.clientY-md.y)>8) md.drag=true; if(md.drag) miniGo(ev); }; });
   mini.addEventListener('pointerup', e=>{ mini.onpointermove=null; if(md && !md.drag) openBigMap(); md=null; });
 }
+/* ============================================================
+   PC-STEUERUNG wie in Empire Earth 2 (Maus + Tastatur); am Handy bleibt alles Touch
+   Maus: Links = auswählen (ziehen = Rahmen, Doppelklick = alle gleichen im Bild, Umschalt = hinzufügen),
+         Rechts = Befehl (laufen, angreifen, sammeln, bauen …), rechts ziehen = Karte verschieben,
+         Mausrad = zoomen, Mausrad gedrückt = drehen, Bildschirmrand = Karte verschieben
+   Tastatur: WASD/Pfeile Kamera, Q/E drehen, +/- zoomen, Strg+1–9 Gruppe speichern, 1–9 Gruppe wählen (2× = hinspringen),
+         H Hauptgebäude, . untätiger Bauer, Leertaste zur Auswahl, M Weltkarte, Entf Auswahl aufheben, Esc abbrechen/Menü,
+         Baumenü (Bauern gewählt): E Hütte, L Lager, K Kriegerhütte, T Wachturm, Z Stadtzentrum, P Palisade, R Weg
+   ============================================================ */
+const PC = {keys:new Set(), mx:-1, my:-1, inside:false, groups:{}, lastGrp:{n:0,t:0}, lastClick:{t:0,u:null}};
+function pcCommandAt(sx,sy){
+  if(G.place){ cancelPlace(); return; }
+  const mine=G.sel.filter(u=>u.owner===0); if(!mine.length) return;
+  const hit=pickAt(sx,sy);
+  if(hit && hit.u && hit.u.owner===0){ formationMove(mine, hit.u.x, hit.u.z); marker(hit.u.x,hit.u.z,0x7cff7c); return; }
+  if(hit && hit.b && hit.b.owner===0 && hit.b.built>=1 && hit.b.hp>=BUILD[hit.b.kind].hp && !BUILD[hit.b.kind].drop && hit.b.kind!=='tower'){ const g=groundAt(sx,sy); if(g){ formationMove(mine,g.x,g.z); marker(g.x,g.z,0x7cff7c); } return; }
+  const keep=G.sel.slice(); lastTap={t:0,u:null}; tapAt(sx,sy); if(G.sel.length!==keep.length) select(keep,null);
+}
+function pcSelectAt(sx,sy,add){
+  if(G.place){ tapAt(sx,sy); confirmPlace(); return; }
+  const hit=pickAt(sx,sy), now=performance.now();
+  if(hit && hit.u && hit.u.owner===0){
+    if(now-PC.lastClick.t<350 && PC.lastClick.u && PC.lastClick.u.kind===hit.u.kind){ // Doppelklick: alle gleichen im Bild
+      select(G.units.filter(u=>u.owner===0 && u.kind===hit.u.kind && !u.inside && (()=>{const s=toScreen(u.x,getH(u.x,u.z),u.z); return s.ok&&s.x>0&&s.y>0&&s.x<G.W&&s.y<G.H;})()), null);
+    } else if(add){ const s=G.sel.includes(hit.u) ? G.sel.filter(u=>u!==hit.u) : [...G.sel.filter(u=>u.owner===0), hit.u]; select(s,null); }
+    else select([hit.u],null);
+    PC.lastClick={t:now,u:hit.u}; EE.click(); return;
+  }
+  PC.lastClick={t:now,u:null};
+  if(hit && hit.u){ select([],null); EE.toast(UNIT[hit.u.kind].name+' der '+G.players[hit.u.owner].civ[0]); return; }
+  if(hit && hit.b){ select([],hit.b); EE.click(); return; }
+  if(hit && hit.r){ if(!add) select([],null); EE.toast(RES_DE[hit.r.kind]+': '+Math.ceil(hit.r.amt)+' übrig'); return; }
+  if(!add) select([],null);
+}
+function pcPanel(a){ if(a.startsWith('b-') && !G.buildMenu && !document.querySelector(`#panel [data-a="${a}"]`)){ G.buildMenu=true; drawPanel(); } const b=document.querySelector(`#panel [data-a="${a}"]`); if(b && !b.classList.contains('dim')){ b.click(); return true; } return false; }
+function pcKey(e){
+  if(!G || G.inMenu || e.target.closest('input,textarea,select')) return;
+  const k=e.key.toLowerCase(), ctrl=e.ctrlKey||e.metaKey;
+  if(/^[1-9]$/.test(k)){ e.preventDefault();
+    if(ctrl){ PC.groups[k]=G.sel.filter(u=>u.owner===0 && !u.dead); EE.toast('Gruppe '+k+' gespeichert ('+PC.groups[k].length+')'); return; }
+    const g=(PC.groups[k]||[]).filter(u=>!u.dead && !u.inside); if(!g.length) return; select(g,null);
+    const now=performance.now(); if(PC.lastGrp.n===k && now-PC.lastGrp.t<450){ G.camS.x=g[0].x; G.camS.z=g[0].z; } PC.lastGrp={n:k,t:now}; return; }
+  if(G.selB===null && G.sel.some(u=>u.owner===0 && u.kind==='worker') && !ctrl){
+    const map={e:'b-house', l:'b-store', k:'b-barracks', t:'b-tower', z:'b-tc', p:'b-wall', r:'b-road'};
+    if(map[k] && pcPanel(map[k])){ e.preventDefault(); return; }
+  }
+  if(G.selB && G.selB.owner===0 && !ctrl){ // Gebäude gewählt: B = Bauer, 1. Truppe usw. über Q/W/E? – hier: B/A/S/D-frei halten → Ausbildung mit F, G, V
+    const map={f:'worker'}; if(map[k] && pcPanel(map[k])){ e.preventDefault(); return; }
+  }
+  switch(k){
+    case 'h': if(G.players[0].tc){ G.camS.x=G.players[0].tc.x; G.camS.z=G.players[0].tc.z; select([],G.players[0].tc); } break;
+    case '.': selectIdle(); break;
+    case ' ': e.preventDefault(); { const u=G.sel[0]||G.selB; if(u){ G.camS.x=u.x; G.camS.z=u.z; } } break;
+    case 'm': openBigMap(); break;
+    case 'delete': select([],null); break;
+    case 'escape': { const bm=$('#bigmap'); if(bm && !bm.classList.contains('hidden')){ bm.classList.add('hidden'); break; } if(G.place){ cancelPlace(); break; } if(G.sel.length||G.selB){ select([],null); break; } toMenu(); } break;
+    case '+': case '=': G.camS.dist*=.85; break;
+    case '-': G.camS.dist*=1.18; break;
+    default: PC.keys.add(k); return;
+  }
+  e.preventDefault();
+}
+function pcUpdate(dt){
+  if(!G || G.inMenu) return;
+  const K=PC.keys, sp=G.camS.dist*1.1*dt; let dx=0, dz=0;
+  if(K.has('w')||K.has('arrowup')) dz-=1; if(K.has('s')||K.has('arrowdown')) dz+=1; if(K.has('a')||K.has('arrowleft')) dx-=1; if(K.has('d')||K.has('arrowright')) dx+=1;
+  // Bildschirmrand (nur Maus, nur wenn das Fenster den Mauszeiger hat)
+  if(PC.inside && !P.size && document.fullscreenElement !== undefined){ const m=8; if(PC.mx<m) dx-=1; if(PC.mx>G.W-m) dx+=1; if(PC.my<m) dz-=1; if(PC.my>G.H-m) dz+=1; }
+  if(K.has('q')) G.camS.yaw+=1.4*dt; if(K.has('e') && !(G.sel.some(u=>u.kind==='worker'))) G.camS.yaw-=1.4*dt;
+  if(dx||dz){ const c=Math.cos(G.camS.yaw), s=Math.sin(G.camS.yaw); G.camS.x += (dx*c + dz*s)*sp; G.camS.z += (-dx*s + dz*c)*sp; }
+}
+function initPC(c){
+  addEventListener('keydown', pcKey);
+  addEventListener('keyup', e=>PC.keys.delete(e.key.toLowerCase()));
+  addEventListener('blur', ()=>PC.keys.clear());
+  c.addEventListener('mousemove', e=>{ PC.mx=e.clientX; PC.my=e.clientY; PC.inside=true;
+    if(G && G.place && !G.place.line && !P.size){ const g=groundAt(e.clientX,e.clientY); if(g){ G.place.x=g.x; G.place.z=g.z; } } });   // Bauplatz folgt der Maus
+  c.addEventListener('mouseleave', ()=>{ PC.inside=false; });
+}
 function pDown(e){
   e.preventDefault(); $('#gc').setPointerCapture(e.pointerId);
+  if(e.pointerType==='mouse'){ // PC: Maus wie in Empire Earth 2
+    P.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t:performance.now()});
+    gesture = e.button===2 ? {type:'rclick', mouse:true} : e.button===1 ? {type:'rotate', mouse:true} : {type:'tap', mouse:true, add:e.shiftKey};
+    return;
+  }
   P.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t:performance.now()});
   if(P.size===1){
     gesture={type:'tap'};
@@ -3221,6 +3310,9 @@ function pMove(e){
   const p = P.get(e.pointerId); if(!p) return;
   const px=p.x, py=p.y; p.x=e.clientX; p.y=e.clientY;
   if(!gesture) return;
+  if(gesture.type==='rotate'){ G.camS.yaw -= (p.x-px)*.008; return; }
+  if(gesture.type==='rclick'){ if(Math.hypot(p.x-p.sx,p.y-p.sy)>6) gesture.type='rpan'; }
+  if(gesture.type==='rpan'){ panBy(p.x-px, p.y-py); return; }
   if(gesture.type==='tap' && Math.hypot(p.x-p.sx,p.y-p.sy)>10){
     clearTimeout(longT);
     if(G.place && G.place.line){ const g0=groundAt(p.sx,p.sy); if(g0){ G.place.ax=g0.x; G.place.az=g0.z; } gesture={type:'wall'}; }
@@ -3243,6 +3335,7 @@ function pUp(e){
   const p = P.get(e.pointerId); P.delete(e.pointerId);
   clearTimeout(longT);
   if(!p || !gesture) return;
+  if(gesture.mouse){ if(gesture.type==='tap') pcSelectAt(p.x,p.y,gesture.add); else if(gesture.type==='rclick') pcCommandAt(p.x,p.y); else if(gesture.type==='box'){ boxSelect(gesture.x0,gesture.y0,p.x,p.y); hideBox(); } else if(gesture.type==='ghost'||gesture.type==='wall'){} gesture=null; return; }
   if(gesture.type==='tap' && P.size===0) tapAt(p.x,p.y);
   else if(gesture.type==='box' && P.size===0){ boxSelect(gesture.x0,gesture.y0,p.x,p.y); hideBox(); }
   if(P.size===0) gesture=null;
@@ -3666,5 +3759,12 @@ function endPlace(){
   G.place=null; G.costH=null; $('#pCost').innerHTML=''; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+function startOnline(cfg, me){
+  // eigenes Volk immer als Spieler 0, die anderen in der Reihenfolge der Raumplätze
+  const order=[me, ...cfg.slots.map((_,i)=>i).filter(i=>i!==me)], slots=order.map(i=>cfg.slots[i]);
+  EE.S.diff=cfg.diff;
+  start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
+  setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
+}
+window.EEGame = { start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
