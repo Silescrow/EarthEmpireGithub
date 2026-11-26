@@ -114,6 +114,9 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .rs.full{border-color:#ff6060;color:#ffb0b0}
 .age{margin-left:auto;font:700 14px "Cinzel",Georgia,serif;color:var(--gold2);text-shadow:0 1px 2px #000;white-space:nowrap}
 .age span{color:var(--gold)}
+.age{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
+.age .wxi{display:flex;align-items:center;gap:3px;font:600 11px system-ui,sans-serif;color:#eef3f8;margin-top:1px}
+.age .wxi svg{width:15px;height:15px}
 .hb{pointer-events:auto;width:44px;height:44px;border-radius:12px;border:2px solid var(--gold);background:#0b1130e0;color:var(--gold2);display:grid;place-items:center;cursor:pointer;position:relative}
 .hb svg{width:24px;height:24px}
 .hb.dim{opacity:.5}
@@ -224,7 +227,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.33</div>
+    <div class="ver2">Version 1.34</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -245,7 +248,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
     <button class="ico" id="bFull" aria-label="Vollbild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ico quit" id="bQuit" aria-label="Spiel verlassen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="ver">Earth Empire · V1.33</div>
+  <div class="ver">Earth Empire · V1.34</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -279,7 +282,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
   <div class="toast hidden" id="toast"></div>
 </section>
 
-<script src="audio.js?v=1.33"></script>
+<script src="audio.js?v=1.34"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -443,7 +446,7 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.33"></script>
-<script src="game.js?v=1.33"></script>
+<script src="three.min.js?v=1.34"></script>
+<script src="game.js?v=1.34"></script>
 </body>
 </html>

@@ -107,8 +107,8 @@ function sfx(name, vol){
 }
 
 /* ---------- Umgebung: Wind, Wellen, Vögel, Feuer ---------- */
-const AMB = {wind:.3, waves:0, birds:0, fire:0};
-let windG, waveG;
+const AMB = {wind:.3, waves:0, birds:0, fire:0, jungle:0, cold:0, desert:0, rain:0, storm:0};
+let windG, waveG, insectG, howlG, sandG, rainG;
 function startAmbient(){
   const t=AC.currentTime;
   windG = gain(0, ambBus); const wf=filt('lowpass',500,.8,windG);
@@ -117,11 +117,37 @@ function startAmbient(){
   waveG = gain(0, ambBus); const vf=filt('lowpass',700,.5,waveG); const vg=gain(1,vf);
   const vs=AC.createBufferSource(); vs.buffer=noiseBuf; vs.loop=true; vs.playbackRate.value=.6; vs.connect(vg); vs.start(t);
   const vl=AC.createOscillator(), vld=AC.createGain(); vl.frequency.value=.13; vld.gain.value=.5; vl.connect(vld); vld.connect(vg.gain); vl.start(t);
+  // Dschungel: Zikaden und Insekten (hohes Rauschen, schnell pulsierend)
+  insectG = gain(0, ambBus); const am=gain(.5, insectG); const ib=filt('bandpass',4700,5,am);
+  const is=AC.createBufferSource(); is.buffer=noiseBuf; is.loop=true; is.connect(ib); is.start(t);
+  const io=AC.createOscillator(), iod=AC.createGain(); io.frequency.value=31; iod.gain.value=.5; io.connect(iod); iod.connect(am.gain); io.start(t);
+  const io2=AC.createOscillator(), io2d=AC.createGain(); io2.frequency.value=.09; io2d.gain.value=900; io2.connect(io2d); io2d.connect(ib.frequency); io2.start(t);
+  // Kälte (Sibirien): heulender Wind durch enge Filter
+  howlG = gain(0, ambBus);
+  for(const [f,q,r,dep] of [[520,11,.07,260],[880,14,.11,300]]){ const hb=filt('bandpass',f,q,howlG); const hs=AC.createBufferSource(); hs.buffer=noiseBuf; hs.loop=true; hs.playbackRate.value=.7; hs.connect(hb); hs.start(t);
+    const ho=AC.createOscillator(), hd=AC.createGain(); ho.frequency.value=r; hd.gain.value=dep; ho.connect(hd); hd.connect(hb.frequency); ho.start(t); }
+  // Wüste: trockenes Sandrieseln
+  sandG = gain(0, ambBus); const sg2=gain(.6,sandG); const sh=filt('highpass',2800,.7,sg2);
+  const ss=AC.createBufferSource(); ss.buffer=noiseBuf; ss.loop=true; ss.connect(sh); ss.start(t);
+  const so=AC.createOscillator(), sod=AC.createGain(); so.frequency.value=.17; sod.gain.value=.45; so.connect(sod); sod.connect(sg2.gain); so.start(t);
+  // Regen: dichtes Prasseln
+  rainG = gain(0, ambBus); const rl=filt('lowpass',5200,.5,rainG); const rh=filt('highpass',700,.5,rl);
+  const rs=AC.createBufferSource(); rs.buffer=noiseBuf; rs.loop=true; rs.playbackRate.value=1.3; rs.connect(rh); rs.start(t);
   setInterval(()=>{
     if(!AC || AC.state!=='running') return;
     const n=AC.currentTime;
     windG.gain.setTargetAtTime(AMB.wind*.16, n, 1.2);
     waveG.gain.setTargetAtTime(AMB.waves*.22, n, 1);
+    insectG.gain.setTargetAtTime(AMB.jungle*.06*(1-AMB.rain*.6), n, 1.5);
+    howlG.gain.setTargetAtTime(AMB.cold*.5, n, 1.5);
+    sandG.gain.setTargetAtTime(AMB.desert*.05, n, 1.5);
+    rainG.gain.setTargetAtTime(AMB.rain*.2, n, 1.5);
+    const J=AMB.jungle*(1-AMB.rain*.8);
+    if(J>.05){ if(Math.random()<J*.3) tropBird(n+Math.random()*.4, J); if(Math.random()<J*.22) frog(n+Math.random()*.4, J); if(Math.random()<J*.025) monkey(n, J); }
+    if(AMB.cold>.2 && Math.random()<AMB.cold*.02) wolf(n, AMB.cold);
+    if(AMB.desert>.3 && Math.random()<AMB.desert*.02) hawk(n, AMB.desert);
+    if(AMB.rain>.1){ for(let i=0;i<4;i++) if(Math.random()<AMB.rain) drop(n+Math.random()*.5, AMB.rain); }
+    if(AMB.storm>.6 && Math.random()<.012) thunder(n);
     if(AMB.birds>.05 && Math.random()<AMB.birds*.55) bird(n+Math.random()*.4, AMB.birds);
     if(AMB.fire>.05){ for(let i=0;i<3;i++) if(Math.random()<.6) crackle(n+Math.random()*.5, AMB.fire); }
   }, 500);
@@ -131,6 +157,21 @@ function bird(t, v){
   for(let i=0;i<n;i++){ const s=t+i*(.08+Math.random()*.06), g=gain(0,ambBus); env(g,s,.01,.05*v,.07);
     const o=osc('sine',base,s,.1,g); o.frequency.setValueAtTime(base,s); o.frequency.exponentialRampToValueAtTime(base*(1.2+Math.random()*.4),s+.06); }
 }
+// Tropenvogel: tiefer, rufender Pfiff mit Triller (Tukan/Papagei)
+function tropBird(t, v){
+  const kind=Math.random(), g=gain(0,ambBus);
+  if(kind<.5){ const f=900+Math.random()*700; for(let i=0;i<2;i++){ const s=t+i*.22, gg=gain(0,ambBus); env(gg,s,.02,.07*v,.18); const o=osc('triangle',f,s,.22,gg); o.frequency.setValueAtTime(f*1.25,s); o.frequency.exponentialRampToValueAtTime(f*.8,s+.18); } }
+  else { const f=1800+Math.random()*900; env(g,t,.01,.06*v,.35); const o=osc('square',f,t,.4,filt('bandpass',f,4,g)); const lfo=AC.createOscillator(), ld=AC.createGain(); lfo.frequency.value=24; ld.gain.value=f*.12; lfo.connect(ld); ld.connect(o.frequency); lfo.start(t); lfo.stop(t+.45); }
+}
+function frog(t, v){ const n=3+((Math.random()*4)|0), f=280+Math.random()*220;
+  for(let i=0;i<n;i++){ const s=t+i*.11, g=gain(0,ambBus); env(g,s,.005,.05*v,.06); osc('square',f,s,.08,filt('lowpass',900,3,g)); } }
+function monkey(t, v){ const g=gain(0,ambBus); env(g,t,.15,.07*v,1.2); const o=osc('sawtooth',320,t,1.5,filt('bandpass',700,3,g)); o.frequency.setValueAtTime(320,t); o.frequency.linearRampToValueAtTime(680,t+.5); o.frequency.linearRampToValueAtTime(380,t+1.3); }
+// Wolf in der Ferne (Sibirien)
+function wolf(t, v){ const g=gain(0,ambBus); env(g,t,.5,.06*v,2.4); const o=osc('sine',380,t,3.2,g); o.frequency.setValueAtTime(380,t); o.frequency.linearRampToValueAtTime(610,t+.7); o.frequency.linearRampToValueAtTime(560,t+2.2); o.frequency.linearRampToValueAtTime(420,t+3);
+  const l=AC.createOscillator(), ld=AC.createGain(); l.frequency.value=5.5; ld.gain.value=9; l.connect(ld); ld.connect(o.frequency); l.start(t); l.stop(t+3.3); send(g,.6); }
+function hawk(t, v){ const g=gain(0,ambBus); env(g,t,.02,.05*v,.7); const o=osc('sawtooth',2700,t,.8,filt('bandpass',2400,6,g)); o.frequency.setValueAtTime(2900,t); o.frequency.exponentialRampToValueAtTime(1800,t+.7); }
+function drop(t, v){ const g=gain(0,ambBus); env(g,t,.001,.05*v,.03); noise(t,.04,filt('bandpass',2500+Math.random()*3500,3,g)); }
+function thunder(t){ const g=gain(0,ambBus); env(g,t,.08,.35,3.5); noise(t,4,filt('lowpass',160,.8,g)); const g2=gain(0,ambBus); env(g2,t,.01,.15,.5); noise(t,.6,filt('lowpass',900,.5,g2)); }
 function crackle(t, v){ const g=gain(0,ambBus); env(g,t,.001,.12*v,.03); noise(t,.04,filt('bandpass',1500+Math.random()*2500,2,g)); }
 function ambient(o){ Object.assign(AMB, o); }
 
