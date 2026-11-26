@@ -2898,14 +2898,16 @@ function updateBBar(b){
   let f=-1, col=0x4fb3ff;
   if(b.built<1){ f=b.built; col=0xf2a630; }
   else if(b.queue.length){ const qk=b.queue[0]; f=b.qT/(qk==='worker'?WORKER_TIME:UNIT[qk].time); }
-  const show = f>=0 && !G.farView && b.owner===0;
+  const small = b.kind==='wall'||b.kind==='gate'||b.kind==='road';
+  // Palisaden: nur das Stück zeigen, an dem gerade gebaut wird (nicht über jedem Stück einen Balken)
+  const show = f>=0 && !G.farView && b.owner===0 && !(small && b.built<=0);
   if(!show){ if(b.bar) b.bar.visible=false; return; }
-  const W=Math.max(2.2,b.size*.55);
+  const W = small ? .7 : clamp(b.size*.3, 1, 1.6);   // kleiner Fortschrittsbalken (V1.73)
   if(!b.bar){ const g=new T.Group();
-    const bg=new T.Sprite(new T.SpriteMaterial({color:0x111111, depthTest:false, transparent:true, opacity:.85})); bg.scale.set(W+.12,.3,1);
-    const fg=new T.Sprite(new T.SpriteMaterial({color:0x4fb3ff, depthTest:false})); fg.center.set(0,.5); fg.scale.set(W,.2,1); fg.position.x=-W/2;
+    const bg=new T.Sprite(new T.SpriteMaterial({color:0x111111, depthTest:false, transparent:true, opacity:.85})); bg.scale.set(W+.08,.16,1);
+    const fg=new T.Sprite(new T.SpriteMaterial({color:0x4fb3ff, depthTest:false})); fg.center.set(0,.5); fg.scale.set(W,.1,1); fg.position.x=-W/2;
     bg.renderOrder=8; fg.renderOrder=9; g.add(bg); g.add(fg); g.fg=fg; b.bar=g; G.scene.add(g); }
-  b.bar.visible=true; b.bar.position.set(b.x, b.mesh.position.y + (b.kind==='tc'?5.2:b.size*.9+1), b.z);
+  b.bar.visible=true; b.bar.position.set(b.x, b.mesh.position.y + (b.kind==='tc'?5.2:small?2.3:b.size*.9+1), b.z);
   b.bar.quaternion.copy(G.cam.quaternion);
   b.bar.fg.scale.x=Math.max(.001,W*clamp(f,0,1)); b.bar.fg.material.color.setHex(col);
   if(G.selB===b){ const el=document.querySelector('#panel .bar div'); if(el) el.style.width=(clamp(f,0,1)*100).toFixed(1)+'%'; }
@@ -3635,21 +3637,41 @@ function startWall(kind){
   $('#placebar').classList.remove('hidden');
   drawPanel(); updateWallGhost();
 }
+// Enden bestehender eigener Palisaden – neue Palisaden docken dort an, damit alles geschlossen ist
+function wallEnds(road){
+  const pts=[];
+  for(const b of G.builds){ if(b.owner!==0 || !b.seg || b.dead) continue; if(road ? b.kind!=='road' : (b.kind!=='wall'&&b.kind!=='gate')) continue;
+    const a=b.seg.ang||0, h=(b.seg.len||1)/2, cx=Math.cos(a)*h, cz=Math.sin(a)*h;
+    pts.push({x:b.x+cx,z:b.z+cz,cells:b.cells}, {x:b.x-cx,z:b.z-cz,cells:b.cells}); }
+  // freie Enden (nicht mit einem Nachbarstück verbunden) zuerst
+  for(const p of pts) p.free = pts.filter(q=>Math.hypot(q.x-p.x,q.z-p.z)<.35).length===1;
+  return pts;
+}
+function snapEnd(x,z,ends){
+  let best=null, bd=1e9;
+  for(const p of ends){ const d=Math.hypot(p.x-x,p.z-z) - (p.free?.8:0); if(d<bd){ bd=d; best=p; } }
+  return best && bd<1.5 ? best : null;
+}
 function updateWallGhost(){
   const pl=G.place, NX=G.NX, NZ=G.NZ;
   for(const gh of pl.ghosts) G.scene.remove(gh); pl.ghosts=[];
   const road = pl.kind==='road';
-  const dx=pl.bx-pl.ax, dz=pl.bz-pl.az, L=Math.min(Math.hypot(dx,dz), 150);
+  const ends = wallEnds(road), sa = snapEnd(pl.ax,pl.az,ends), sb = snapEnd(pl.bx,pl.bz,ends);
+  const AX = sa?sa.x:pl.ax, AZ = sa?sa.z:pl.az, BX = sb&&sb!==sa?sb.x:pl.bx, BZ = sb&&sb!==sa?sb.z:pl.bz;
+  const own = new Set(); for(const p of [sa,sb]) if(p) for(const k of p.cells||[]) own.add(k);
+  pl.snapA=!!sa; pl.snapB=!!(sb&&sb!==sa);
+  const dx=BX-AX, dz=BZ-AZ, L=Math.min(Math.hypot(dx,dz), 150);
   const n = Math.max(1, Math.round(L/1.15)), seg = Math.max(.6, L/n);
   const ux = L>0.01?dx/Math.hypot(dx,dz):1, uz = L>0.01?dz/Math.hypot(dx,dz):0;
   const ang = Math.atan2(uz, ux), mid = Math.floor(n/2);
   pl.cells = [];
   for(let i=0;i<n;i++){
-    const x = pl.ax + ux*seg*(i+.5), z = pl.az + uz*seg*(i+.5);
+    const x = AX + ux*seg*(i+.5), z = AZ + uz*seg*(i+.5);
     const ks = new Set();
     for(let t=-.45;t<=.45;t+=.15){ const k=cellIdx(x+ux*seg*t, z+uz*seg*t); ks.add(k); }
     const arr=[...ks];
-    const ok = arr.every(k=>k>=0 && !G.grid[k]) && getH(x,z)>WATER_Y+.15 && true;
+    const edge = i===0 || i===n-1;
+    const ok = arr.every(k=>k>=0 && (!G.grid[k] || (edge && own.has(k)))) && getH(x,z)>WATER_Y+.15;
     pl.cells.push({ks:arr, x, z, len:seg, ok, gate: !road && pl.gate && n>=3 && (n<=30 ? i===mid : i%24===12)});
   }
   let okCount=0;
@@ -3983,5 +4005,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { gift, quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { gift, quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
