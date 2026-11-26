@@ -1962,7 +1962,7 @@ function makeHouse(color, owner){
   geos();
   const g = new T.Group();
   const hk = variant(((owner|0)*3+G.builds.length)%97, ['house','tent']);
-  if(hk){ g.add(modelMesh(hk, hk==='tent'?3.1:3.3)); teamFlag(g, color, 1.1, 1.5, 1.1, 1.4); return g; }
+  if(hk){ g.add(modelMesh(hk, hk==='tent'?3.1:3.3)); return g; }   // Hütten ohne Fahne
   const tent = mesh(new T.ConeGeometry(1.05,1.9,7), mat(0xb98b56), 0,.95,0); g.add(tent);
   const hide = mesh(new T.ConeGeometry(.75,1.1,7,1,true,0,2.2), mat(0x8a5a2e,{side:T.DoubleSide}), 0,.7,0); hide.rotation.y=1; g.add(hide);
   for(let i=0;i<4;i++){ const a=i*1.57+.4; const p=mesh(GEO.box, mat(0x5a3818), Math.cos(a)*.18,2,Math.sin(a)*.18); p.scale.set(.05,.6,.05); p.rotation.set(Math.sin(a)*.4,0,-Math.cos(a)*.4); g.add(p); }
