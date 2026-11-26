@@ -230,6 +230,7 @@ function buildUI(){
   <canvas id="mini" width="150" height="150"></canvas>
   <div id="kinds"></div>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
+  <button id="bFollowOff" aria-label="Kamera zurück"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Zurück</button>
   <button class="hb" id="bNorth" aria-label="Kameradrehung zurücksetzen"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" stroke="currentColor" stroke-width="1.6" fill="none" opacity=".7"/><g id="needle"><path d="M12 4.2l3 7.8h-6z" fill="#e2453b"/><path d="M12 19.8l3-7.8h-6z" fill="currentColor"/></g></svg></button>
   <div id="panel"></div>
   <div id="placebar" class="hidden"><span id="pCost"></span><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">+ Tore</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
@@ -252,6 +253,7 @@ function buildUI(){
     const done = () => { if(!d.classList.contains('hidden')) return; mo.disconnect(); if(G && (EE.S.gfx|0)!==G.gfx) applyGfx(EE.S.gfx|0); };
     const mo = new MutationObserver(done); mo.observe(d,{attributes:true, attributeFilter:['class']}); };
   $('#kinds').onclick = e => { const b=e.target.closest('[data-k]'); if(b) selectKind(b.dataset.k); };
+  $('#bFollowOff').onclick = () => stopFollow();
   $('#bNorth').onclick = () => { EE.click(); G.camReset = true; };
   $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); } };
   $('#pOk').onclick = confirmPlace;
@@ -343,6 +345,9 @@ function drawPanel(){
     for(const k in groups){ const g=groups[k], u0=ws[g.list[0]], hp=g.list.reduce((a,i)=>a+ws[i].hp/ws[i].maxHp,0)/g.n;
       h += `<button class="gpic${u0.owner!==0?' foe':''}" data-g="${k}" aria-label="${g.n} ${UNIT_DE[k]||k}">${unitPic(u0)}<b>${g.n}</b><i style="width:${Math.round(hp*100)}%;background:${hp>.5?'#62e06a':hp>.25?'#f2c230':'#e23b3b'}"></i></button>`; }
     h += `<button class="sx" data-a="desel" aria-label="Auswahl aufheben">✕</button></div>${ws.length===1?`<small>${UNIT[ws[0].kind]?UNIT[ws[0].kind].name:''} · ${job}${carry}</small>`:''}</div>`;
+    if(ws.length===1 && !G.buildMenu && !ws[0].dead){
+      h += `<button class="ab tool" data-a="follow"><span class="ai"><svg viewBox="0 0 24 24"><path d="M3 8.5h3l1.6-2.5h8.8L18 8.5h3v10H3z" fill="none" stroke="#e8b64a" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="#e8b64a" stroke-width="2"/></svg></span>Folgen</button>`;
+    }
     if(ws[0].owner===0 && ws.some(u=>u.kind==='worker') && !G.buildMenu){
       h += `<button class="ab tool" data-a="bmenu"><span class="ai">${hammerSVG()}</span>Bauen</button>`;
     }
@@ -846,6 +851,7 @@ const hutSVG = () => '<svg viewBox="0 0 24 24"><path d="M12 3L3 18h18z" fill="#c
 const storeSVG = () => '<svg viewBox="0 0 24 24"><rect x="3" y="15" width="18" height="4" fill="#8a5a2b"/><rect x="4" y="10" width="7" height="5" rx="2" fill="#a86d36"/><rect x="12" y="11" width="8" height="4" rx="2" fill="#a86d36"/><path d="M8 10l2-4 3 3z" fill="#9aa3ad"/></svg>';
 
 function action(a){
+  if(a==='follow'){ startFollow(G.sel[0]); return; }
   const p = G.players[0];
   EE.click();
   if(a==='worker'){
@@ -1073,8 +1079,40 @@ function onResize(){
   G.cam.aspect = w/h; G.cam.updateProjectionMatrix();
   G.W = w; G.H = h;
 }
+// ===== Verfolger-Kamera: hinter der Schulter einer Figur, die Figur arbeitet selbst weiter =====
+function startFollow(u){
+  if(!u || u.dead) return; EE.click();
+  G.follow=u; G.fcam=null; G.camReset=false; select([],null);
+  document.querySelector('#game').classList.add('fview');
+  EE.toast('Kamera folgt – „Zurück“ beendet');
+}
+function stopFollow(quiet){
+  const u=G.follow; if(!u) return; G.follow=null;
+  document.querySelector('#game').classList.remove('fview');
+  if(!quiet) EE.click();
+  if(u && !u.dead){ G.camS.x=u.x; G.camS.z=u.z; G.camS.dist=Math.max(G.camS.dist,14); }
+}
+function followCam(){
+  const u=G.follow;
+  if(!u || u.dead || !G.units.includes(u)){ stopFollow(true); return false; }
+  const m=u.mesh, f=m ? m.rotation.y : (u.face||0);
+  const fx=Math.sin(f), fz=Math.cos(f), rx=Math.cos(f), rz=-Math.sin(f);
+  const gy=getH(u.x,u.z);
+  const tx=u.x-fx*3.1-rx*.6, tz=u.z-fz*3.1-rz*.6;
+  const ty=Math.max(getH(tx,tz)+.6, gy+1.95, WATER_Y+.5);
+  const lx=u.x+fx*5, lz=u.z+fz*5, ly=gy+1.25;
+  if(!G.fcam) G.fcam={x:tx,y:ty,z:tz,lx,ly,lz};
+  const c=G.fcam, k=Math.min(1,(G.dtW||.016)*5);
+  c.x+=(tx-c.x)*k; c.y+=(ty-c.y)*k; c.z+=(tz-c.z)*k; c.lx+=(lx-c.lx)*k; c.ly+=(ly-c.ly)*k; c.lz+=(lz-c.lz)*k;
+  G.cam.position.set(c.x,c.y,c.z); G.cam.near=.08; G.cam.far=260; G.cam.updateProjectionMatrix();
+  G.cam.lookAt(c.lx,c.ly,c.lz);
+  G.scene.fog.near=40; G.scene.fog.far=150;
+  G.sun.position.set(u.x+30, gy+55, u.z+18); G.sun.target.position.set(u.x,gy,u.z);
+  G.camMoved=true; return true;
+}
 function updateCam(){
   const s = G.camS;
+  if(G.follow){ s.x=G.follow.x; s.z=G.follow.z; s.dist=Math.min(s.dist,14); }
   s.x = clamp(s.x,-G.NX/2+6,G.NX/2-6); s.z = clamp(s.z,-G.NZ/2+6,G.NZ/2-6);
   const maxD = Math.max(G.NX,G.NZ)*1.05;
   s.dist = clamp(s.dist, G.camMin||5, maxD);
@@ -1088,6 +1126,7 @@ function updateCam(){
   G.cam.far = s.dist*4+200; G.cam.near = clamp(s.dist*.02,.5,40); G.cam.updateProjectionMatrix();
   G.cam.lookAt(s.x, y, s.z);
   const fv = G.gfx===0 ? .7 : 1; G.scene.fog.near = (s.dist*1.6+20)*fv; G.scene.fog.far = (s.dist*4+120)*fv;
+  if(G.follow && followCam()) { G.farView=false; return; }
   G.sun.position.set(s.x+30, y+55, s.z+18);
   G.sun.target.position.set(s.x, y, s.z);
   const shadows = G.gfx>=1 && s.dist<60;
@@ -3363,7 +3402,7 @@ function pcKey(e){
     case ' ': e.preventDefault(); { const u=G.sel[0]||G.selB; if(u){ G.camS.x=u.x; G.camS.z=u.z; } } break;
     case 'm': openBigMap(); break;
     case 'delete': select([],null); break;
-    case 'escape': { const bm=$('#bigmap'); if(bm && !bm.classList.contains('hidden')){ bm.classList.add('hidden'); break; } if(G.place){ cancelPlace(); break; } if(G.sel.length||G.selB){ select([],null); break; } toMenu(); } break;
+    case 'escape': { if(G.follow){ stopFollow(); break; } const bm=$('#bigmap'); if(bm && !bm.classList.contains('hidden')){ bm.classList.add('hidden'); break; } if(G.place){ cancelPlace(); break; } if(G.sel.length||G.selB){ select([],null); break; } toMenu(); } break;
     case '+': case '=': G.camS.dist*=.85; break;
     case '-': G.camS.dist*=1.18; break;
     default: PC.keys.add(k); return;
