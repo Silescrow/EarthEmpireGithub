@@ -1026,7 +1026,9 @@ function updateCam(){
   const maxD = Math.max(G.NX,G.NZ)*1.05;
   s.dist = clamp(s.dist, G.camMin||5, maxD);
   const far = clamp((s.dist-45)/(maxD-45),0,1);
-  const pitch = lerp(.95, 1.38, far);
+  // Nah heran: Kamera flacher wie ein Beobachter (realistischer Blick), weit weg: steil von oben
+  const near = clamp((27-s.dist)/Math.max(1,27-(G.camMin||5)),0,1);
+  const pitch = lerp(.95, 1.38, far) - near*near*.32;
   const y = Math.max(getH(s.x,s.z), WATER_Y);
   const hd = Math.cos(pitch)*s.dist, yaw = s.yaw*(1-far);
   G.cam.position.set(s.x+Math.sin(yaw)*hd, y+Math.sin(pitch)*s.dist, s.z+Math.cos(yaw)*hd);
@@ -1643,7 +1645,7 @@ function makeBush(R){
   const F=flora(), g=new T.Group();
   const m=new T.Mesh(F.geo.bush[(R()*2)|0], F.mat); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=F.depth;
   const sc=.62+R()*.16; m.scale.set(sc,sc*(.9+R()*.2),sc); g.add(m);
-  const bg = partsVariant('berries', 6, ()=>{ const parts=[]; for(let i=0;i<14;i++){ const a=Math.random()*6.28, y=(.45+Math.random()*.6)*.7, r=(.45+Math.random()*.3)*.7; parts.push([F.berryGeo, new T.Matrix4().makeTranslation(Math.cos(a)*r, y, Math.sin(a)*r)]); } return mergeParts(parts); });
+  const bg = partsVariant('berries', 6, ()=>{ const parts=[]; for(let c=0;c<9;c++){ const a=Math.random()*6.28, y=(.4+Math.random()*.6)*.7, r=(.5+Math.random()*.25)*.7; for(let i=0;i<3+(Math.random()*3|0);i++){ const s=.75+Math.random()*.5; parts.push([F.berryGeo, new T.Matrix4().compose(new T.Vector3(Math.cos(a)*r+(Math.random()-.5)*.09, y+(Math.random()-.5)*.08, Math.sin(a)*r+(Math.random()-.5)*.09), new T.Quaternion(), new T.Vector3(s,s,s))]); } } return mergeParts(parts); });
   g.add(new T.Mesh(bg, F.berryMat));
   g.rotation.y = R()*6.28; return g;
 }
@@ -1987,7 +1989,7 @@ function makeStore(color, owner){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb', tower:'models/wachturm.glb', dolphin:'models/delfin.glb', fish:'models/fisch.glb' };
+const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/monolith.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb', tower:'models/wachturm.glb', dolphin:'models/delfin.glb', fish:'models/fisch.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -2213,7 +2215,7 @@ function flora(){
   FLORA={tex, mat, depth,
     geo:{ oak:[makeBroadleaf(R),makeBroadleaf(R),makeBroadleaf(R,true)], fir:[makeFir(R),makeFir(R)], palm:[makePalm(R),makePalm(R)], bush:[makeBushGeo(R),makeBushGeo(R)] },
     lod:{ oak:makeBroadleaf(R,false,true), fir:makeFir(R,true), palm:makePalm(R,true) },
-    gfx:G.gfx, berryGeo:new T.IcosahedronGeometry(.075,0), berryMat:new T.MeshLambertMaterial({color:0xd4202e, emissive:0x3a0000})};
+    gfx:G.gfx, berryGeo:new T.IcosahedronGeometry(.032,1), berryMat:new T.MeshLambertMaterial({color:0xb3121f, emissive:0x220000})};
   return FLORA;
 }
 function treeKind(x,z,h,R){
