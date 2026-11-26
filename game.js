@@ -542,6 +542,107 @@ function bloodFx(x,z,n,pool){
   if(pool && BLOOD.pools.length<40){ const mat=new T.MeshBasicMaterial({color:0x5e0606, transparent:true, opacity:.85, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2});
     const m=new T.Mesh(BLOOD.pgeo, mat); const s=pool*(.7+G.rand()*.5); m.scale.set(s,1,s*(.7+G.rand()*.5)); m.rotation.y=G.rand()*6.28; m.position.set(x+(G.rand()-.5)*.3,y+.03,z+(G.rand()-.5)*.3); G.scene.add(m); BLOOD.pools.push({m,t:0}); }
 }
+// Schwimm-Skelett automatisch: Knochenkette entlang des Körpers (Kopf → Schwanz), Gewichte nach Lage,
+// Bewegung als laufende Welle (Fisch: seitlich, Delfin: auf und ab)
+const SWIM_RIG = {};
+function makeSwimmer(key, len, vertical){
+  const md=MODELS[key]; if(!md) return null;
+  let R=SWIM_RIG[key];
+  if(!R){
+    const geo=md.geo.clone(), bb=geo.boundingBox||(geo.computeBoundingBox(),geo.boundingBox), pos=geo.attributes.position, NB=5;
+    const z0=bb.min.z, z1=bb.max.z, cy=(bb.min.y+bb.max.y)/2, si=[], sw=[];
+    for(let v=0;v<pos.count;v++){ const f=clamp((z1-pos.getZ(v))/(z1-z0),0,.9999)*(NB-1), a=Math.floor(f), w=f-a;
+      si.push(a, Math.min(a+1,NB-1), 0, 0); sw.push(1-w, w, 0, 0); }
+    geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(si,4)); geo.setAttribute('skinWeight', new T.Float32BufferAttribute(sw,4));
+    R=SWIM_RIG[key]={geo, NB, z0, z1, cy};
+  }
+  const bones=[]; for(let i=0;i<R.NB;i++){ const b=new T.Bone(); if(i===0) b.position.set(0,R.cy,R.z1); else { b.position.set(0,0,-(R.z1-R.z0)/(R.NB-1)); bones[i-1].add(b); } bones.push(b); }
+  const sk=new T.SkinnedMesh(R.geo, md.mat); sk.add(bones[0]); sk.bind(new T.Skeleton(bones)); sk.frustumCulled=false;
+  const s=len/(R.z1-R.z0); sk.scale.setScalar(s);
+  const g=new T.Group(); g.add(sk); g.userData.swim={bones, vertical, ph:Math.random()*6.28}; return g;
+}
+function swimPose(g, dt, speed){
+  const S=g.userData.swim; if(!S) return; S.ph+=dt*speed;
+  for(let i=1;i<S.bones.length;i++){ const a=Math.sin(S.ph - i*.9)*.12*i; if(S.vertical) S.bones[i].rotation.x=a; else S.bones[i].rotation.y=a; }
+}
+// Delfine: kleine Gruppen springen im warmen und gemäßigten Meer in Kameranähe aus dem Wasser
+const DOLPH = {list:[], t:6};
+function splashFx(x,z,n){
+  if(!DEBRIS.wmat){ const c=document.createElement('canvas'); c.width=c.height=64; const x2=c.getContext('2d'), gr=x2.createRadialGradient(32,32,2,32,32,31); gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.6,'rgba(255,255,255,.4)'); gr.addColorStop(1,'rgba(255,255,255,0)'); x2.fillStyle=gr; x2.fillRect(0,0,64,64); DEBRIS.wmat=new T.SpriteMaterial({map:new T.CanvasTexture(c), transparent:true, opacity:.8, depthWrite:false}); }
+  for(let i=0;i<n;i++){ const s=new T.Sprite(DEBRIS.wmat.clone()); const a=G.rand()*6.28, r=G.rand()*.4; s.position.set(x+Math.cos(a)*r, WATER_Y+.15, z+Math.sin(a)*r); s.scale.setScalar(.5); G.scene.add(s); DEBRIS.dust.push({s,t:1.8,vx:Math.cos(a)*1.2,vz:Math.sin(a)*1.2}); }
+}
+function updateDolphins(dt){
+  if(!MODELS.dolphin || G.farView){ for(const d of DOLPH.list) G.scene.remove(d.m); DOLPH.list.length=0; return; }
+  DOLPH.t-=dt;
+  if(DOLPH.t<=0 && DOLPH.list.length===0){
+    DOLPH.t = 12+G.rand()*18;
+    const c=G.camS, lat=toLat(c.z);
+    if(Math.abs(lat)<48) for(let k=0;k<14;k++){
+      const a=G.rand()*6.28, r=c.dist*(.3+G.rand()*.6), x=c.x+Math.cos(a)*r, z=c.z+Math.sin(a)*r;
+      if(getH(x,z) > WATER_Y-2.6 || getH(x+6,z) > WATER_Y-2 || getH(x,z+6) > WATER_Y-2) continue;
+      const hd=G.rand()*6.28, n=2+(G.rand()*3|0);
+      for(let i=0;i<n;i++){ const o=makeSwimmer('dolphin', 2.2, true); if(!o) break; o.visible=false; G.scene.add(o);
+        DOLPH.list.push({m:o, x:x+(G.rand()-.5)*3, z:z+(G.rand()-.5)*3, hd:hd+(G.rand()-.5)*.25, ph:-(i*.35+G.rand()*.3), jumps:3+(G.rand()*3|0), L:4+G.rand()*1.5, H:1.4+G.rand()*.8, air:false}); }
+      break;
+    }
+  }
+  const CYC=2.6, AIR=1.15;
+  for(let i=DOLPH.list.length-1;i>=0;i--){ const d=DOLPH.list[i], o=d.m;
+    d.ph+=dt; if(d.ph<0) continue;
+    const t=d.ph%CYC, sp=d.L/AIR*.85; d.x+=Math.sin(d.hd)*sp*dt; d.z+=Math.cos(d.hd)*sp*dt;
+    const inAir = t<AIR;
+    if(inAir && !d.air){ d.air=true; splashFx(d.x,d.z,3); }
+    if(!inAir && d.air){ d.air=false; splashFx(d.x,d.z,4); if(--d.jumps<=0){ G.scene.remove(o); DOLPH.list.splice(i,1); continue; } }
+    o.visible=inAir; if(!inAir) continue;
+    const k=t/AIR, y=WATER_Y-.4+Math.sin(k*Math.PI)*d.H, vy=Math.cos(k*Math.PI)*Math.PI*d.H/AIR;
+    o.position.set(d.x,y,d.z); o.rotation.set(-Math.atan2(vy, sp),d.hd,0,'YXZ'); swimPose(o, dt, 7);
+  }
+}
+// Fische: Fischschwärme im flachen Wasser am Ufer (Nahrung – Bauern fischen vom Ufer aus mit dem Speer)
+const FISH = [];
+function addFish(x,z,gx,gz){
+  if(FISH.some(f=>Math.hypot(f.x-x,f.z-z)<14)) return null;
+  const g=new T.Group(); g.position.set(x, WATER_Y-.45, z);
+  const n=G.gfx===0?4:7;
+  for(let i=0;i<n;i++){ const o=makeSwimmer('fish', .45+G.rand()*.25, false); if(!o) break; o.userData.a=i/n*6.28+G.rand()*.5; o.userData.r=.6+G.rand()*.9; o.userData.s=(.5+G.rand()*.4)*(G.rand()<.5?1:-1); o.userData.y=-G.rand()*.35; g.add(o); }
+  G.scene.add(g);
+  const r={type:'fish', kind:'food', amt:220, max:220, x, z, gx, gz, mesh:g, alive:true, r:.6, fish:true, jumpT:3+G.rand()*6};
+  G.res.push(r); FISH.push(r);
+  if(G.resMod){ const k=resKey(x,z); if(k in G.resMod){ r.amt=G.resMod[k]; if(r.amt<=0) removeRes(r); } }
+  return r;
+}
+// zusätzlich frei schwimmende Schwärme (nur zum Anschauen) im klaren Flachwasser bei der Kamera
+const SCHOOL = {list:[], t:3};
+function updateFish(dt){
+  const c=G.camS, R=c.dist*1.4+20;
+  const swim=(o,dt)=>{ const u=o.userData; u.a+=dt*u.s*.9; o.position.set(Math.cos(u.a)*u.r, u.y+Math.sin(u.a*3)*.04, Math.sin(u.a)*u.r); o.rotation.y = -u.a + (u.s>0?0:Math.PI); swimPose(o, dt, 9); };
+  for(const f of FISH){ if(!f.alive || Math.abs(f.x-c.x)>R || Math.abs(f.z-c.z)>R || G.farView) continue;
+    const n=f.mesh.children.length, show=Math.ceil(n*f.amt/f.max);
+    f.mesh.children.forEach((o,i)=>{ o.visible=i<show; if(o.visible) swim(o,dt); });
+    f.jumpT-=dt; if(f.jumpT<=0){ f.jumpT=4+G.rand()*8; splashFx(f.x+(G.rand()-.5),f.z+(G.rand()-.5),2); }
+  }
+  // freie Schwärme
+  SCHOOL.t-=dt;
+  if(SCHOOL.t<=0 && !G.farView && MODELS.fish){ SCHOOL.t=4;
+    for(let i=SCHOOL.list.length-1;i>=0;i--){ const s=SCHOOL.list[i]; if(Math.hypot(s.g.position.x-c.x, s.g.position.z-c.z)>c.dist*1.6+10){ G.scene.remove(s.g); SCHOOL.list.splice(i,1); } }
+    if(SCHOOL.list.length<(G.gfx===0?1:3)) for(let k=0;k<10;k++){
+      const a=G.rand()*6.28, r=c.dist*(.2+G.rand()*.7), x=c.x+Math.cos(a)*r, z=c.z+Math.sin(a)*r, h=getH(x,z);
+      if(h>WATER_Y-.8 || h<WATER_Y-4) continue;
+      const g=new T.Group(); g.position.set(x, WATER_Y-.6, z); const n=G.gfx===0?6:12;
+      for(let i=0;i<n;i++){ const o=makeSwimmer('fish', .35+G.rand()*.2, false); o.userData.a=G.rand()*.8; o.userData.r=1.5+G.rand()*1.2; o.userData.s=.55; o.userData.y=-G.rand()*.5; g.add(o); }
+      G.scene.add(g); SCHOOL.list.push({g, hd:G.rand()*6.28}); break;
+    }
+  }
+  for(const s of SCHOOL.list){ s.g.children.forEach(o=>swim(o,dt)); s.hd+=dt*.05; s.g.position.x+=Math.sin(s.hd)*dt*.6; s.g.position.z+=Math.cos(s.hd)*dt*.6;
+    if(getH(s.g.position.x, s.g.position.z)>WATER_Y-.7) s.hd+=Math.PI*.6; }
+}
+// Speer zum Fischen in die Hand (sonst die normale Keule)
+function fishSpear(m, on){
+  if(!m.rig || !MODELS.w_spear) return;
+  if(on && !m.fspear){ const md=MODELS.w_spear, sk=m.children[0], s=sk.scale.x, bb=md.geo.boundingBox, L=bb.max.y-bb.min.y, k=1.3/L/s;
+    const w=new T.Mesh(md.geo, md.mat); w.scale.setScalar(k); w.rotation.set(.15,0,0); w.position.copy(new T.Vector3(0,bb.min.y+L*.35,0).applyEuler(w.rotation).multiplyScalar(-k)).add(m.palmR||new T.Vector3()); m.rig.handR.add(w); m.fspear=w; }
+  if(m.fspear){ m.fspear.visible=on; if(m.club) m.club.visible=!on; }
+}
 function updateBlood(dt){
   for(let i=BLOOD.parts.length-1;i>=0;i--){ const p=BLOOD.parts[i], m=p.m; p.vy-=9.8*dt; m.position.x+=p.vx*dt; m.position.z+=p.vz*dt; m.position.y+=p.vy*dt;
     if(m.position.y<getH(m.position.x,m.position.z)){ G.scene.remove(m); BLOOD.parts.splice(i,1); } }
@@ -1070,6 +1171,12 @@ function genChunk(ci,cj){
     else if(r<.085) placeCluster('gold',x,z,2,1.2);
     else if(r<.13 && cold<.9) spawnDeer(x,z);
   }
+  // Fischschwärme: flaches Wasser direkt am Ufer
+  for(let i=0;i<10;i++){
+    const x=x0+R()*CH, z=z0+R()*CH, h=getH(x,z); if(h>WATER_Y-.6 || h<WATER_Y-2.8 || coldAt(toLat(z))>.95) continue;
+    let best=null; for(let a=0;a<6.28 && !best;a+=.4) for(let d=2;d<=5;d+=1){ const sx=x+Math.cos(a)*d, sz=z+Math.sin(a)*d; if(getH(sx,sz)>WATER_Y+.25 && freeCell(sx,sz)){ best=[sx,sz]; break; } }
+    if(best) addFish(x,z,best[0],best[1]);
+  }
   addDecorChunk(x0,z0,CH,R);
   const dl=G.depo && G.depo[key]; if(dl){ for(const d of dl) placeCluster(d.type, d.x, d.z, d.type==='oil'?1:3, 1.6); delete G.depo[key]; }
   G.rand=saveR;
@@ -1421,7 +1528,7 @@ function buildWater(){
         float foam = (1.0-smoothstep(.03, .3, depth)) * smoothstep(.62, .9, fn + .25*sin(uTime*1.5 + p.x*.3 + p.y*.2));
         // Brandung: Schaumstreifen laufen aufs Ufer zu und verlaufen
         float surf = sin(depth*16.0 + uTime*2.0 + fn*3.0);
-        foam = max(foam, (1.0-smoothstep(.05, .7, depth)) * smoothstep(.75, .98, surf) * (.6+.4*fn));
+        foam = max(foam, (1.0-smoothstep(.04, .3, depth)) * smoothstep(.8, .98, surf) * fn);
         col = mix(col, vec3(1.0), foam*.4);
         // klares Wasser: am Rand sieht man den Boden, in den Tropen besonders weit hinaus
         float a = mix(mix(.4, .12, trop), .95, smoothstep(.0, mix(1.2, 3.0, trop), depth));
@@ -1829,7 +1936,7 @@ function makeStore(color, owner){
 /* ============================================================
    3D-MODELLE (eigene, verkleinerte GLB-Dateien)
    ============================================================ */
-const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb', tower:'models/wachturm.glb' };
+const MODEL_FILES = { tc:'models/rundhuette.glb', house:'models/rundhuette.glb', store:'models/steinhaus.glb', barracks:'models/zahnhaus.glb', fence:'models/zaun.glb', rock:'models/fels.glb', ore:'models/erz.glb', mono:'models/monolith.glb', cavem:'models/hoehlenmann.glb', bigtc:'models/grosse_huette.glb', tent:'models/zelt.glb', store2:'models/vorratshuette.glb', store3:'models/kornspeicher.glb', barr1:'models/festung.glb', barr2:'models/aussenposten.glb', barr3:'models/zahnhaus2.glb', w_spear:'models/speer.glb', w_axe:'models/steinaxt.glb', w_bow:'models/langbogen.glb', banner:'models/banner.glb', bank:'models/bank.glb', thron:'models/thron.glb', werkzeuge:'models/werkzeuge.glb', leiter:'models/leiter.glb', trog:'models/trog.glb', fellgestell:'models/fellgestell.glb', barrikade:'models/barrikade.glb', antelope:'models/antilope.glb', rabbit:'models/hase.glb', horse:'models/pferd.glb', cavef:'models/hoehlenfrau.glb', warrior:'models/krieger.glb', palisade:'models/zaun_knochen.glb', fire:'models/lagerfeuer.glb', tower:'models/wachturm.glb', dolphin:'models/delfin.glb', fish:'models/fisch.glb' };
 const MODELS = {};
 let modelsReady = null;
 function parseGLB(buf){
@@ -1861,7 +1968,7 @@ function parseGLB(buf){
   return texP.then(()=>({geo, mat}));
 }
 // Grafik „Niedrig“: Gebäude in einfacher Fassung (models/niedrig/), ab „Mittel“ volle Qualität
-const MODEL_LOW = new Set(['tower','warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
+const MODEL_LOW = new Set(['dolphin','fish','tower','warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
 let modelsLow = null;
 function loadModels(gfx){
   const low = gfx===0;
@@ -2408,7 +2515,7 @@ function cmdGather(u,r){
   u.target=r; u.site=null; u.lastType=r.kind;
   if(u.carry.amt>0 && u.carry.type!==r.kind){ u.carry.amt=0; }
   u.state = r.deer && !r.dead ? 'hunt' : 'gather';
-  moveTo(u,r.x,r.z);
+  moveTo(u, r.fish?r.gx:r.x, r.fish?r.gz:r.z);
 }
 function cmdBuild(u,b){ u.state='build'; u.site=b; u.target=null; moveTo(u,b.x,b.z); }
 function dropoffFor(u){
@@ -2478,7 +2585,7 @@ function updateWorker(u,dt){
         if(r){ cmdGather(u,r); } else { u.state = u.carry.amt>0 ? 'drop' : 'idle'; u.path=null; }
         break;
       }
-      if(near(u,r.x,r.z,r.r+.85)){
+      if(r.fish ? near(u,r.gx,r.gz,1.1) : near(u,r.x,r.z,r.r+.85)){
         u.path=null; u.working=true; u.face=Math.atan2(r.x-u.x,r.z-u.z);
         u.hitT=(u.hitT||0)+dt; if(u.hitT>1.05){ u.hitT=0; sfxAt(r.kind==='wood'?'chop':r.kind==='stone'?'stone':r.kind==='gold'?'gold':'berry', u.x,u.z,.8); }
         const amount = Math.min(r.amt, dt*(r.kind==='wood'?1:r.kind==='food'?1.15:.8)*gatherRate);
@@ -2487,7 +2594,7 @@ function updateWorker(u,dt){
         if(r.amt<=0) removeRes(r);
         if(u.carry.amt>=CARRY){ u.state='drop'; u.path=null; }
       } else {
-        if(!u.path || u.pi>=u.path.length){ u.repath-=dt; if(u.repath<=0){ u.repath=1; if(!moveTo(u,r.x,r.z)){ u.state='idle'; } } }
+        if(!u.path || u.pi>=u.path.length){ u.repath-=dt; if(u.repath<=0){ u.repath=1; if(!moveTo(u, r.fish?r.gx:r.x, r.fish?r.gz:r.z)){ u.state='idle'; } } }
         followPath(u,dt);
       }
       break; }
@@ -2529,6 +2636,7 @@ function updateWorker(u,dt){
   const m = u.mesh; m.position.set(u.x, getH(u.x,u.z), u.z);
   let df = u.face - m.rotation.y; df = Math.atan2(Math.sin(df),Math.cos(df)); m.rotation.y += df*Math.min(1,dt*10);
   u.phase += dt*(u.moving?8.5:u.working?6:2);
+  if(m.isRigged && u.kind==='worker') fishSpear(m, u.working && u.state==='gather' && u.target && u.target.fish);
   if(m.isRigged){ const shoot = u.working && UNIT[u.kind] && UNIT[u.kind].ranged; if(m.bowK) setBowSlot(m, shoot); if(!G.farView && m.visible) poseRig(m, u.moving?'walk':shoot?'shoot':u.working?'work':'idle', shoot ? 1-clamp(u.cd/UNIT[u.kind].cd,0,1) : u.phase); }
   else {
   const sw = u.moving ? Math.sin(u.phase)*.7 : 0;
@@ -2552,7 +2660,7 @@ function autoJob(u){
 function removeRes(r){
   r.alive=false; G.scene.remove(r.mesh);
   if(r.mesh.inst) batchHide(r.mesh.inst);
-  if(!r.deer){ const k=cellIdx(r.x,r.z); if(k>=0) G.grid[k]=0; }
+  if(!r.deer && !r.fish){ const k=cellIdx(r.x,r.z); if(k>=0) G.grid[k]=0; }
 }
 function finishBuilding(b){
   const d = BUILD[b.kind];
@@ -2683,7 +2791,7 @@ function update(dt){
   if((G.saveT-=dt)<=0){ G.saveT=30; saveGame(); }
   for(const u of G.units.slice()) updateWorker(u,dt);
   updatePopulation(dt);
-  G.dtW=dt; updateArrows(dt); updateBlood(dt); updateDebris(dt); if(G.alarmT) G.alarmT=Math.max(0,G.alarmT-dt);
+  G.dtW=dt; updateArrows(dt); updateBlood(dt); updateDebris(dt); updateDolphins(dt); updateFish(dt); if(G.alarmT) G.alarmT=Math.max(0,G.alarmT-dt);
   for(const d of G.deer) updateDeer(d,dt);
   for(const b of G.builds) updateBuilding(b,dt);
   for(let i=1;i<G.players.length;i++) updateAI(G.players[i],dt);
@@ -3364,5 +3472,5 @@ function endPlace(){
   G.place=null; G.costH=null; $('#pCost').innerHTML=''; $('#placebar').classList.add('hidden'); $('#pGate').classList.add('hidden'); $('#pTxt').textContent='Gebäude mit dem Finger platzieren';
 }
 
-window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { start:()=>start(), load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++) update(.05);}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
