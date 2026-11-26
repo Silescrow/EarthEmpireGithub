@@ -427,7 +427,7 @@ function attachWeapon(g, kind){
   if(kind==='bow'){ g.bowK=k; g.bowL=L; g.bowS=s; g.weapon=w; setBowSlot(g,false); if(g.club) g.club.visible=false; return; }
   else { const grip = kind==='spear' ? .35 : .12; w.rotation.set(kind==='spear'?.15:1.25,0,0);
     // Griffpunkt der Waffe genau in die Hand legen (Verschiebung in gedrehter Richtung)
-    w.position.copy(new T.Vector3(0,bb.min.y+L*grip,0).applyEuler(w.rotation).multiplyScalar(-k)); w.position.z+=.02/s; g.rig.handR.add(w); }
+    w.position.copy(new T.Vector3(0,bb.min.y+L*grip,0).applyEuler(w.rotation).multiplyScalar(-k)).add(g.palmR); g.rig.handR.add(w); }
   g.weapon=w;
   if(g.club) g.club.visible=false;
 }
@@ -437,7 +437,7 @@ function setBowSlot(g, inHand){
   const w=g.weapon; if(!w || g.bowInHand===inHand) return; g.bowInHand=inHand;
   if(w.parent) w.parent.remove(w);
   const bb=w.geometry.boundingBox, mid=new T.Vector3(0,(bb.min.y+bb.max.y)/2,0);
-  if(inHand){ w.scale.setScalar(g.bowK); w.rotation.set(...BOW_T.hand.r); w.position.copy(mid.applyEuler(w.rotation).multiplyScalar(-g.bowK)); g.rig.handL.add(w); }
+  if(inHand){ w.scale.setScalar(g.bowK); w.rotation.set(...BOW_T.hand.r); w.position.copy(mid.applyEuler(w.rotation).multiplyScalar(-g.bowK)).add(g.palmL); g.rig.handL.add(w); }
   else { const ws=g.bowK*g.bowS; w.scale.setScalar(ws); w.rotation.set(...BOW_T.back.r); w.position.set(...BOW_T.back.p).add(mid.applyEuler(w.rotation).multiplyScalar(-ws)); g.add(w); }
 }
 function makeSoldier(kind, color){
@@ -839,7 +839,7 @@ function updateCam(){
   const s = G.camS;
   s.x = clamp(s.x,-G.NX/2+6,G.NX/2-6); s.z = clamp(s.z,-G.NZ/2+6,G.NZ/2-6);
   const maxD = Math.max(G.NX,G.NZ)*1.05;
-  s.dist = clamp(s.dist, 5, maxD);
+  s.dist = clamp(s.dist, G.camMin||5, maxD);
   const far = clamp((s.dist-45)/(maxD-45),0,1);
   const pitch = lerp(.95, 1.38, far);
   const y = Math.max(getH(s.x,s.z), WATER_Y);
@@ -1542,7 +1542,7 @@ function buildRig(key){
   const restZ=[Math.atan2(-dL.x,-dL.y)-.18, -(Math.atan2(dR.x,-dR.y)-.18)];
   return RIGS[key] = {geo:g2, mat:m.mat, J, BONES, H, restZ};
 }
-let HEADBAND_Y = .042;
+let HEADBAND_Y = .042, PALM = .5;
 function makeRigged(key, height, color){
   const r = RIGS[key] || buildRig(key); if(!r) return null;
   const bones = r.BONES.map(([name,par,j])=>{ const b=new T.Bone(); b.name=name; return b; });
@@ -1561,6 +1561,13 @@ function makeRigged(key, height, color){
   const load = new T.Mesh(new T.BoxGeometry(.2*r.H,.12*r.H,.1*r.H), new T.MeshLambertMaterial({color:0x9a6232}));
   load.position.set(0,0,-.13*r.H); load.visible=false; B.chest.add(load);
   g.rig = B; g.load = load; g.club = club; g.isRigged = true; g.restZ = r.restZ;
+  // Handflächen-Mitte (Griffpunkt) relativ zum Handgelenk-Knochen
+  if(!r.palm){ // Mitte der echten Hand-Geometrie (Ecken, die am Hand-Knochen hängen) = Griffpunkt
+    const si=r.geo.attributes.skinIndex, sw=r.geo.attributes.skinWeight, pos=r.geo.attributes.position, idx={}; r.BONES.forEach(([n],i)=>idx[n]=i);
+    const cen=(name)=>{ const bi=idx[name], c=new T.Vector3(); let n=0; for(let v=0;v<pos.count;v++){ for(let k=0;k<4;k++){ if(si.getComponent(v,k)===bi && sw.getComponent(v,k)>.5){ c.x+=pos.getX(v); c.y+=pos.getY(v); c.z+=pos.getZ(v); n++; break; } } }
+      return n ? c.divideScalar(n).sub(r.J[name]) : r.J[name==='handR'?'tipR':'tipL'].clone().sub(r.J[name]).multiplyScalar(PALM); };
+    r.palm={R:cen('handR'), L:cen('handL')}; }
+  g.palmR = r.palm.R.clone(); g.palmL = r.palm.L.clone();
   return g;
 }
 function poseRig(g, mode, ph){
