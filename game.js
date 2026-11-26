@@ -98,6 +98,8 @@ async function start(sv){
   else if(G.players[0].tc) centerCamOn(G.players[0].tc.x, G.players[0].tc.z);
   updateCam(); updateTiles(true);
   $('#game').classList.remove('hidden');
+  // Fenster-Design der Epoche (ep1 = Steinzeit … ep10 = Zukunft)
+  for(let i=1;i<=10;i++) $('#game').classList.remove('ep'+i); $('#game').classList.add('ep'+(G.age||1));
   let last = performance.now();
   const loop = now => {
     if(!G || !G.running) return;
@@ -320,12 +322,11 @@ function drawPanel(){
     // Auswahl-Leiste wie in Age of Empires: kleine Figuren je Sorte, Anzahl und X zum Abwählen
     const MAXP = 16, groups = {};
     ws.forEach((u,i)=>{ (groups[u.kind]||(groups[u.kind]={n:0,list:[]})).n++; groups[u.kind].list.push(i); });
-    let h = `<div class="selx"><div class="sh">`;
-    for(const k in groups) h += `<b>${groups[k].n}× ${UNIT_DE[k]||k}</b>`;
-    h += `<button class="sx" data-a="desel" aria-label="Auswahl aufheben">✕</button></div><div class="pics">`;
-    ws.slice(0,MAXP).forEach((u,i)=>{ h += `<button class="pic${u.owner!==0?' foe':''}" data-u="${i}">${unitPic(u)}</button>`; });
-    if(ws.length>MAXP) h += `<span class="more">+${ws.length-MAXP}</span>`;
-    h += `</div>${ws.length===1?`<small>${job}${carry}</small>`:''}</div>`;
+    // Kompakt: je Sorte nur EIN Bild mit der Anzahl darauf (z. B. 20 Bauern = ein Bild mit „20“)
+    let h = `<div class="selx kompakt"><div class="grp">`;
+    for(const k in groups){ const g=groups[k], u0=ws[g.list[0]], hp=g.list.reduce((a,i)=>a+ws[i].hp/ws[i].maxHp,0)/g.n;
+      h += `<button class="gpic${u0.owner!==0?' foe':''}" data-g="${k}" aria-label="${g.n} ${UNIT_DE[k]||k}">${unitPic(u0)}<b>${g.n}</b><i style="width:${Math.round(hp*100)}%;background:${hp>.5?'#62e06a':hp>.25?'#f2c230':'#e23b3b'}"></i></button>`; }
+    h += `<button class="sx" data-a="desel" aria-label="Auswahl aufheben">✕</button></div>${ws.length===1?`<small>${UNIT[ws[0].kind]?UNIT[ws[0].kind].name:''} · ${job}${carry}</small>`:''}</div>`;
     if(ws[0].owner===0 && ws.some(u=>u.kind==='worker') && !G.buildMenu){
       h += `<button class="ab tool" data-a="bmenu"><span class="ai">${hammerSVG()}</span>Bauen</button>`;
     }
@@ -346,7 +347,7 @@ function drawPanel(){
   }
   el.querySelectorAll('.ab').forEach(b=>b.onclick=()=>action(b.dataset.a));
   el.querySelectorAll('.sx').forEach(b=>b.onclick=()=>{ EE.click(); select([],null); });
-  if(G.sel.length){ const ws=G.sel.slice(); el.querySelectorAll('.pic').forEach(b=>b.onclick=()=>{ EE.click(); const u=ws[+b.dataset.u]; if(u){ select([u],null); } }); }
+  if(G.sel.length){ const ws=G.sel.slice(); el.querySelectorAll('.pic').forEach(b=>b.onclick=()=>{ EE.click(); const u=ws[+b.dataset.u]; if(u){ select([u],null); } }); el.querySelectorAll('.gpic').forEach(b=>b.onclick=()=>{ EE.click(); const us=ws.filter(u=>u.kind===b.dataset.g); if(us.length && us.length<ws.length) select(us,null); }); }
 }
 const UNIT_DE = {worker:'Bauern'};
 /* ---------- Kleine Bilder (Icons) aus den echten 3D-Modellen ---------- */
