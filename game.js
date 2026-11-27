@@ -913,7 +913,7 @@ function addFish(x,z,gx,gz){
   G.scene.add(g);
   const r={type:'fish', kind:'food', amt:220, max:220, x, z, gx, gz, mesh:g, alive:true, r:.6, fish:true, jumpT:3+G.rand()*6};
   G.res.push(r); FISH.push(r);
-  if(G.resMod){ const k=resKey(x,z); if(k in G.resMod){ r.amt=G.resMod[k]; if(r.amt<=0) removeRes(r); } }
+  if(G.resMod){ const k=resKey(x,z); if(k in G.resMod){ r.amt=G.resMod[k]; if(r.amt<=0){ G.noFell=1; removeRes(r); G.noFell=0; } } }
   return r;
 }
 // zusätzlich frei schwimmende Schwärme (nur zum Anschauen) im klaren Flachwasser bei der Kamera
@@ -3033,7 +3033,7 @@ function treeInstance(x,z,force){
   const sc=(kind==='fir'?.72:kind==='palm'?.85:.8)+R()*.35;
   const o=new T.Object3D(); o.position.set(x,h-.1,z); o.rotation.y=R()*6.28; o.scale.setScalar(sc); o.updateMatrix();
   const c=new T.Color(), v=.85+R()*.25; c.setRGB(v*(.95+R()*.12), v, v*(.9+R()*.1));
-  const d=new T.Object3D(); d.inst=batchAdd(B, chunkKeyOf(x,z), o.matrix, c); return d;
+  const d=new T.Object3D(); d.inst=batchAdd(B, chunkKeyOf(x,z), o.matrix, c); d.o=o; d.sc=sc; d.tk=kind; return d;
 }
 const civTexCache = {};
 /* Steinzeit: keine Länderflaggen, sondern ein Fell-Banner mit dem Stammeszeichen der Zivilisation (mit Ocker/Farbe aufgemalt) */
@@ -3182,6 +3182,32 @@ function placeCluster(type, cx, cz, count, spread, minB){
     if(type==='tree') treeMark(x,z);
   }
 }
+/* ===== Nachwachsender Wald (V2.25): gefällter Baum → Stumpf → nach 1–2 min ein Setzling → wächst in ~3 min zum vollen Baum.
+   Nur wo vorher Wald war und nichts gebaut wurde (kein Gebäude, Weg, Mauer). Dichter Wald wächst schneller. ===== */
+let STUMP_GEO=null, STUMP_MAT=null;
+function treeFelled(r){
+  if(!STUMP_GEO){ STUMP_GEO=new T.CylinderGeometry(.16,.22,.28,9); STUMP_MAT=new T.MeshLambertMaterial({color:0x6e4a2a}); }
+  const st=new T.Mesh(STUMP_GEO, STUMP_MAT); st.position.set(r.x, getH(r.x,r.z)+.1, r.z); st.receiveShadow=true; G.scene.add(st);
+  let near=0; for(const o of G.res){ if(o.alive && o.type==='tree' && Math.abs(o.x-r.x)<6 && Math.abs(o.z-r.z)<6) near++; }
+  (G.regrow||(G.regrow=[])).push({x:r.x, z:r.z, k:r.mesh&&r.mesh.tk, st, t:G.t + (near>=6?55:near>=3?80:115) + G.rand()*30});
+}
+function updateRegrow(dt){
+  G.rgT=(G.rgT||0)-dt; if(G.rgT>0) return; G.rgT=1;
+  if(G.regrow) for(let i=G.regrow.length-1;i>=0;i--){ const e=G.regrow[i]; if(G.t<e.t) continue;
+    const k=cellIdx(e.x,e.z);
+    if(k<0 || G.grid[k]===1 || (G.road && G.road[k]) || G.builds.some(b=>!b.dead && Math.hypot(b.x-e.x,b.z-e.z)<b.size*.5+.8)){ G.scene.remove(e.st); G.regrow.splice(i,1); continue; }   // bebaut: kein Wald mehr
+    if(G.units.some(u=>!u.dead && Math.abs(u.x-e.x)<.7 && Math.abs(u.z-e.z)<.7)){ e.t=G.t+5; continue; }
+    G.scene.remove(e.st); G.regrow.splice(i,1);
+    if(G.resMod){ const q=resKey(e.x,e.z); delete G.resMod[q]; }
+    if(G.grid[k]===2) G.grid[k]=0;
+    const r=addRes('tree'+(e.k?':'+e.k:''), e.x, e.z); r.amt=0; r.grow=0; growTree(r,0);
+    (G.growing||(G.growing=[])).push(r); }
+  if(G.growing) for(let i=G.growing.length-1;i>=0;i--){ const r=G.growing[i]; if(!r.alive){ G.growing.splice(i,1); continue; }
+    r.grow=Math.min(1, r.grow + 1/180); growTree(r, r.grow);
+    if(r.grow>=1){ r.amt=r.max; G.growing.splice(i,1); } }
+}
+function growTree(r,g){ const d=r.mesh; if(!d || !d.o || !d.inst) return; const k=.12+.88*g;
+  d.o.scale.setScalar(d.sc*k); d.o.updateMatrix(); d.o.matrix.toArray(d.inst.c.m, d.inst.i*16); d.inst.B.dirty=true; }
 function addRes(type,x,z){
   let m, kind, amt;
   if(type.startsWith('tree')){ m=treeInstance(x,z,type.split(':')[1]); kind='wood'; amt=100; type='tree'; }
@@ -3196,7 +3222,7 @@ function addRes(type,x,z){
   if(G.gfx<2 && m && m.traverse) m.traverse(o=>{ if(o.isMesh) o.castShadow=false; });   // Büsche, Steine, Erz: keine eigenen Schatten (spart den Schatten-Durchgang)
   { const k=cellIdx(x,z); if(k>=0 && !G.grid[k]) G.grid[k] = 2; }   // 2 = Baum/Stein: weich – Leute zwängen sich notfalls vorbei (V2.16)
   G.res.push(r);
-  if(G.resMod){ const k=resKey(x,z); if(k in G.resMod){ r.amt=G.resMod[k]; if(r.amt<=0) removeRes(r); } }
+  if(G.resMod){ const k=resKey(x,z); if(k in G.resMod){ r.amt=G.resMod[k]; if(r.amt<=0){ G.noFell=1; removeRes(r); G.noFell=0; } } }
   return r;
 }
 /* ---------- Wilde Tiere: Schafe (Europa/Asien), Elefanten (Afrika), Raubtiere Wolf, Löwe, Krokodil.
@@ -3715,6 +3741,7 @@ function autoJob(u){
 }
 function removeRes(r){
   r.alive=false; G.scene.remove(r.mesh);
+  if(r.type==='tree' && !G.noFell) treeFelled(r);
   if(r.mesh.inst) batchHide(r.mesh.inst);
   if(!r.deer && !r.fish){ const k=cellIdx(r.x,r.z); if(k>=0) G.grid[k]=0; }
 }
@@ -3954,6 +3981,7 @@ function updateAIWar(p, mine, tc){
    ============================================================ */
 function update(dt){
   pcUpdate(dt);
+  updateRegrow(dt);
   // Musik: bei Kämpfen „Valley of the War Horns“, 20 s nach dem letzten Treffer wieder ruhige Lieder
   { const war = G.fightT!=null && G.t-G.fightT<20; if(war!==!!G.warMusic && !G.inMenu){ G.warMusic=war; EE.music(war?'war':'calm'); } }
   if(G.mkt) for(const k in G.mkt) G.mkt[k]+=(1-G.mkt[k])*dt*.004;
@@ -4440,7 +4468,7 @@ function pickAt(sx,sy){
   for(const b of G.builds){ if(b.kind==='road') continue; const s=toScreen(b.x, b.mesh.position.y+1, b.z); const r = 26+b.size*14; const d=Math.hypot(s.x-sx,s.y-sy); if(d<r && d<bd){bd=d;best={b};} }
   if(best) return best;
   bd = 30;
-  for(const r of G.res){ if(!r.alive) continue; const s=toScreen(r.x, getH(r.x,r.z)+.6, r.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<bd){bd=d;best={r};} }
+  for(const r of G.res){ if(!r.alive || r.grow<1) continue; const s=toScreen(r.x, getH(r.x,r.z)+.6, r.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<bd){bd=d;best={r};} }
   // Wegstücke antippen (nur wenn keine eigenen Leute ausgewählt sind – sonst ist der Tipp ein Laufbefehl)
   if(!best && !G.sel.some(u=>u.owner===0)){ let rd=22; for(const b of G.builds){ if(b.kind!=='road' || b.owner!==0 || b.dead) continue; const s=toScreen(b.x, getH(b.x,b.z)+.05, b.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<rd){ rd=d; best={b}; } } }
   return best;
@@ -5156,5 +5184,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { spawnU:(o,x,z,k)=>spawnWorker(o,x,z,k), fmove:(us,x,z)=>formationMove(us,x,z), blocked:(x,z)=>!freeCell(x,z), gather:(u,r)=>cmdGather(u,r), models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s), offer:(i,s,g)=>showOffer(i,s,g)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { spawnU:(o,x,z,k)=>spawnWorker(o,x,z,k), fmove:(us,x,z)=>formationMove(us,x,z), blocked:(x,z)=>!freeCell(x,z), gather:(u,r)=>cmdGather(u,r), models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{fell:(r)=>removeRes(r), regrowNow:()=>{ for(const e of G.regrow||[]) e.t=0; G.rgT=0; }, finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s), offer:(i,s,g)=>showOffer(i,s,g)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
