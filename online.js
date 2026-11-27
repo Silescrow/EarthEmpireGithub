@@ -11,7 +11,7 @@
   const ON = window.EEOnline = { peer:null, host:false, code:'', conns:new Map(), me:null, lobby:null, myId:'' };
   const name = () => { const k=window.SC&&SC.konto&&SC.konto(); return k ? k.name : ''; };
   const rnd = n => Math.random().toString(36).slice(2, 2+n);
-  const civByName = n => EE.CIVS.find(c=>c[0]===n);
+  const civByName = n => EE.civBy(n);
   function loadPeer(){ return window.Peer ? Promise.resolve() : new Promise((ok,err)=>{ const s=document.createElement('script'); s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'; s.onload=ok; s.onerror=()=>err(new Error('PeerJS konnte nicht geladen werden – Internet prüfen')); document.head.appendChild(s); }); }
 
   // ---------- Oberfläche ----------
@@ -145,7 +145,7 @@
   function render(){
     const L=ON.lobby; if(!L) return;
     const me = L.slots.findIndex(s=>s.id===ON.myId), used=new Set(L.slots.filter(s=>s.civ).map(s=>s.civ));
-    const civOpts = cur => `<option value="">– Volk wählen –</option>`+EE.CIVS.map(c=>`<option ${c[0]===cur?'selected':''} ${used.has(c[0])&&c[0]!==cur?'disabled':''}>${c[0]}</option>`).join('');
+    const civOpts = cur => `<option value="">– Land wählen –</option>`+EE.CIVS.map(c=>`<option ${c[0]===cur?'selected':''} ${used.has(c[0])&&c[0]!==cur?'disabled':''}>${c[0]}</option>`).join('');
     const teamOpts = cur => [1,2,3,4,5,6,7,8].map(t=>`<option value="${t}" ${t===cur?'selected':''}>T${t}</option>`).join('');
     $('#onSlots').innerHTML = L.slots.map((s,i)=>{
       const mine=i===me, canEdit = mine || (ON.host && s.kind==='ai');

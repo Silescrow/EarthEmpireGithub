@@ -93,8 +93,10 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .card.wide{width:min(860px,96vw)}
 .cols{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
 .nats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+@media (orientation:landscape){.nats{grid-template-columns:repeat(10,minmax(0,1fr));gap:3px}}
+.bonus small{display:block;font-size:12px;color:#d9c79a;opacity:.85;margin-top:2px}
 .nat{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 1px;min-height:44px;border:1.5px solid #e8b64a50;border-radius:9px;background:#0b1130;color:#fff7e2;cursor:pointer;font:700 13px "Barlow Semi Condensed",sans-serif}
-.nat svg{width:24px;height:29px;filter:drop-shadow(0 1px 2px #000a)}
+.nat svg{width:26px;height:31px;filter:drop-shadow(0 1px 2px #000a)}
 .nat span{font-size:11.5px;line-height:1.1;white-space:nowrap}
 .nat.on{border-color:var(--gold2);background:#3a2a08;box-shadow:0 0 0 2px var(--gold) inset}
 .bonus{margin-top:6px;min-height:2.6em;font-size:14px;color:#ffe9b0;text-align:center}
@@ -345,7 +347,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.94</div>
+    <div class="ver2">Version 1.95</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -366,7 +368,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="corner2">
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V1.94</div>
+  <div class="ver">Siles Empire · V1.95</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -395,7 +397,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.94"></script>
+<script src="audio.js?v=1.95"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -490,37 +492,76 @@ $$('input[type=range]').forEach(r=>{
 const B=(bg,sym)=>'<defs><clipPath id="cp"><path d="M0 0H30V34L15 27L0 34Z"/></clipPath></defs><g clip-path="url(#cp)">'+bg+sym+'</g><path d="M0 0H30V34L15 27L0 34Z" fill="none" stroke="#f5d27a" stroke-width="1.4"/>';
 const R=c=>'<rect width="30" height="36" fill="'+c+'"/>';
 const sun=(cx,cy,r,c)=>{let o='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+c+'"/>';for(let i=0;i<12;i++){const a=i*Math.PI/6;o+='<line x1="'+(cx+Math.cos(a)*(r+1))+'" y1="'+(cy+Math.sin(a)*(r+1))+'" x2="'+(cx+Math.cos(a)*(r+3.5))+'" y2="'+(cy+Math.sin(a)*(r+3.5))+'" stroke="'+c+'" stroke-width="1.2"/>'}return o};
+// Länder: immer der heutige Name und die heutige Flagge. Aussehen und Einheiten kommen je Epoche von der damaligen Zivilisation (Stil-Zeile).
+// [Name, Bonus, Flagge, Artikel (f/m/p oder leer), Stil je Epoche, altes Vorfahren-Banner (für frühe Epochen)]
+const H=(...c)=>{const h=31/c.length;return c.map((f,i)=>'<rect y="'+(i*h).toFixed(2)+'" width="30" height="'+(i===c.length-1?36:h+.3).toFixed(2)+'" fill="'+f+'"/>').join('')};
+const V=(...c)=>{const w=30/c.length;return c.map((f,i)=>'<rect x="'+(i*w).toFixed(2)+'" width="'+(w+.3).toFixed(2)+'" height="36" fill="'+f+'"/>').join('')};
+const star=(cx,cy,r,f)=>{let d='';for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,q=i%2?r*.42:r;d+=(i?'L':'M')+(cx+Math.cos(a)*q).toFixed(2)+' '+(cy+Math.sin(a)*q).toFixed(2)}return '<path d="'+d+'Z" fill="'+f+'"/>'};
+const UJ=(w,h)=>'<svg width="'+w+'" height="'+h+'" viewBox="0 0 30 18" preserveAspectRatio="none"><rect width="30" height="18" fill="#012169"/><path d="M0 0L30 18M30 0L0 18" stroke="#fff" stroke-width="4"/><path d="M0 0L30 18M30 0L0 18" stroke="#c8102e" stroke-width="1.5"/><path d="M15 0V18M0 9H30" stroke="#fff" stroke-width="6"/><path d="M15 0V18M0 9H30" stroke="#c8102e" stroke-width="3.5"/></svg>';
 const CIVS=[
- ['Osmanen','Kanonen und Belagerung +20 %, Janitscharen als Elite-Infanterie',B(R('#c8102e'),'<circle cx="13" cy="14" r="6" fill="#fff"/><circle cx="14.8" cy="14" r="4.9" fill="#c8102e"/><path d="M21.5 14l-4 1.3 2.5-3.4v4.2l-2.5-3.4z" fill="#fff"/>')],
- ['Römer','Legionäre +15 % Angriff, Einheiten auf Straßen schneller',B(R('#8b0d12'),'<text x="15" y="17" font-size="7" font-family="Georgia,serif" font-weight="700" fill="#f5c542" text-anchor="middle">SPQR</text><path d="M8 21h14" stroke="#f5c542" stroke-width="1"/>')],
- ['Griechen','Phalanx (Speerträger) stärker, Forschung schneller',B(R('#1d4fa0'),sun(15,14,4,'#f5c542'))],
- ['Ägypter','Wunder und Tempel bauen schneller, Streitwagen stärker',B(R('#e0b440')+'<rect y="4" width="30" height="3" fill="#1d4fa0"/><rect y="10" width="30" height="3" fill="#1d4fa0"/><rect y="16" width="30" height="3" fill="#1d4fa0"/>','<path d="M15 6l7 15H8z" fill="#f7e2a0" stroke="#7a5310"/>')],
- ['Babylonier','Universität und Forschung günstiger',B(R('#1f5fb0'),'<path d="M15 6l2 6 6-2-4 5 4 5-6-2-2 6-2-6-6 2 4-5-4-5 6 2z" fill="#f5c542"/>')],
- ['Germanen','Gebäude stabiler, Krieger mit mehr Leben',B(R('#2f5d2a'),'<path d="M9 8l12 14M21 8L9 22" stroke="#d9d9d9" stroke-width="2.4" stroke-linecap="round"/><path d="M7 8q3-3 5 1M23 8q-3-3-5 1" stroke="#d9d9d9" stroke-width="2" fill="none"/>')],
- ['Briten','Langbogenschützen mit mehr Reichweite, starke Flotte',B(R('#b5121b'),'<path d="M8 19V11l3.5 4L15 9l3.5 6L22 11v8z" fill="#f5c542"/><rect x="8" y="19" width="14" height="2.5" fill="#f5c542"/>')],
- ['Franken','Ritter und Reiter schneller',B(R('#1b3d8f'),'<ellipse cx="15" cy="12" rx="2" ry="5.5" fill="#f5c542"/><ellipse cx="10.5" cy="15" rx="3.6" ry="1.8" transform="rotate(-35 10.5 15)" fill="#f5c542"/><ellipse cx="19.5" cy="15" rx="3.6" ry="1.8" transform="rotate(35 19.5 15)" fill="#f5c542"/><rect x="10" y="17" width="10" height="1.8" fill="#f5c542"/><path d="M15 19v4" stroke="#f5c542" stroke-width="2"/>')],
- ['Wikinger','Schiffe schneller, Plünderer bringen Beute',B('<rect width="30" height="36" fill="#f2efe6"/><rect x="0" width="6" height="36" fill="#b3202a"/><rect x="12" width="6" height="36" fill="#b3202a"/><rect x="24" width="6" height="36" fill="#b3202a"/>','<circle cx="15" cy="14" r="6" fill="#1b2a44" stroke="#f5c542"/>')],
- ['Mongolen','Reiterbogenschützen, sehr schnelle Kavallerie',B(R('#1673c7'),'<circle cx="15" cy="10" r="3" fill="#f5c542"/><path d="M10 15h10l-5 3z" fill="#f5c542"/><rect x="10" y="20" width="10" height="2" fill="#f5c542"/>')],
- ['Chinesen','Bauern sammeln 15 % schneller',B(R('#c41e1e'),'<circle cx="15" cy="14" r="7" fill="none" stroke="#f5c542" stroke-width="1.6"/><path d="M11 14h8M15 10v8" stroke="#f5c542" stroke-width="1.6"/>')],
- ['Japaner','Samurai stark im Nahkampf, Schiffe günstiger',B(R('#f4efe4'),'<circle cx="15" cy="14" r="6.5" fill="#b8002a"/>')],
- ['Koreaner','Türme und Mauern stärker',B(R('#f4f1ea'),'<circle cx="15" cy="14" r="6.5" fill="#1a4b9a"/><path d="M8.5 14a6.5 6.5 0 0 1 13 0a3.25 3.25 0 0 1-6.5 0a3.25 3.25 0 0 0-6.5 0z" fill="#c8102e"/>')],
- ['Azteken','Krieger werden durch Siege stärker',B(R('#138a7d'),sun(15,14,4,'#e74c3c'))],
- ['Inka','Goldminen ergiebiger',B(['#d62828','#f77f00','#fcbf49','#2a9d8f','#1d6fb8','#6a4c93'].map((c,i)=>'<rect y="'+(i*6)+'" width="30" height="6" fill="'+c+'"/>').join(''),'<circle cx="15" cy="14" r="5" fill="#f5c542" stroke="#7a5310"/>')],
- ['Maya','Tempel heilen schneller',B(R('#2e7d4f'),'<path d="M7 23h16v-3h-2v-3h-2v-3h-2v-3h-4v3h-2v3H9v3H7z" fill="#e8d9a8"/>')],
- ['Russen','Einheiten billiger, harter Winter schwächt Gegner',B(R('#7a1020'),'<path d="M15 6q5 4 4 8q0 2-1 3h-6q-1-1-1-3q-1-4 4-8z" fill="#f5c542"/><rect x="11" y="17" width="8" height="6" fill="#f5c542"/><path d="M15 3v4" stroke="#f5c542" stroke-width="1.2"/>')],
- ['Zulu','Infanterie sehr schnell und günstig',B(R('#c9a46a'),'<ellipse cx="15" cy="14" rx="5.5" ry="9" fill="#f2f2f2" stroke="#222"/><path d="M15 5v18" stroke="#222" stroke-width="1.6"/><ellipse cx="12.5" cy="11" rx="1.3" ry="2" fill="#222"/><ellipse cx="17.5" cy="17" rx="1.3" ry="2" fill="#222"/>')]
+ ['Türkei','Kanonen und Belagerung +20 %, Janitscharen als Elite-Infanterie',B(R('#e30a17'),'<circle cx="12.5" cy="13" r="6" fill="#fff"/><circle cx="14" cy="13" r="4.8" fill="#e30a17"/>'+star(20,13,3,'#fff')),'f','Steinzeit: Anatolische Stämme · später Osmanisches Reich'],
+ ['Italien','Legionäre +15 % Angriff, Einheiten auf Straßen schneller',B(V('#009246','#fff','#ce2b37'),''),'','Steinzeit: Italische Stämme · später Römisches Reich'],
+ ['Griechenland','Phalanx (Speerträger) stärker, Forschung schneller',B(H('#0d5eaf','#fff','#0d5eaf','#fff','#0d5eaf','#fff','#0d5eaf','#fff','#0d5eaf'),'<rect width="13.8" height="17.2" fill="#0d5eaf"/><path d="M6.9 0V17.2M0 8.6H13.8" stroke="#fff" stroke-width="3.4"/>'),'','Steinzeit: Ägäische Stämme · später Antikes Griechenland'],
+ ['Ägypten','Wunder und Tempel bauen schneller, Streitwagen stärker',B(H('#ce1126','#fff','#000'),'<path d="M15 10.6l1.6 1.2v3.6l-1.6 1-1.6-1v-3.6z" fill="#c09300"/>'),'','Steinzeit: Niltal-Stämme · später Reich der Pharaonen'],
+ ['Irak','Universität und Forschung günstiger',B(H('#ce1126','#fff','#000'),'<path d="M8.5 15.5h13M10 13.2v2.3M13.5 12.5v3M17 13.2v2.3M20 12.8v2.7" stroke="#007a3d" stroke-width="1.3" fill="none"/>'),'m','Steinzeit: Stämme Mesopotamiens · später Babylonier'],
+ ['Deutschland','Gebäude stabiler, Krieger mit mehr Leben',B(H('#000','#dd0000','#ffce00'),''),'','Steinzeit: Mitteleuropäische Stämme · später Germanen'],
+ ['Großbritannien','Langbogenschützen mit mehr Reichweite, starke Flotte',B(R('#012169')+'<path d="M0 0L30 34M30 0L0 34" stroke="#fff" stroke-width="5"/><path d="M0 0L30 34M30 0L0 34" stroke="#c8102e" stroke-width="1.8"/><path d="M15 0V36M0 14H30" stroke="#fff" stroke-width="8"/><path d="M15 0V36M0 14H30" stroke="#c8102e" stroke-width="4.6"/>',''),'','Steinzeit: Britische Stämme · später Briten und Engländer'],
+ ['Frankreich','Ritter und Reiter schneller',B(V('#0055a4','#fff','#ef4135'),''),'','Steinzeit: Gallische Stämme · später Franken'],
+ ['Norwegen','Schiffe schneller, Plünderer bringen Beute',B(R('#ba0c2f')+'<path d="M10.5 0V36M0 14H30" stroke="#fff" stroke-width="7"/><path d="M10.5 0V36M0 14H30" stroke="#00205b" stroke-width="3.6"/>',''),'','Steinzeit: Nordische Jäger · später Wikinger'],
+ ['Mongolei','Reiterbogenschützen, sehr schnelle Kavallerie',B(V('#c4272f','#015197','#c4272f'),'<circle cx="5" cy="9" r="1.6" fill="#f9cf02"/><rect x="3" y="11.5" width="4" height="1.4" fill="#f9cf02"/><rect x="3.6" y="13.6" width="2.8" height="5" fill="#f9cf02"/><rect x="3" y="19.2" width="4" height="1.4" fill="#f9cf02"/>'),'f','Steinzeit: Steppenvölker · später Mongolenreich'],
+ ['China','Bauern sammeln 15 % schneller',B(R('#ee1c25'),star(7,7.5,4.2,'#ffde00')+star(13.5,3.5,1.4,'#ffde00')+star(15.5,6.5,1.4,'#ffde00')+star(15.5,10.5,1.4,'#ffde00')+star(13.5,13.5,1.4,'#ffde00')),'','Steinzeit: Gelber-Fluss-Kulturen · später Kaiserreich China'],
+ ['Japan','Samurai stark im Nahkampf, Schiffe günstiger',B(R('#f6f3ea'),'<circle cx="15" cy="14" r="6.5" fill="#bc002d"/>'),'','Steinzeit: Jōmon · später Samurai-Japan'],
+ ['Korea','Türme und Mauern stärker',B(R('#f6f3ea'),'<circle cx="15" cy="14" r="6" fill="#003478"/><path d="M9 14a6 6 0 0 1 12 0a3 3 0 0 1-6 0a3 3 0 0 0-6 0z" fill="#cd2e3a"/><path d="M4 5l4 3M3 7l4 3M22 19l4 3M23 17l4 3M22 8l4-3M23 10l4-3M4 22l4-3M3 20l4-3" stroke="#000" stroke-width="1.1"/>'),'','Steinzeit: Stämme der Halbinsel · später Goryeo und Joseon'],
+ ['Mexiko','Krieger werden durch Siege stärker',B(V('#006847','#fff','#ce1126'),'<ellipse cx="15" cy="14" rx="3" ry="3.4" fill="#8c5a2b"/><path d="M12.5 16.8q2.5 1.6 5 0" stroke="#4f8a2f" stroke-width="1" fill="none"/>'),'','Steinzeit: Mesoamerikanische Stämme · später Azteken'],
+ ['Peru','Goldminen ergiebiger',B(V('#d91023','#fff','#d91023'),''),'','Steinzeit: Andenvölker · später Inka-Reich'],
+ ['Guatemala','Tempel heilen schneller',B(V('#4997d0','#fff','#4997d0'),'<circle cx="15" cy="14" r="3" fill="none" stroke="#4b8b3b" stroke-width="1.2"/><path d="M13.5 15.5l3-3" stroke="#a7a7a7" stroke-width="1"/>'),'','Steinzeit: Mesoamerikanische Jäger · später Maya'],
+ ['Russland','Einheiten billiger, harter Winter schwächt Gegner',B(H('#fff','#0039a6','#d52b1e'),''),'','Steinzeit: Stämme der Steppe und Wälder · später Rus und Zarenreich'],
+ ['Südafrika','Infanterie sehr schnell und günstig',B(H('#e03c31','#e03c31','#001489','#001489')+'<path d="M0 -2L13 14L0 30M13 14H30" stroke="#fff" stroke-width="8" fill="none"/><path d="M0 -2L13 14L0 30M13 14H30" stroke="#007749" stroke-width="5" fill="none"/><path d="M0 3L10 14L0 25z" fill="#ffb81c"/><path d="M0 6L7.5 14L0 22z" fill="#000"/>',''),'','Steinzeit: San-Jäger · später Zulu · heute gemischte Armee'],
+ ['Iran','Unsterbliche als Elite-Infanterie, Handel bringt mehr',B(H('#239f40','#fff','#da0000'),'<path d="M15 11.5q-2 2.2 0 4.6q2-2.4 0-4.6z" fill="#da0000"/>'),'m','Steinzeit: Iranische Stämme · später Perserreich'],
+ ['Saudi-Arabien','Kamelreiter, Handel am Markt günstiger',B(R('#006c35'),'<path d="M8 10q2-2 3 0t3 0t3 0t3 0t3 0" stroke="#fff" stroke-width="1.1" fill="none"/><path d="M8 17H22M21 15.8l2 1.2-2 1.2" stroke="#fff" stroke-width="1.1" fill="none"/>'),'','Steinzeit: Wüstenstämme · später Arabisches Kalifat'],
+ ['Indien','Kriegselefanten, mehr Nahrung von Beeren und Feldern',B(H('#ff9933','#fff','#138808'),'<circle cx="15" cy="15.5" r="3.6" fill="none" stroke="#000080" stroke-width=".9"/><path d="M15 11.9V19.1M11.4 15.5H18.6M12.5 13L17.5 18M17.5 13L12.5 18" stroke="#000080" stroke-width=".45"/>'),'','Steinzeit: Indus-Kulturen · später Maurya und Mogulreich'],
+ ['Mali','Handel mit Gold lohnt mehr, Bauen in Wüsten ohne Nachteil',B(V('#14b53a','#fcd116','#ce1126'),''),'','Steinzeit: Sahel-Stämme · später Mali-Reich'],
+ ['Spanien','Konquistadoren, Entdecker sehen weiter',B(H('#aa151b','#f1bf00','#f1bf00','#aa151b'),'<rect x="7" y="11" width="4.5" height="6" rx="1" fill="#aa151b" stroke="#c8a032" stroke-width=".6"/>'),'','Steinzeit: Iberische Stämme · später Königreich Spanien'],
+ ['Portugal','Entdeckerschiffe schneller, Handel über See',B('<rect width="12" height="36" fill="#046a38"/><rect x="12" width="18" height="36" fill="#da291c"/>','<circle cx="12" cy="14" r="4.6" fill="#ffe900" stroke="#c99a00" stroke-width=".6"/><path d="M10 12h4v3.2q-2 1.6-4 0z" fill="#fff" stroke="#da291c" stroke-width=".7"/>'),'','Steinzeit: Iberische Stämme · später Seefahrer-Reich'],
+ ['Irland','Krieger schneller im Wald, Holz sammeln schneller',B(V('#169b62','#fff','#ff883e'),''),'','Steinzeit: Inseljäger · später Kelten'],
+ ['Niederlande','Handel und Markt günstiger, starke Handelsflotte',B(H('#ae1c28','#fff','#21468b'),''),'p','Steinzeit: Küstenstämme · später Holländer'],
+ ['Polen','Geflügelte Husaren, Kavallerie stärker',B(H('#fff','#dc143c'),''),'','Steinzeit: Slawische Stämme · später Königreich Polen'],
+ ['USA','Reiter schneller, Jäger bringen mehr Nahrung',B(H('#b22234','#fff','#b22234','#fff','#b22234','#fff','#b22234','#fff','#b22234'),'<rect width="14" height="17.2" fill="#3c3b6e"/>'+[[2.5,3],[6.5,3],[10.5,3],[4.5,6.5],[8.5,6.5],[2.5,10],[6.5,10],[10.5,10],[4.5,13.5],[8.5,13.5]].map(([x,y])=>star(x,y,1.2,'#fff')).join('')),'p','Steinzeit: Indianer · später Siedler · heute gemischte Armee'],
+ ['Australien','Jäger und Sammler schneller, Wüste ohne Nachteil',B(R('#012169'),'<g transform="translate(0 0)">'+UJ(15,12).replace('<svg','<svg x="0" y="0"')+'</g>'+star(7.5,20,3,'#fff')+star(22,7,1.4,'#fff')+star(19,13,1.4,'#fff')+star(25,13,1.4,'#fff')+star(22,21,1.6,'#fff')),'','Steinzeit: Aborigines · später Siedler · heute gemischte Armee'],
+ ['Brasilien','Bauern sammeln im Dschungel schneller, Bogenschützen stärker',B(R('#009c3b'),'<path d="M15 4L28 14L15 24L2 14z" fill="#ffdf00"/><circle cx="15" cy="14" r="5.4" fill="#002776"/><path d="M9.8 13q5-2 10.4 1" stroke="#fff" stroke-width="1" fill="none"/>'),'','Steinzeit: Tupi und Amazonas-Völker · später Kolonie · heute gemischte Armee'],
 ];
+// alte Volksnamen (ältere Spielstände, Online-Räume) → heutiges Land
+const OLD_CIV={Osmanen:'Türkei',Römer:'Italien',Griechen:'Griechenland',Ägypter:'Ägypten',Babylonier:'Irak',Germanen:'Deutschland',Briten:'Großbritannien',Franken:'Frankreich',Wikinger:'Norwegen',Mongolen:'Mongolei',Chinesen:'China',Japaner:'Japan',Koreaner:'Korea',Azteken:'Mexiko',Inka:'Peru',Maya:'Guatemala',Russen:'Russland',Zulu:'Südafrika'};
+const civBy=n=>CIVS.find(c=>c[0]===(OLD_CIV[n]||n));
+[B(R('#c8102e'),'<circle cx="13" cy="14" r="6" fill="#fff"/><circle cx="14.8" cy="14" r="4.9" fill="#c8102e"/><path d="M21.5 14l-4 1.3 2.5-3.4v4.2l-2.5-3.4z" fill="#fff"/>'),
+ B(R('#8b0d12'),'<text x="15" y="17" font-size="7" font-family="Georgia,serif" font-weight="700" fill="#f5c542" text-anchor="middle">SPQR</text><path d="M8 21h14" stroke="#f5c542" stroke-width="1"/>'),
+ B(R('#1d4fa0'),sun(15,14,4,'#f5c542')),
+ B(R('#e0b440')+'<rect y="4" width="30" height="3" fill="#1d4fa0"/><rect y="10" width="30" height="3" fill="#1d4fa0"/><rect y="16" width="30" height="3" fill="#1d4fa0"/>','<path d="M15 6l7 15H8z" fill="#f7e2a0" stroke="#7a5310"/>'),
+ B(R('#1f5fb0'),'<path d="M15 6l2 6 6-2-4 5 4 5-6-2-2 6-2-6-6 2 4-5-4-5 6 2z" fill="#f5c542"/>'),
+ B(R('#2f5d2a'),'<path d="M9 8l12 14M21 8L9 22" stroke="#d9d9d9" stroke-width="2.4" stroke-linecap="round"/><path d="M7 8q3-3 5 1M23 8q-3-3-5 1" stroke="#d9d9d9" stroke-width="2" fill="none"/>'),
+ B(R('#b5121b'),'<path d="M8 19V11l3.5 4L15 9l3.5 6L22 11v8z" fill="#f5c542"/><rect x="8" y="19" width="14" height="2.5" fill="#f5c542"/>'),
+ B(R('#1b3d8f'),'<ellipse cx="15" cy="12" rx="2" ry="5.5" fill="#f5c542"/><ellipse cx="10.5" cy="15" rx="3.6" ry="1.8" transform="rotate(-35 10.5 15)" fill="#f5c542"/><ellipse cx="19.5" cy="15" rx="3.6" ry="1.8" transform="rotate(35 19.5 15)" fill="#f5c542"/><rect x="10" y="17" width="10" height="1.8" fill="#f5c542"/><path d="M15 19v4" stroke="#f5c542" stroke-width="2"/>'),
+ B('<rect width="30" height="36" fill="#f2efe6"/><rect x="0" width="6" height="36" fill="#b3202a"/><rect x="12" width="6" height="36" fill="#b3202a"/><rect x="24" width="6" height="36" fill="#b3202a"/>','<circle cx="15" cy="14" r="6" fill="#1b2a44" stroke="#f5c542"/>'),
+ B(R('#1673c7'),'<circle cx="15" cy="10" r="3" fill="#f5c542"/><path d="M10 15h10l-5 3z" fill="#f5c542"/><rect x="10" y="20" width="10" height="2" fill="#f5c542"/>'),
+ B(R('#c41e1e'),'<circle cx="15" cy="14" r="7" fill="none" stroke="#f5c542" stroke-width="1.6"/><path d="M11 14h8M15 10v8" stroke="#f5c542" stroke-width="1.6"/>'),
+ B(R('#f4efe4'),'<circle cx="15" cy="14" r="6.5" fill="#b8002a"/>'),
+ B(R('#f4f1ea'),'<circle cx="15" cy="14" r="6.5" fill="#1a4b9a"/><path d="M8.5 14a6.5 6.5 0 0 1 13 0a3.25 3.25 0 0 1-6.5 0a3.25 3.25 0 0 0-6.5 0z" fill="#c8102e"/>'),
+ B(R('#138a7d'),sun(15,14,4,'#e74c3c')),
+ B(['#d62828','#f77f00','#fcbf49','#2a9d8f','#1d6fb8','#6a4c93'].map((c,i)=>'<rect y="'+(i*6)+'" width="30" height="6" fill="'+c+'"/>').join(''),'<circle cx="15" cy="14" r="5" fill="#f5c542" stroke="#7a5310"/>'),
+ B(R('#2e7d4f'),'<path d="M7 23h16v-3h-2v-3h-2v-3h-2v-3h-4v3h-2v3H9v3H7z" fill="#e8d9a8"/>'),
+ B(R('#7a1020'),'<path d="M15 6q5 4 4 8q0 2-1 3h-6q-1-1-1-3q-1-4 4-8z" fill="#f5c542"/><rect x="11" y="17" width="8" height="6" fill="#f5c542"/><path d="M15 3v4" stroke="#f5c542" stroke-width="1.2"/>'),
+ B(R('#c9a46a'),'<ellipse cx="15" cy="14" rx="5.5" ry="9" fill="#f2f2f2" stroke="#222"/><path d="M15 5v18" stroke="#222" stroke-width="1.6"/><ellipse cx="12.5" cy="11" rx="1.3" ry="2" fill="#222"/><ellipse cx="17.5" cy="17" rx="1.3" ry="2" fill="#222"/>')].forEach((b,i)=>CIVS[i][5]=b);
 if(S.civ==null||S.civ>=CIVS.length)S.civ=0;
-$('#nats').innerHTML=CIVS.map((c,i)=>`<button class="nat" data-i="${i}"><svg viewBox="0 0 30 36">${c[2].replace(/cp/g,'cp'+i)}</svg><span>${c[0]}</span></button>`).join('');
-const drawCiv=()=>{$$('.nat').forEach((b,i)=>b.classList.toggle('on',i===S.civ));const c=CIVS[S.civ];$('#bonus').innerHTML='<b>'+c[0]+':</b> '+c[1]};
+$('#nats').innerHTML=CIVS.map((c,i)=>`<button class="nat" data-i="${i}" title="${c[0]}" aria-label="${c[0]}"><svg viewBox="0 0 30 36">${c[2].replace(/cp/g,'cp'+i)}</svg></button>`).join('');
+const drawCiv=()=>{$$('.nat').forEach((b,i)=>b.classList.toggle('on',i===S.civ));const c=CIVS[S.civ];$('#bonus').innerHTML='<b>'+c[0]+'</b> · '+c[1]+'<small>'+c[4]+'</small>'};
 $('#nats').addEventListener('click',e=>{const b=e.target.closest('.nat');if(!b)return;S.civ=+b.dataset.i;save();drawCiv();click();vib(10)});
 drawCiv();
 
-// Gegner-Anzahl (1–17 KI-Zivilisationen)
-const drawAI=()=>{ $('#aiN').textContent=S.ai>=17?'Alle (17)':S.ai; $('#aiAll').classList.toggle('on',S.ai>=17); };
+// Gegner-Anzahl (1–29 KI-Länder)
+const drawAI=()=>{ $('#aiN').textContent=S.ai>=29?'Alle (29)':S.ai; $('#aiAll').classList.toggle('on',S.ai>=29); };
 $('#aiMinus').addEventListener('click',()=>{ S.ai=Math.max(1,(S.ai||3)-1); save(); drawAI(); click(); });
-$('#aiPlus').addEventListener('click',()=>{ S.ai=Math.min(17,(S.ai||3)+1); save(); drawAI(); click(); });
-$('#aiAll').addEventListener('click',()=>{ S.ai=17; save(); drawAI(); click(); });
+$('#aiPlus').addEventListener('click',()=>{ S.ai=Math.min(29,(S.ai||3)+1); save(); drawAI(); click(); });
+$('#aiAll').addEventListener('click',()=>{ S.ai=29; save(); drawAI(); click(); });
 if(!S.ai) S.ai=3; if(S.map>3) S.map=1; drawAI();
 
 // Update: neue Version auf GitHub? Dann unten klein mit Balken automatisch herunterladen und neu starten
@@ -567,7 +608,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={VER:'1.94',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={civBy,VER:'1.95',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -592,10 +633,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.94"></script>
-<script src="game.js?v=1.94"></script>
-<script src="silescrow.js?v=1.94"></script>
-<script src="online.js?v=1.94"></script>
+<script src="three.min.js?v=1.95"></script>
+<script src="game.js?v=1.95"></script>
+<script src="silescrow.js?v=1.95"></script>
+<script src="online.js?v=1.95"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,

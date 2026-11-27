@@ -22,10 +22,17 @@ function ridged(x,y,s){ let f=0,a=.55,fr=1,w=1; for(let i=0;i<5;i++){ let n=1-Ma
 function fbm(x,y,s){ let f=0,a=.5,fr=1; for(let i=0;i<4;i++){ f+=a*vnoise(x*fr,y*fr,s+i*13); fr*=2; a*=.5; } return f; }
 
 /* ---------- Daten ---------- */
-const CIV_COLOR = { 'Osmanen':0xd0182c, 'Römer':0x7a1030, 'Griechen':0x2a6fd6, 'Ägypter':0xe3b23c, 'Babylonier':0x17b3c4, 'Germanen':0x2e7d32,
-  'Briten':0x1a2a80, 'Franken':0x7e57c2, 'Wikinger':0xd9d9d9, 'Mongolen':0x6ec6ff, 'Chinesen':0xff7a1a, 'Japaner':0xff8fb1, 'Koreaner':0x2b2b2b,
-  'Azteken':0x138a7d, 'Inka':0xffd400, 'Maya':0x7cc242, 'Russen':0xa0522d, 'Zulu':0xc9a46a };
-const BASE_COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61];
+const CIV_COLOR = { 'Türkei':0xd0182c, 'Italien':0x7a1030, 'Griechenland':0x2a6fd6, 'Ägypten':0xe3b23c, 'Irak':0x17b3c4, 'Deutschland':0x2e7d32,
+  'Großbritannien':0x1a2a80, 'Frankreich':0x7e57c2, 'Norwegen':0xd9d9d9, 'Mongolei':0x6ec6ff, 'China':0xff7a1a, 'Japan':0xff8fb1, 'Korea':0x2b2b2b,
+  'Mexiko':0x138a7d, 'Peru':0xffd400, 'Guatemala':0x7cc242, 'Russland':0xa0522d, 'Südafrika':0xc9a46a,
+  'Iran':0x0b5d1e, 'Saudi-Arabien':0x556b2f, 'Indien':0x9c27b0, 'Mali':0xb8860b, 'Spanien':0x8b0000, 'Portugal':0x00695c,
+  'Irland':0xa5d6a7, 'Niederlande':0xe65100, 'Polen':0xf5f5f5, 'USA':0x3c3b6e, 'Australien':0xffcc80, 'Brasilien':0x00c853 };
+// Ländernamen im Satz: die Türkei, der Irak, die USA, Deutschland (k: 0 wer/was, 1 wem, 2 wen)
+const CIV_ART = { f:['die','der','die'], m:['der','dem','den'], p:['die','den','die'] };
+function cn(c,k){ c=c&&c.civ||c; const a=CIV_ART[c[4]]; return (a?a[k|0]+' ':'')+c[0]; }
+function CN(c,k){ const t=cn(c,k); return t[0].toUpperCase()+t.slice(1); }
+function cv(c,sg,pl){ c=c&&c.civ||c; return c[4]==='p'?pl:sg; }
+const BASE_COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61,0x4a148c,0x00bfa5,0xffab91,0x795548,0xcddc39,0x5c6bc0,0xec407a,0x26c6da,0xbf360c,0x9e9d24,0x546e7a,0xffe082];
 const COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61];
 const COLNAMES = ['Blau','Rot','Gelb','Grün','Lila','Orange','Türkis','Pink','Braun','Weiß','Schwarz','Hellgrün','Dunkelblau','Weinrot','Ocker','Waldgrün','Violett','Koralle'];
 const RES = ['food','wood','stone','gold'];
@@ -60,9 +67,9 @@ async function start(sv){
   const S = EE.S;
   const mapI = sv ? sv.map : S.map|0;
   const NX = [3840,5760,8320,12800][mapI] || 5760, HS = NX<=6000?8:16, NZ = Math.round(NX*(LAT0-LAT1)/360/TILE)*TILE;
-  const byName = n => EE.CIVS.find(c=>c[0]===n);
+  const byName = n => EE.civBy(n);
   const civ = sv ? byName(sv.civs[0]) : (EE.CIVS[S.civ] || EE.CIVS[0]);
-  const foes = sv ? sv.civs.length-1 : clamp(S.ai||3, 1, 17);
+  const foes = sv ? sv.civs.length-1 : clamp(S.ai||3, 1, 29);
   // Gegner möglichst weit weg wählen (bei wenigen Gegnern nie Nachbarn)
   const dist = (a,b)=>{ const p=CIV_POS[a[0]]||[0,0], q=CIV_POS[b[0]]||[0,0]; let dl=Math.abs(p[0]-q[0]); return Math.hypot(dl, (p[1]-q[1])*1.3); };
   const chosen=[civ], pool=EE.CIVS.filter(c=>c!==civ);
@@ -77,7 +84,7 @@ async function start(sv){
         players:[], sel:[], selB:null, place:null, running:true, raf:0, msgT:0 };
   G.rand = rng(G.seed);
   [civ, ...others.slice(0,foes)].forEach((c,i)=>G.players.push({id:i, civ:c, res:{...START_RES}, pop:0, popCap:0, tc:null, color:COLORS[i]}));
-  // Teamfarbe = Hauptfarbe der eigenen Flagge (Osmanen rot …); ist sie einem anderen Volk zu ähnlich, eine gut unterscheidbare Ersatzfarbe
+  // Teamfarbe = Hauptfarbe der eigenen Flagge (Türkei rot …); ist sie einem anderen Volk zu ähnlich, eine gut unterscheidbare Ersatzfarbe
   { const rgb=h=>[h>>16&255,h>>8&255,h&255], dist=(a,b)=>{ const A=rgb(a),B=rgb(b); return Math.hypot(A[0]-B[0],A[1]-B[1],A[2]-B[2]); }, used=[];
     const okL = c=>{ const L=rgb(c).reduce((a,b)=>a+b,0)/765; return L>.1 && L<.85; };
     G.players.forEach((p,i)=>{
@@ -119,7 +126,7 @@ async function start(sv){
     G.raf = requestAnimationFrame(loop);
   };
   G.raf = requestAnimationFrame(loop);
-  EE.toast('Die '+civ[0]+' erwachen in der Steinzeit');
+  EE.toast(CN(civ)+' '+cv(civ,'erwacht','erwachen')+' in der Steinzeit');
   EE.music('calm');
 }
 
@@ -959,7 +966,7 @@ function checkEnd(){
   if(G.over) return;
   const has = i => G.builds.some(b=>b.owner===i && b.kind!=='road') || G.units.some(u=>u.owner===i);
   if(!has(0)){ G.over=true; try{localStorage.removeItem(SAVE_KEY)}catch(e){} setTimeout(()=>{ EE.toast('Niederlage – dein Volk ist untergegangen'); EE.sfx('error'); }, 400); return; }
-  for(let i=1;i<G.players.length;i++){ const p=G.players[i]; if(!p.out && !has(i)){ p.out=true; EE.toast('Die '+p.civ[0]+' sind besiegt!'); EE.sfx('fanfare',.8); } }
+  for(let i=1;i<G.players.length;i++){ const p=G.players[i]; if(!p.out && !has(i)){ p.out=true; EE.toast(CN(p)+' '+cv(p,'ist','sind')+' besiegt!'); EE.sfx('fanfare',.8); } }
   if(G.players.slice(1).every(p=>p.out)){ G.over=true; try{localStorage.removeItem(SAVE_KEY)}catch(e){} setTimeout(()=>{ EE.toast('Sieg! Alle Gegner sind besiegt'); EE.sfx('fanfare'); }, 600); }
 }
 // KI: Kriegerhütte bauen, Krieger ausbilden, im Krieg angreifen
@@ -1072,7 +1079,7 @@ function propose(i, st){
   if(st===d.state) return;
   if(st==='enemy'){ d.mood=Math.max(-100,d.mood-40); setDip(i,'enemy'); return; }
   if(d.hard && d.state==='enemy' && st==='ally'){ d.mood=Math.max(-100,d.mood-5); G.dipUI.bribe=null;
-    EE.toast(p.civ[0]+' sind unversöhnlich – kein Bündnis, auch nicht für Gold'); EE.sfx('error',.6); if(G.dipOpen) renderDip(); return; }
+    EE.toast(CN(p)+' '+cv(p,'ist','sind')+' unversöhnlich – kein Bündnis, auch nicht für Gold'); EE.sfx('error',.6); if(G.dipOpen) renderDip(); return; }
   const need = dipNeed(d.state, st);
   const bonus = (G.rand()-.5)*14;
   if(d.mood+bonus >= need){ d.mood=Math.min(100,d.mood+5); setDip(i,st); }
@@ -1096,14 +1103,14 @@ function payBribe(){
   me.res.gold -= B.cost; p.res.gold += B.cost;
   G.dipUI.bribe=null;
   d.mood = Math.min(100, Math.max(d.mood, dipNeed(d.state,B.st)) + 12);
-  EE.toast(p.civ[0]+' nehmen das Gold an 💰'); setDip(B.i, B.st); updateHUD(); renderDip();
+  EE.toast(CN(p)+' '+cv(p,'nimmt','nehmen')+' das Gold an 💰'); setDip(B.i, B.st); updateHUD(); renderDip();
 }
 function sendTribute(i, res, amt){
   const me=G.players[0], p=G.players[i], d=G.dip[i]; EE.click();
   if(me.res[res]<amt){ EE.toast('Nicht genug '+RES_DE[res]); EE.sfx('error'); return; }
   me.res[res]-=amt; p.res[res]+=amt;
   d.mood = Math.min(100, d.mood + Math.round(amt*RES_VAL[res]/6));
-  EE.toast(amt+' '+RES_DE[res]+' an '+p.civ[0]+' geschickt – Stimmung steigt'); EE.sfx('confirm');
+  EE.toast(amt+' '+RES_DE[res]+' an '+cn(p,2)+' geschickt – Stimmung steigt'); EE.sfx('confirm');
   updateHUD(); renderDip();
 }
 // Verbündete um Rohstoffe bitten: hängt vom Charakter ab (großzügig, normal, geizig) und davon, was sie selbst übrig haben
@@ -1111,23 +1118,23 @@ const GEN_DE = g => g>.66 ? 'großzügig' : g<.3 ? 'geizig' : 'normal';
 function genOf(i){ const d=G.dip[i]; if(d.gen==null) d.gen = ((Math.sin((G.seed|0)*.013+i*12.9898)*43758.5453)%1+1)%1; return d.gen; }
 function askTribute(i, res, amt){
   const me=G.players[0], p=G.players[i], d=G.dip[i], gen=genOf(i); EE.click();
-  if(d.state==='enemy'){ EE.toast(p.civ[0]+' lachen nur – ihr seid im Krieg'); EE.sfx('error',.6); return; }
+  if(d.state==='enemy'){ EE.toast(CN(p)+' '+cv(p,'lacht','lachen')+' nur – ihr seid im Krieg'); EE.sfx('error',.6); return; }
   if(d.askT && G.t-d.askT<60){ EE.toast(p.civ[0]+': „Ihr habt doch gerade erst gefragt!“'); EE.sfx('error',.6); return; }
   d.askT=G.t;
   const keep = 150 + (1-gen)*350, spare = Math.max(0, Math.floor(p.res[res]-keep));
   const willing = (d.state==='ally' ? .25 : -.2) + gen*.7 + d.mood/250;
-  if(gen<.3 && G.rand() > willing){ d.mood=Math.max(-100,d.mood-3); EE.toast(p.civ[0]+' sind geizig und geben nichts'); EE.sfx('error',.6); }
+  if(gen<.3 && G.rand() > willing){ d.mood=Math.max(-100,d.mood-3); EE.toast(CN(p)+' '+cv(p,'ist geizig und gibt','sind geizig und geben')+' nichts'); EE.sfx('error',.6); }
   else if(spare<=0){ EE.toast(p.civ[0]+': „Wir haben selbst kaum '+RES_DE[res]+'.“'); EE.sfx('error',.6); }
-  else if(G.rand() > willing){ d.mood=Math.max(-100,d.mood-4); EE.toast(p.civ[0]+' lehnen ab'); EE.sfx('error',.6); }
+  else if(G.rand() > willing){ d.mood=Math.max(-100,d.mood-4); EE.toast(CN(p)+' '+cv(p,'lehnt','lehnen')+' ab'); EE.sfx('error',.6); }
   else { const give=Math.min(amt, spare, Math.round(amt*(gen>.66?1:gen<.3?.4:.75))); p.res[res]-=give; me.res[res]+=give; d.mood=Math.max(-100,d.mood-(give>=amt?6:3));
-    EE.toast(give>=amt ? p.civ[0]+' schicken dir '+give+' '+RES_DE[res] : p.civ[0]+' können nur '+give+' '+RES_DE[res]+' entbehren'); EE.sfx('confirm'); }
+    EE.toast(give>=amt ? CN(p)+' '+cv(p,'schickt','schicken')+' dir '+give+' '+RES_DE[res] : CN(p)+' '+cv(p,'kann','können')+' nur '+give+' '+RES_DE[res]+' entbehren'); EE.sfx('confirm'); }
   updateHUD(); renderDip();
 }
 function demandTribute(i, res, amt){
   const me=G.players[0], p=G.players[i], d=G.dip[i]; EE.click();
   const weaker = p.pop < me.pop*.9 || d.state==='ally';
-  if(weaker && d.mood > -25 && p.res[res]>=amt){ p.res[res]-=amt; me.res[res]+=amt; d.mood=Math.max(-100,d.mood-22); EE.toast(p.civ[0]+' zahlen '+amt+' '+RES_DE[res]+' – aber sie sind verärgert'); EE.sfx('confirm'); }
-  else { d.mood=Math.max(-100,d.mood-12); EE.toast(p.civ[0]+' weigern sich zu zahlen'); EE.sfx('error',.6); }
+  if(weaker && d.mood > -25 && p.res[res]>=amt){ p.res[res]-=amt; me.res[res]+=amt; d.mood=Math.max(-100,d.mood-22); EE.toast(CN(p)+' '+cv(p,'zahlt','zahlen')+' '+amt+' '+RES_DE[res]+' – aber sie sind verärgert'); EE.sfx('confirm'); }
+  else { d.mood=Math.max(-100,d.mood-12); EE.toast(CN(p)+' '+cv(p,'weigert','weigern')+' sich zu zahlen'); EE.sfx('error',.6); }
   updateHUD(); renderDip();
 }
 function tradeQuote(i, give, get, amt){
@@ -1139,10 +1146,10 @@ function tradeQuote(i, give, get, amt){
 function doTrade(i, give, get, amt){
   const me=G.players[0], p=G.players[i], d=G.dip[i]; EE.click();
   if(d.state==='enemy'){ EE.toast('Mit Feinden kann man nicht handeln'); EE.sfx('error'); return; }
-  if(d.mood < -30){ EE.toast(p.civ[0]+' wollen gerade nicht mit dir handeln'); EE.sfx('error'); return; }
+  if(d.mood < -30){ EE.toast(CN(p)+' '+cv(p,'will','wollen')+' gerade nicht mit dir handeln'); EE.sfx('error'); return; }
   const q = tradeQuote(i,give,get,amt);
   if(me.res[give]<amt){ EE.toast('Nicht genug '+RES_DE[give]); EE.sfx('error'); return; }
-  if(p.res[get]<q){ EE.toast(p.civ[0]+' haben nur '+Math.floor(p.res[get])+' '+RES_DE[get]); EE.sfx('error'); return; }
+  if(p.res[get]<q){ EE.toast(CN(p)+' '+cv(p,'hat','haben')+' nur '+Math.floor(p.res[get])+' '+RES_DE[get]); EE.sfx('error'); return; }
   me.res[give]-=amt; p.res[give]+=amt; me.res[get]+=q; p.res[get]-=q; d.mood=Math.min(100,d.mood+2);
   EE.toast('Handel: '+amt+' '+RES_DE[give]+' gegen '+q+' '+RES_DE[get]); EE.sfx('confirm');
   updateHUD(); renderDip();
@@ -1162,7 +1169,7 @@ function renderDip(){
   if(U.tab==='rel'){
     const B=U.bribe;
     if(B && G.dip[B.i].state!==B.st){ const bp=G.players[B.i], ok=me.res.gold>=B.cost;
-      h += `<div class="dbribe"><i style="background:${col(B.i)}"></i><span><b>${bp.civ[0]}</b> lehnen ${B.st==='ally'?'das Bündnis':'den Frieden'} ab – für <b class="${ok?'ok':'miss'}">${ICON.gold} ${B.cost} Gold</b> stimmen sie zu.</span><button class="btn small" id="dBrNo">Nein</button><button class="btn main small" id="dBrYes">Bestechen</button></div>`; }
+      h += `<div class="dbribe"><i style="background:${col(B.i)}"></i><span><b>${CN(bp)}</b> ${cv(bp,'lehnt','lehnen')} ${B.st==='ally'?'das Bündnis':'den Frieden'} ab – für <b class="${ok?'ok':'miss'}">${ICON.gold} ${B.cost} Gold</b> stimmen sie zu.</span><button class="btn small" id="dBrNo">Nein</button><button class="btn main small" id="dBrYes">Bestechen</button></div>`; }
     else { U.bribe=null; h += `<p class="dnote">Lehnen sie ab, hilft Gold: Neutrale billig, Kriegsgegner teuer, ⚔ unversöhnlich = nie.</p>`; }
     h += `<div class="drows${G.players.length>7?' two':''}">`;
     for(const p of G.players.slice(1)){ const d=G.dip[p.id];
@@ -1179,7 +1186,7 @@ function renderDip(){
       <button class="btn main small" id="dTrade"${d.state==='enemy'||U.give===U.get?' disabled':''}>Handeln</button></div>`;
   } else {
     const p=G.players[U.who];
-    h += `<div class="dlab">Volk</div><div class="dline">${civBtns(false)}</div>
+    h += `<div class="dlab">Land</div><div class="dline">${civBtns(false)}</div>
       <div class="dlab">Rohstoff</div><div class="dline">${resBtns('give')}</div>
       <div class="dlab">Menge</div><div class="dline">${amtBtns}</div>
       <div class="deal">Du hast ${Math.floor(me.res[U.give])} ${RES_DE[U.give]} · ${p.civ[0]}: ${moodTxt(G.dip[U.who].mood)}, ${GEN_DE(genOf(U.who))}
@@ -1228,22 +1235,22 @@ function sendMyArmy(target){
 function allyRequests(p, soldiers, tc, threat){
   const d=G.dip[p.id]; if(G.offer) return;
   if(threat && (!p.helpT || G.t-p.helpT>150)){ p.helpT=G.t;
-    showAsk(p.id, `${p.civ[0]} werden angegriffen! Schickst du Krieger?`, '⚔ Krieger schicken',
-      ()=>{ const n=sendMyArmy(threat); d.mood=Math.min(100,d.mood+(n?15:2)); EE.toast(n? n+' Krieger ziehen den '+p.civ[0]+' zu Hilfe' : 'Du hast keine Krieger – bilde welche in der Kriegerhütte aus'); },
-      ()=>{ d.mood=Math.max(-100,d.mood-10); EE.toast(p.civ[0]+' sind enttäuscht'); });
+    showAsk(p.id, `${CN(p)} ${cv(p,'wird','werden')} angegriffen! Schickst du Krieger?`, '⚔ Krieger schicken',
+      ()=>{ const n=sendMyArmy(threat); d.mood=Math.min(100,d.mood+(n?15:2)); EE.toast(n? n+' Krieger ziehen '+cn(p,1)+' zu Hilfe' : 'Du hast keine Krieger – bilde welche in der Kriegerhütte aus'); },
+      ()=>{ d.mood=Math.max(-100,d.mood-10); EE.toast(CN(p)+' '+cv(p,'ist','sind')+' enttäuscht'); });
     return; }
   p.jointT=(p.jointT ?? 300+G.rand()*300)-1.5;
   if(p.jointT<=0 && !p.joint && soldiers.length>=5){ p.jointT=400+G.rand()*300;
     const foes=G.players.filter(o=>o.id!==0 && o.id!==p.id && G.dip[o.id].state==='enemy' && o.tc && !o.tc.dead); if(!foes.length) return;
     const X=foes.sort((a,b)=>Math.hypot(a.tc.x-tc.x,a.tc.z-tc.z)-Math.hypot(b.tc.x-tc.x,b.tc.z-tc.z))[0];
-    showAsk(p.id, `${p.civ[0]}: „Wir greifen die ${X.civ[0]} an – bist du dabei?“`, '⚔ Ja, Krieger mitschicken',
-      ()=>{ p.joint={vs:X.id}; p.waveT=0; const n=sendMyArmy(X.tc); d.mood=Math.min(100,d.mood+12); EE.toast(n? n+' Krieger ziehen mit den '+p.civ[0]+' gegen die '+X.civ[0] : 'Die '+p.civ[0]+' greifen allein an – du hast keine Krieger'); },
-      ()=>{ d.mood=Math.max(-100,d.mood-6); EE.toast(p.civ[0]+' greifen ohne dich an'); p.joint={vs:X.id}; p.waveT=0; });
+    showAsk(p.id, `${p.civ[0]}: „Wir greifen ${cn(X,2)} an – bist du dabei?“`, '⚔ Ja, Krieger mitschicken',
+      ()=>{ p.joint={vs:X.id}; p.waveT=0; const n=sendMyArmy(X.tc); d.mood=Math.min(100,d.mood+12); EE.toast(n? n+' Krieger ziehen mit '+cn(p,1)+' gegen '+cn(X,2) : CN(p)+' '+cv(p,'greift','greifen')+' allein an – du hast keine Krieger'); },
+      ()=>{ d.mood=Math.max(-100,d.mood-6); EE.toast(CN(p)+' '+cv(p,'greift','greifen')+' ohne dich an'); p.joint={vs:X.id}; p.waveT=0; });
   }
 }
 function showOffer(i, st){
   const p=G.players[i]; G.offer={i,st};
-  const el=$('#offer'); el.innerHTML=`<span><i style="background:#${COLORS[i].toString(16).padStart(6,'0')}"></i>${p.civ[0]} bieten ${st==='ally'?'ein Bündnis':'Frieden'} an</span><button class="pb no" id="oNo">✕</button><button class="pb ok" id="oYes">✓</button>`;
+  const el=$('#offer'); el.innerHTML=`<span><i style="background:#${COLORS[i].toString(16).padStart(6,'0')}"></i>${CN(p)} ${cv(p,'bietet','bieten')} ${st==='ally'?'ein Bündnis':'Frieden'} an</span><button class="pb no" id="oNo">✕</button><button class="pb ok" id="oYes">✓</button>`;
   el.classList.remove('hidden'); EE.sfx('fanfare',.5);
   const done=(yes)=>{ el.classList.add('hidden'); G.offer=null; if(yes){ setDip(i,st); G.dip[i].mood=Math.min(100,G.dip[i].mood+10); } else { G.dip[i].mood-=8; EE.click(); } };
   $('#oYes').onclick=()=>done(true); $('#oNo').onclick=()=>done(false);
@@ -1487,10 +1494,12 @@ function centerCamOn(x,z){ G.camS.x=x; G.camS.z=z+4; }
    WELTKARTE
    ============================================================ */
 const LAT0 = 90, LAT1 = -90;                // Kartenausschnitt (Breitengrade)
-const CIV_POS = { 'Osmanen':[32.5,39.5], 'Römer':[12.5,42], 'Griechen':[22,39], 'Ägypter':[31,27], 'Babylonier':[44.5,33],
-  'Germanen':[10,51], 'Briten':[-1.5,52.5], 'Franken':[2.5,47], 'Wikinger':[10,60.5], 'Mongolen':[105,47],
-  'Chinesen':[113,34], 'Japaner':[138,36], 'Koreaner':[127.5,37], 'Azteken':[-99,19.5], 'Inka':[-72,-13.5],
-  'Maya':[-89.5,17.5], 'Russen':[37.5,55.7], 'Zulu':[31,-28.5] };
+const CIV_POS = { 'Türkei':[32.5,39.5], 'Italien':[12.5,42], 'Griechenland':[22,39], 'Ägypten':[31,27], 'Irak':[44.5,33],
+  'Deutschland':[10,51], 'Großbritannien':[-1.5,52.5], 'Frankreich':[2.5,47], 'Norwegen':[10,60.5], 'Mongolei':[105,47],
+  'China':[113,34], 'Japan':[138,36], 'Korea':[127.5,37], 'Mexiko':[-99,19.5], 'Peru':[-72,-13.5],
+  'Guatemala':[-89.5,17.5], 'Russland':[37.5,55.7], 'Südafrika':[31,-28.5],
+  'Iran':[53,32.5], 'Saudi-Arabien':[45,24.5], 'Indien':[78,22], 'Mali':[-4,14], 'Spanien':[-3.7,40.4], 'Portugal':[-8.2,39.5],
+  'Irland':[-8,53.3], 'Niederlande':[5.5,52.2], 'Polen':[19.5,52], 'USA':[-100,40], 'Australien':[134,-25], 'Brasilien':[-47,-14] };
 // Wüsten [lonMin, lonMax, latMin, latMax]
 const DESERTS = [[-17,34,15,31],[34,58,14,31],[50,66,25,34],[68,76,24,30],[76,92,36,42],[92,116,37,47],[118,146,-32,-18],
   [17,25,-27,-19],[-118,-104,29,37],[-72,-68,-28,-17],[55,66,39,45]];
@@ -3358,7 +3367,7 @@ function updateWorker(u,dt){
   if(u.kind==='ox'){ updateOx(u,dt); return; }
   const p = G.players[u.owner];
   u.moving=false; u.working=false;
-  const gatherRate = ((u.owner===0 && G.civ[0]==='Chinesen') ? 1.15 : 1) * (u.owner!==0 ? aiD().gather : 1) * (u.ageSt==='alt' ? .75 : 1);
+  const gatherRate = ((u.owner===0 && G.civ[0]==='China') ? 1.15 : 1) * (u.owner!==0 ? aiD().gather : 1) * (u.ageSt==='alt' ? .75 : 1);
   if(u.inside && u.inside.kind==='tower'){ updateTowerCrew(u,dt); u.ring.visible=false; return; }
   if(isSoldier(u)){ u.scanT=(u.scanT||0)-dt; if(u.scanT<=0){ u.scanT=.5; if(u.state==='idle'){ const f=nearestFoe(u, u.pin ? UNIT[u.kind].range+.6 : UNIT[u.kind].ranged?10:7); if(f) cmdAttack(u,f);
       else if(u.post && Math.hypot(u.post.x-u.x,u.post.z-u.z)>1.6){ u.state='move'; u.goal={x:u.post.x,z:u.post.z,tries:0}; moveTo(u,u.post.x,u.post.z); } } } }   // nach dem Kampf zurück an den Platz
@@ -3737,7 +3746,7 @@ function updateAIWar(p, mine, tc){
     if(wave.length < Math.max(2, p.wave.n*.3)){ for(const s of wave){ s.wave=false; cmdMove(s, tc.x+(G.rand()-.5)*8, tc.z+(G.rand()-.5)*8); } p.wave=null; p.joint=null; p.waveT=180*D.wave; return; }
     if(p.wave.phase==='gather'){
       const ready = wave.filter(s=>Math.hypot(s.x-p.wave.rx,s.z-p.wave.rz)<7).length;
-      if(ready>=wave.length*.8 || G.t-p.wave.t0>40){ p.wave.phase='go'; if(vs===0){ EE.toast('Die '+p.civ[0]+' greifen an!'); EE.sfx('error',.8); EE.vib(60); G.alarmT=6; } else EE.toast('Die '+p.civ[0]+' ziehen gegen die '+G.players[vs].civ[0]+' los'); }
+      if(ready>=wave.length*.8 || G.t-p.wave.t0>40){ p.wave.phase='go'; if(vs===0){ EE.toast(CN(p)+' '+cv(p,'greift','greifen')+' an!'); EE.sfx('error',.8); EE.vib(60); G.alarmT=6; } else EE.toast(CN(p)+' '+cv(p,'zieht','ziehen')+' gegen '+cn(G.players[vs],2)+' los'); }
     }
     if(p.wave.phase==='go') for(const s of wave){ if(s.state==='attack' && alive(s.target)) continue;
       const f=nearestFoe(s, 16); if(f){ cmdAttack(s,f); continue; }
@@ -4096,7 +4105,7 @@ function pcSelectAt(sx,sy,add){
     PC.lastClick={t:now,u:hit.u}; EE.click(); return;
   }
   PC.lastClick={t:now,u:null};
-  if(hit && hit.u){ select([],null); EE.toast(UNIT[hit.u.kind].name+' der '+G.players[hit.u.owner].civ[0]); return; }
+  if(hit && hit.u){ select([],null); EE.toast(UNIT[hit.u.kind].name+' aus '+cn(G.players[hit.u.owner],1)); return; }
   if(hit && hit.b){ tapBuilding(hit.b); return; }
   if(hit && hit.r){ if(!add) select([],null); EE.toast(RES_DE[hit.r.kind]+': '+Math.ceil(hit.r.amt)+' übrig'); return; }
   if(!add) select([],null);
@@ -4245,9 +4254,9 @@ function tapAt(sx,sy){
       lastTap={t:now,u:hit.u}; EE.click(); return;
     }
     if(mine.length){ if(hostile(0,hit.u.owner)){ mine.forEach(u=>(u.auto=u.seek=u.hold=false,u.post=null,u.pin&&setPin(u,false),0)||cmdAttack(u,hit.u)); marker(hit.u.x,hit.u.z,0xff4444); EE.vib(12); drawPanel(); }
-      else EE.toast('Ihr habt keinen Krieg mit den '+G.players[hit.u.owner].civ[0]+' – das geht in der Diplomatie');
+      else EE.toast('Ihr habt keinen Krieg mit '+cn(G.players[hit.u.owner],1)+' – das geht in der Diplomatie');
       return; }
-    select([], null); EE.toast(UNIT[hit.u.kind].name+' der '+G.players[hit.u.owner].civ[0]); return;
+    select([], null); EE.toast(UNIT[hit.u.kind].name+' aus '+cn(G.players[hit.u.owner],1)); return;
   }
   if(mine.length){
     if(hit && hit.r && (hit.r.kind==='metal'||hit.r.kind==='oil')){ EE.toast(RES_DE[hit.r.kind]+'-Vorkommen – kann noch nicht abgebaut werden'); return; }
@@ -4260,7 +4269,7 @@ function tapAt(sx,sy){
     if(hit && hit.b && hit.b.owner===0 && (hit.b.built<1 || hit.b.hp<BUILD[hit.b.kind].hp)){ const bs=mine.filter(u=>u.kind==='worker'); if(!bs.length){ EE.toast('Nur Bauern können bauen'); return; } bs.forEach(u=>cmdBuild(u,hit.b)); iconMarker(hit.b,'hammer'); if(bs.length>1) EE.toast(bs.length+' Bauern '+(hit.b.built<1?'bauen':'reparieren')+' zusammen – das geht schneller'); marker(hit.b.x,hit.b.z,0xffd24a); EE.vib(10); drawPanel(); return; }
     if(hit && hit.b && hit.b.owner===0 && BUILD[hit.b.kind].drop){ mine.forEach(u=>{ if(u.carry.amt>0){u.state='drop';u.path=null;} }); marker(hit.b.x,hit.b.z,0xffffff); return; }
     if(hit && hit.b && hit.b.owner!==0){ if(hostile(0,hit.b.owner)){ mine.forEach(u=>(u.auto=u.seek=u.hold=false,u.post=null,u.pin&&setPin(u,false),0)||cmdAttack(u,hit.b)); marker(hit.b.x,hit.b.z,0xff4444); EE.vib(12); }
-      else EE.toast('Ihr habt keinen Krieg mit den '+G.players[hit.b.owner].civ[0]); return; }
+      else EE.toast('Ihr habt keinen Krieg mit '+cn(G.players[hit.b.owner],1)); return; }
     if(hit && hit.b){ tapBuilding(hit.b); return; }
     // Doppeltipp auf den Boden: Auswahl aufheben
     if(now-lastTap.t<450 && lastTap.g && Math.hypot(sx-lastTap.x, sy-lastTap.y)<45){ lastTap={t:0,u:null}; select([],null); EE.click(); EE.toast('Auswahl aufgehoben'); return; }
@@ -4651,7 +4660,7 @@ function terrCheck(owner, kind, x, z){
   if(kind==='tc'){
     if(id<0) return 'Hier kann man kein Gebiet gründen';
     if(o===owner) return 'Dieses Gebiet gehört dir schon – baue im Nachbargebiet';
-    if(o>=0) return 'Das Gebiet gehört den '+G.players[o].civ[0]+' – erst deren Stadtzentrum zerstören';
+    if(o>=0) return 'Das Gebiet gehört '+cn(G.players[o],1)+' – erst das Stadtzentrum zerstören';
     if(G.builds.some(b=>b.kind==='tc' && b.built<1 && regionAt(b.x,b.z)===id)) return 'Hier wird schon ein Stadtzentrum gebaut';
     const mine=[...G.reg.owner].filter(([k,v])=>v===owner).map(([k])=>k);
     if(!mine.length) return null;
