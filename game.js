@@ -3983,7 +3983,7 @@ async function applyGfx(g){
   const swap={}; for(const k in old) if(MODELS[k] && MODELS[k]!==old[k]) swap[k]=[old[k],MODELS[k]];
   const w=m=>{ const bb=m.geo.boundingBox; return Math.max(bb.max.x-bb.min.x, bb.max.z-bb.min.z); };
   for(const b of G.builds) b.mesh.traverse(o=>{ if(!o.isMesh) return; for(const k in swap){ const [a,n]=swap[k]; if(o.geometry===a.geo){ o.geometry=n.geo; o.material=Array.isArray(o.material)?o.material:n.mat; if(!o.material.transparent) o.material=n.mat; o.scale.multiplyScalar(w(a)/w(n)); } } });
-  EE.toast('Grafik: '+['Niedrig (480p)','Mittel (720p)','Hoch (1080p)','Ultra (1440p)'][g]+(g===0?' · einfache Gebäude, weniger Tiere':''));
+  EE.toast('Grafik: '+['Niedrig','Mittel','Hoch','Ultra'][g]);
 }
 let fpsN=0, fpsT=0, fpsLow=0, fpsHigh=0;
 // Auflösung: Grundwert je Grafikstufe × automatische Anpassung × (Schulterperspektive auf Niedrig/Mittel: 80 %, dort ist viel Laub im Bild)
