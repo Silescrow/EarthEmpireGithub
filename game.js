@@ -2452,7 +2452,7 @@ function buildQuadRig(key){
   const H=bb.max.y-bb.min.y, L=bb.max.z-bb.min.z;
   // Bauchhöhe: dort, wo die Zahl der Punkte pro Schicht stark ansteigt (über den Beinen beginnt der Körper)
   const NB=24, cnt=new Array(NB).fill(0);
-  for(let i=0;i<n;i++){ const b=Math.min(NB-1, Math.floor(pos.getY(i)/H*NB)); cnt[b]++; }
+  { const seen=new Set(); for(let i=0;i<n;i++){ const y=pos.getY(i), k=Math.round(pos.getX(i)*500)+','+Math.round(y*500)+','+Math.round(pos.getZ(i)*500); if(seen.has(k)) continue; seen.add(k); cnt[Math.min(NB-1, Math.floor(y/H*NB))]++; } }   // jede Stelle nur einmal zählen (gebackene Modelle haben je Dreieck eigene Ecken)
   let legTop=.42*H;
   for(let b=3;b<NB*.65;b++){ const base=cnt.slice(1,b).sort((a,c)=>a-c)[Math.floor((b-1)/2)]||1; if(cnt[b]>base*1.9){ legTop=b/NB*H; break; } }
   // Beine: vier Gruppen (vorne/hinten, links/rechts)
@@ -4074,10 +4074,13 @@ function openBigMap(){
   // Fenster genau um die Karte zuschneiden: Karte so groß wie möglich, Rahmen liegt eng an
   { const leg=ov.querySelector('.bm-leg'), body=ov.querySelector('.bm-body');
     const availW=innerWidth-28-24, availH=innerHeight-28-22, fixH=ov.querySelector('.bm-head').offsetHeight+ov.querySelector('.bm-tip').offsetHeight+5*2+16;
-    const n=G.players.length, rowH=15, colW=142; let cw=availW, ch=0, cols=1;
-    for(;cw>160;cw-=8){ ch=Math.floor(cw*H/W); if(ch+fixH>availH) continue;          // Legende rechts neben der Karte, in so vielen Spalten wie nötig
-      cols=Math.ceil(n*rowH/Math.max(rowH,ch)); if(cw+10+cols*colW<=availW) break; }
-    c.style.width=cw+'px'; c.style.height=ch+'px'; leg.style.height=ch+'px'; leg.style.width=(cols*colW)+'px'; leg.style.columnCount=cols; }
+    // Legende rechts daneben, so viele Spalten wie für die volle Höhe nötig; Karte bekommt den Rest (nie breiter als der Bildschirm)
+    const n=G.players.length, sp=leg.querySelector('span'), rowH=Math.max(14,(sp&&sp.offsetHeight)||15)+2, maxW=leg.querySelectorAll('span').length?Math.max(...[...leg.querySelectorAll('span')].map(e=>e.scrollWidth)):120;
+    const colW=Math.min(170, maxW+10), legH=Math.max(rowH, availH-fixH), cols=Math.max(1,Math.ceil(n*rowH/legH)), legW=cols*colW;
+    let cw=Math.floor(Math.min(availW-legW-12, (availH-fixH)*W/H)), ch;
+    if(cw<availW*.45){ cw=Math.floor(Math.min(availW, (availH-fixH)*W/H)); leg.style.display='none'; } else leg.style.display='';   // zu wenig Platz: nur die Karte
+    ch=Math.floor(cw*H/W);
+    c.style.width=cw+'px'; c.style.height=ch+'px'; leg.style.height=Math.min(legH, Math.max(ch, Math.ceil(n/cols)*rowH))+'px'; leg.style.width=legW+'px'; leg.style.columnCount=cols; }
 }
 function drawMinimap(){
   const cv=$('#mini'); if(!cv) return; const x=cv.getContext('2d'), W=cv.width, H=cv.height, s=W/G.NX;
