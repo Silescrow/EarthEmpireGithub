@@ -1377,9 +1377,9 @@ function followCam(){
   if(!G.fcam) G.fcam={x:tx,y:ty,z:tz,lx,ly,lz};
   const c=G.fcam, k=Math.min(1,(G.dtW||.016)*5);
   c.x+=(tx-c.x)*k; c.y+=(ty-c.y)*k; c.z+=(tz-c.z)*k; c.lx+=(lx-c.lx)*k; c.ly+=(ly-c.ly)*k; c.lz+=(lz-c.lz)*k;
-  G.cam.position.set(c.x,c.y,c.z); G.cam.near=.08; G.cam.far=260; G.cam.updateProjectionMatrix();
+  G.cam.position.set(c.x,c.y,c.z); G.cam.near=.1; G.cam.far=G.gfx>=2?170:120; G.cam.updateProjectionMatrix();
   G.cam.lookAt(c.lx,c.ly,c.lz);
-  G.scene.fog.near=40; G.scene.fog.far=150;
+  G.scene.fog.near=G.gfx>=2?35:25; G.scene.fog.far=G.gfx>=2?150:105;   // Nebel in der Ferne: weniger zu zeichnen
   G.sun.position.set(u.x+30, gy+55, u.z+18); G.sun.target.position.set(u.x,gy,u.z);
   G.camMoved=true; return true;
 }
@@ -3789,7 +3789,7 @@ function camResetStep(dt){
     if(Math.abs(dy)<.003){ S.yaw=0; G.camReset=false; } }
   if(n){ const deg=Math.round(S.yaw*57.3); if(deg!==G.needleDeg){ G.needleDeg=deg; n.setAttribute('transform','rotate('+deg+' 12 12)'); } }
 }
-function render(){ camResetStep(G.dtW||.016); updateCam(); updateWeather(G.dtW||.016); updateRegionOverlay(); updateBirds(G.dtW||.016); G.fr=(G.fr||0)+1; if(G.renderer.shadowMap.enabled && (G.fr%2===0 || G.camMoved)) G.renderer.shadowMap.needsUpdate=true; G.camMoved=false; G.renderer.render(G.scene, G.cam); }
+function render(){ camResetStep(G.dtW||.016); updateCam(); updateWeather(G.dtW||.016); updateRegionOverlay(); updateBirds(G.dtW||.016); G.fr=(G.fr||0)+1; if(G.renderer.shadowMap.enabled && (G.follow ? G.fr%4===0 : (G.fr%2===0 || G.camMoved))) G.renderer.shadowMap.needsUpdate=true; G.camMoved=false; G.renderer.render(G.scene, G.cam); }
 
 /* ============================================================
    MINIKARTE
