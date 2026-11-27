@@ -265,12 +265,13 @@ function stop(){
 /* ============================================================
    OBERFLÄCHE (HUD)
    ============================================================ */
+// Gemalte Rohstoff-Icons liegen in ui/res_*.png (Beeren, Fleisch, Fisch, Getreide, Holz, Stein, Gold, Metall, Eisen, Kohle, Öl, Uran, Energie, Münzen, Wolle, Faser, Leder, Knochen, Honig/Salz, Bevölkerung, Munition, Schießpulver, Salpeter, Zinn/Kupfer, Stahl, Treibstoff, Ersatzteile, Sanität, Gummi, Glas, Aluminium, Mikrochip)
 const ICON = {
-  food:'<svg viewBox="0 0 24 24"><circle cx="8" cy="14" r="5" fill="#d8323c"/><circle cx="15" cy="10" r="5" fill="#e8434d"/><circle cx="15" cy="17" r="4.5" fill="#b8262f"/><path d="M15 5q2-3 5-2" stroke="#3a7a2a" stroke-width="2" fill="none"/></svg>',
-  wood:'<svg viewBox="0 0 24 24"><rect x="2" y="9" width="20" height="7" rx="3.5" fill="#9a6232"/><circle cx="20" cy="12.5" r="3.4" fill="#e2b77a"/><circle cx="20" cy="12.5" r="1.4" fill="#9a6232"/></svg>',
-  stone:'<svg viewBox="0 0 24 24"><path d="M3 18l3-9 6-4 7 3 2 10z" fill="#9aa3ad"/><path d="M6 9l6-4 1 7z" fill="#c4ccd4"/></svg>',
-  gold:'<svg viewBox="0 0 24 24"><path d="M3 18l3-8 6-4 7 4 2 8z" fill="#7d6a3a"/><path d="M8 11l3-2 2 3-3 2zM13 14l3-1 1 3-3 1z" fill="#ffd24a"/></svg>',
-  pop:'<svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="#f0d3a8"/><path d="M4 21q1-8 8-8t8 8z" fill="#8a5a2b"/></svg>',
+  food:'<svg viewBox="0 0 24 24"><image href="ui/res_beeren.png" x="-1.5" y="-1.5" width="27" height="27"/></svg>',   // gemaltes Icon (V2.20)
+  wood:'<svg viewBox="0 0 24 24"><image href="ui/res_holz.png" x="-1.5" y="-1.5" width="27" height="27"/></svg>',   // gemaltes Icon (V2.20)
+  stone:'<svg viewBox="0 0 24 24"><image href="ui/res_stein.png" x="-1.5" y="-1.5" width="27" height="27"/></svg>',   // gemaltes Icon (V2.20)
+  gold:'<svg viewBox="0 0 24 24"><image href="ui/res_gold.png" x="-1.5" y="-1.5" width="27" height="27"/></svg>',   // gemaltes Icon (V2.20)
+  pop:'<svg viewBox="0 0 24 24"><image href="ui/res_bevoelkerung.png" x="-1.5" y="-1.5" width="27" height="27"/></svg>',
 };
 
 function buildUI(){
@@ -4601,6 +4602,13 @@ function roadMat(){
   for(let i=0;i<70*16;i++){ const px=S*.2+R()*S*.6, py=R()*S; x.fillStyle=`rgba(${150+R()*50|0},${145+R()*45|0},${135+R()*40|0},.9)`; x.beginPath(); x.arc(px,py,(.8+R()*1.8)*1.6,0,7); x.fill(); }
   for(let k=0;k<2;k++){ x.strokeStyle='rgba(70,50,30,.35)'; x.lineWidth=5*S/128; x.beginPath(); x.moveTo(S*(.36+k*.28),0); x.lineTo(S*(.36+k*.28),S); x.stroke(); }
   ROAD_TEX=new T.CanvasTexture(cv); ROAD_TEX.wrapT=T.RepeatWrapping; ROAD_TEX.colorSpace=T.SRGBColorSpace;
+  // Gemalte Straße je Epoche (V2.20): Bild laden, Ränder weich ausblenden, ersetzt dann die erzeugte Textur
+  const ROADS=['steinzeit','antike','mittelalter','neuzeit','industrie','industrie','industrie','industrie','moderne','zukunft'];
+  const im=new Image(); im.onload=()=>{ try{
+      x.clearRect(0,0,S,S); x.drawImage(im,0,0,S,S); const d=x.getImageData(0,0,S,S), q=d.data, nn=fbmTile(S,93);
+      for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const o=(j*S+i)*4, e=Math.abs(i/S-.5)*2, t=nn[j*S+i]; q[o+3]=clamp((1-e)*3.4-(t-.5)*2.2,0,1)*245; }
+      x.putImageData(d,0,0); ROAD_TEX.needsUpdate=true; }catch(e){} };
+  { const rn=ROADS[clamp(G.era|0,0,9)]; im.src=(window.EE_ROADS&&window.EE_ROADS[rn]) || 'ui/strasse_'+rn+'.jpg'; }
   ROAD_MAT=new T.MeshLambertMaterial({map:ROAD_TEX, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
   return ROAD_MAT;
 }
