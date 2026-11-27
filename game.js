@@ -2877,7 +2877,7 @@ function moveTo(u,x,z){
 }
 function cmdMove(u,x,z){ u.state='move'; u.target=null; u.site=null; u.goal={x,z,tries:0}; moveTo(u,x,z); }
 function cmdGather(u,r){
-  u.target=r; u.site=null; u.lastType=r.kind;
+  u.target=r; u.site=null; u.lastType=r.kind; u.lastSrc=srcType(r);
   if(u.carry.amt>0 && u.carry.type!==r.kind){ u.carry.amt=0; }
   u.state = r.deer && !r.dead ? 'hunt' : 'gather';
   moveTo(u, r.fish?r.gx:r.x, r.fish?r.gz:r.z);
@@ -2887,6 +2887,16 @@ function dropoffFor(u){
   let best=null, bd=1e9;
   for(const b of G.builds){ if(b.owner!==u.owner||b.built<1) continue; const d=BUILD[b.kind]; if(!d.drop||d.drop.indexOf(u.carry.type)<0) continue;
     const dd=Math.hypot(b.x-u.x,b.z-u.z); if(dd<bd){bd=dd;best=b;} }
+  return best;
+}
+// Weiterarbeiten nach leerem Rohstoff: nur dieselbe Art (Beeren bleiben Beeren, Jäger jagen weiter, Fischer fischen) –
+// eigene Bauern fangen nicht von selbst an, Tiere zu töten
+function srcType(r){ return !r ? null : r.deer ? 'tier' : r.fish ? 'fisch' : r.kind; }
+function nextSame(u, maxD){
+  if(!u.lastType) return null;
+  if(u.owner!==0) return nearestRes(u.lastType, u.x, u.z, maxD, u.owner);
+  const want=u.lastSrc||u.lastType; let best=null, bd=maxD;
+  for(const r of G.res){ if(!r.alive || r.amt<=0 || r.kind!==u.lastType || srcType(r)!==want) continue; const d=Math.hypot(r.x-u.x,r.z-u.z); if(d<bd){ bd=d; best=r; } }
   return best;
 }
 function nearestRes(kind,x,z,maxD,owner){
@@ -2980,7 +2990,7 @@ function updateWorker(u,dt){
     case 'gather': {
       let r = u.target;
       if(!r || !r.alive || r.amt<=0){
-        r = nearestRes(u.lastType||'wood', u.x, u.z, 14, u.owner);
+        r = nextSame(u, 14);
         if(r){ cmdGather(u,r); } else { u.state = u.carry.amt>0 ? 'drop' : 'idle'; u.path=null; }
         break;
       }
@@ -3003,7 +3013,7 @@ function updateWorker(u,dt){
       if(near(u,b.x,b.z,b.size*.5+1.1)){
         p.res[u.carry.type] += u.carry.amt; b.recv=b.recv||{}; b.recv[u.carry.type]=(b.recv[u.carry.type]||0)+u.carry.amt; u.carry.amt=0; u.path=null; if(G.selB===b) drawPanelSoon();
         if(u.owner===0) updateHUD();
-        const r = (u.target && u.target.alive && u.target.amt>0) ? u.target : nearestRes(u.lastType, u.x,u.z, 16, u.owner);
+        const r = (u.target && u.target.alive && u.target.amt>0) ? u.target : nextSame(u, 16);
         if(r) cmdGather(u,r); else u.state='idle';
       } else {
         if(!u.path || u.pi>=u.path.length){ moveTo(u,b.x,b.z); }
@@ -4020,7 +4030,7 @@ function confirmWall(){
 /* ===== Mauertürme (wie Empire Earth II): in die Palisade/Mauer eingebaut, ca. alle 10 m, Ecken und Enden immer.
    Sie schießen selbst (Steinzeit: Pfeile, später andere Munition). Krieger darauf kämpfen von oben mit. ===== */
 const WT_COST = BUILD.tower.cost, WT_GAP = 10;   // kostet so viel wie ein einzelner Wachturm
-const GATE_W = 8.2;   // Torbreite ca. 12 m: später passen drei Panzer nebeneinander durch
+const GATE_W = 4.1;   // Torbreite ca. 6 m (halb so breit wie vorher)
 function gateParts(w){
   const a=w.seg.ang||0, ux=Math.cos(a), uz=Math.sin(a), pr=o=>(o.x-w.x)*ux+(o.z-w.z)*uz;
   const L=wallLine(w).sort((p,q)=>pr(p)-pr(q)); let i=L.indexOf(w), lo=i, hi=i, len=w.seg.len||1;
