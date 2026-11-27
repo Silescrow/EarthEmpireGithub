@@ -1749,6 +1749,8 @@ function groundW(x,z,h,out,o){
 const TERRAIN_T = {value:0};
 /* ---------- JAHRESZEITEN: 15 Minuten je Jahreszeit (1 Jahr = 60 Minuten), Start im Frühling (Nordhalbkugel).
    Südhalbkugel umgekehrt, in den Tropen Regen- und Trockenzeit. ---------- */
+// Baumkronen nah an der Kamera durchsichtig – beim Selbststeuern nur ganz nah (sonst verschwindet der Baum, den man fällt)
+const FADE_U = {value:new T.Vector2(4.5,11)};
 const SEASON_LEN = 900, YEAR_LEN = 4*SEASON_LEN, YEAR_U = {value:0}, NZ_U = {value:1}, SNOW_U = {value:0};   // SNOW_U: liegengebliebener Schnee nach Schneefall (taut bei Wärme)
 const yearPhase = () => (((G && G.t) || 0) / YEAR_LEN) % 1;
 const SEASONS = [['Frühling','🌸'],['Sommer','☀️'],['Herbst','🍂'],['Winter','❄️']];
@@ -2640,9 +2642,9 @@ function floraMat(tex){
   const m=new T.MeshLambertMaterial({map:tex, vertexColors:true, alphaTest:.45, side:T.DoubleSide});
   const fk='flora'+G.gfx; m.customProgramCacheKey=()=>fk;
   m.onBeforeCompile = sh => {
-    sh.uniforms.uTime = TERRAIN_T; sh.uniforms.uYear = YEAR_U; sh.uniforms.uNZ = NZ_U; sh.uniforms.uSnow = SNOW_U;
+    sh.uniforms.uTime = TERRAIN_T; sh.uniforms.uYear = YEAR_U; sh.uniforms.uNZ = NZ_U; sh.uniforms.uSnow = SNOW_U; sh.uniforms.uFade = FADE_U;
     // Jahreszeiten an den Bäumen: Laubbäume färben sich im Herbst und werden bei Frost kahl, Nadelbäume bekommen Schnee
-    sh.fragmentShader = 'varying vec3 vSea;\nvarying float vHs;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+    sh.fragmentShader = 'uniform vec2 uFade;\nvarying vec3 vSea;\nvarying float vHs;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
       {
         float bl = step(.5, vMapUv.x) * step(vMapUv.x, .75);
         if(bl > .5){
@@ -2657,7 +2659,7 @@ function floraMat(tex){
     // nah an der Kamera werden Baumkronen durchsichtig, damit man beim Heranzoomen etwas sieht
     sh.fragmentShader = sh.fragmentShader.replace('void main() {', `void main() {
       float cdist = length(vViewPosition);
-      if(cdist < 11.0){ float a = smoothstep(4.5, 11.0, cdist); float ign = fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(.06711056,.00583715)))); if(ign > a) discard; }`);
+      if(cdist < uFade.y){ float a = smoothstep(uFade.x, uFade.y, cdist); float ign = fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(.06711056,.00583715)))); if(ign > a) discard; }`);
     sh.vertexShader = 'uniform float uTime, uYear, uNZ, uSnow;\nvarying vec3 vSea;\nvarying float vHs;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       #ifdef USE_INSTANCING
         vec2 ip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]); float iy = instanceMatrix[3][1];
@@ -3645,7 +3647,7 @@ function update(dt){
   G.chunkT=(G.chunkT||0)-dt; if(G.chunkT<=0){ G.chunkT=.25; updateChunks(); }
   G.tileT=(G.tileT||0)-dt; if(G.tileT<=0){ G.tileT=.12; updateTiles(); }
   G.cullT=(G.cullT||0)-dt; if(G.cullT<=0){ G.cullT=.2; cullFar(); }
-  TERRAIN_T.value = G.t; YEAR_U.value = yearPhase(); NZ_U.value = G.NZ;
+  TERRAIN_T.value = G.t; YEAR_U.value = yearPhase(); NZ_U.value = G.NZ; if(G.follow) FADE_U.value.set(.6,1.6); else FADE_U.value.set(4.5,11);
   G.ambT=(G.ambT||0)-dt; if(G.ambT<=0){ G.ambT=.5; updateAmbient(); }
   FLAG_T.value = G.t;
   updateOverview();
