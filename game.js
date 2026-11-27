@@ -31,14 +31,14 @@ const COLNAMES = ['Blau','Rot','Gelb','Grün','Lila','Orange','Türkis','Pink','
 const RES = ['food','wood','stone','gold'];
 const RES_DE = {food:'Nahrung',wood:'Holz',stone:'Stein',gold:'Gold',metal:'Metall',oil:'Öl'};
 const BUILD = {
-  tc:    {name:'Stadtzentrum', size:6, cost:{wood:250, stone:100, food:100}, time:60, hp:1200, drop:['food','wood','stone','gold'], pop:5},
-  house: {name:'Hütte', size:3, cost:{wood:30}, time:14, hp:300, pop:4},
-  wall:  {name:'Palisade', size:1, cost:{wood:4}, time:3, hp:250},
-  gate:  {name:'Tor', size:1, cost:{wood:15}, time:8, hp:500},
-  store: {name:'Lager', size:3, cost:{wood:50}, time:18, hp:500, drop:['wood','stone','gold','food']},
+  tc:    {name:'Stadtzentrum', size:6, cost:{wood:250, stone:100, food:100}, time:60, hp:3000, drop:['food','wood','stone','gold'], pop:5},
+  house: {name:'Hütte', size:3, cost:{wood:30}, time:14, hp:400, pop:4},
+  wall:  {name:'Palisade', size:1, cost:{wood:4}, time:3, hp:300},
+  gate:  {name:'Tor', size:1, cost:{wood:15}, time:8, hp:1000},
+  store: {name:'Lager', size:3, cost:{wood:50}, time:18, hp:700, drop:['wood','stone','gold','food']},
   road:  {name:'Weg', size:1, cost:{}, time:2.2, hp:100},
-  barracks:{name:'Kriegerhütte', size:4, cost:{wood:120, stone:40}, time:35, hp:900},
-  tower: {name:'Wachturm', size:3, cost:{wood:100, stone:40}, time:30, hp:800},
+  barracks:{name:'Kriegerhütte', size:4, cost:{wood:120, stone:40}, time:35, hp:1500},
+  tower: {name:'Wachturm', size:3, cost:{wood:100, stone:40}, time:30, hp:1200},
 };
 const WORKER_COST = {food:60};
 const WORKER_TIME = 18;
@@ -322,7 +322,8 @@ function drawPanel(){
       h += `<button class="ab lock" data-a="age"><span class="ai"><svg viewBox="0 0 24 24"><path d="M12 3l8 9h-5v9H9v-9H4z" fill="#e8b64a"/></svg></span>Bronzezeit<span class="ac">${costText({food:500,wood:300})}</span></button>`;
       if(q) h += `<div class="bar"><div style="width:${(b.qT/WORKER_TIME*100)|0}%"></div></div>`;
     }
-    if(b.owner===0 && b.built>=1 && b.kind==='wall' && b.seg){ const pl=wallTowerPlan(b); h += `<button class="ab${pl.length?'':' lock'}" data-a="wtowers"><span class="ai">${towerSVG()}</span>Türme einbauen<span class="ac">${pl.length?pl.length+' × '+costText(WT_COST):'schon fertig'}</span></button>`; }
+    if(b.owner===0 && b.built>=1 && b.kind==='wall' && b.seg){ const pl=wallTowerPlan(b); const tot={}; for(const r in WT_COST) tot[r]=WT_COST[r]*pl.length; h += `<button class="ab${pl.length?'':' lock'}" data-a="wtowers"><span class="ai">${towerSVG()}</span>${pl.length?pl.length+' Türme einbauen':'Türme fertig'}<span class="ac">${pl.length?costText(tot):'alle 10 m ein Turm'}</span></button>`;
+      h += `<button class="ab" data-a="wtower1"><span class="ai">${towerSVG()}</span>1 Turm hier<span class="ac">${costText(WT_COST)}</span></button>`; }
     if(b.owner===0 && b.built>=1 && b.kind==='wall' && b.seg) h += `<button class="ab" data-a="togate"><span class="ai"><svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13h-5v-7H9v7z" fill="#a8743e"/></svg></span>Zu Tor machen<span class="ac">${costText(BUILD.gate.cost)}</span></button>`;
     if(b.owner===0 && b.built>=1 && b.kind==='tower'){ const c=crew(b).length;
       h += `<div class="info"><small>Besatzung ${c}/${TOWER_MAX} · Krieger oben sind geschützt und schießen weiter</small></div>`;
@@ -854,6 +855,7 @@ const storeSVG = () => '<svg viewBox="0 0 24 24"><rect x="3" y="15" width="18" h
 
 function action(a){
   if(a==='wtowers'){ buildWallTowers(G.selB); return; }
+  if(a==='wtower1'){ buildWallTowers(G.selB, true); return; }
   if(a==='follow'){ startFollow(G.sel[0]); return; }
   const p = G.players[0];
   EE.click();
@@ -2907,11 +2909,13 @@ function updateDeer(d,dt){
 // Fortschrittsbalken über dem Gebäude: Bau (orange) oder Ausbildung (blau)
 function updateBBar(b){
   let f=-1, col=0x4fb3ff;
+  const hpF = b.built>=1 ? b.hp/BUILD[b.kind].hp : 1;
   if(b.built<1){ f=b.built; col=0xf2a630; }
-  else if(b.queue.length){ const qk=b.queue[0]; f=b.qT/(qk==='worker'?WORKER_TIME:UNIT[qk].time); }
+  else if(hpF<.995){ f=hpF; col = hpF>.5?0x5fe36a : hpF>.25?0xf2c230 : 0xe23b3b; }   // Lebensanzeige im Krieg
+  else if(b.queue.length && b.owner===0){ const qk=b.queue[0]; f=b.qT/(qk==='worker'?WORKER_TIME:UNIT[qk].time); }
   const small = b.kind==='wall'||b.kind==='gate'||b.kind==='road';
   // Palisaden: nur das Stück zeigen, an dem gerade gebaut wird (nicht über jedem Stück einen Balken)
-  const show = f>=0 && !G.farView && b.owner===0 && !(small && b.built<=0);
+  const show = f>=0 && !G.farView && (b.owner===0 || hpF<.995) && !(small && b.built<=0);
   if(!show){ if(b.bar) b.bar.visible=false; return; }
   const W = small ? .7 : clamp(b.size*.3, 1, 1.6);   // kleiner Fortschrittsbalken (V1.73)
   if(!b.bar){ const g=new T.Group();
@@ -2955,7 +2959,7 @@ function removePiles(b){ if(b.piles){ for(const t in b.piles) G.scene.remove(b.p
 function updateBuilding(b,dt){
   // Rohstoffe: im Stadtzentrum unsichtbar, im Lager wachsen die Vorräte sichtbar IM Gebäude (V1.59)
   if(b.kind==='store'){ b.pileT=(b.pileT||0)-dt; if(b.pileT<=0){ b.pileT=1; updatePiles(b); } }
-  if(b.owner===0) updateBBar(b);
+  if(b.owner===0 || b.hp<BUILD[b.kind].hp) updateBBar(b); else if(b.bar) b.bar.visible=false;
   if(b.kind==='tower' && b.built>=1) towerAutoFire(b,dt);
   if(b.kind==='gate' && b.built>=1 && b.mesh.doors){ b.gT=(b.gT||0)-dt;
     if(b.gT<=0){ b.gT=.25; b.want = G.units.some(u=>!u.dead && !u.inside && !hostile(b.owner,u.owner) && Math.abs(u.x-b.x)<3.2 && Math.abs(u.z-b.z)<3.2) ? 1 : 0; }
@@ -3727,7 +3731,7 @@ function confirmWall(){
 /* ===== Mauertürme (wie Empire Earth II): in die Palisade/Mauer eingebaut, ca. alle 10 m, Ecken und Enden immer.
    Sie schießen selbst (Steinzeit: Pfeile, später andere Munition). Krieger darauf kämpfen von oben mit. ===== */
 const WT_COST = BUILD.tower.cost, WT_GAP = 10;   // kostet so viel wie ein einzelner Wachturm
-const GATE_W = 4.6;   // Torbreite (Steinzeit); spätere Epochen breiter, damit mehrere Panzer durchpassen
+const GATE_W = 8.2;   // Torbreite ca. 12 m: später passen drei Panzer nebeneinander durch
 function gateParts(w){
   const a=w.seg.ang||0, ux=Math.cos(a), uz=Math.sin(a), pr=o=>(o.x-w.x)*ux+(o.z-w.z)*uz;
   const L=wallLine(w).sort((p,q)=>pr(p)-pr(q)); let i=L.indexOf(w), lo=i, hi=i, len=w.seg.len||1;
@@ -3738,25 +3742,35 @@ function gateParts(w){
   return L.slice(lo,hi+1);
 }
 function wallLine(b){ return G.builds.filter(o=>o.owner===b.owner && o.wallId===b.wallId && o.seg && !o.dead && (o.kind==='wall'||o.kind==='gate'||o.kind==='tower')); }
+// Alle zusammenhängenden Palisaden (auch mehrere gezogene Linien, die aneinander andocken) bekommen Türme
+function wallNet(b){
+  const own=G.builds.filter(o=>o.owner===b.owner && o.seg && !o.dead && (o.kind==='wall'||o.kind==='gate'||o.kind==='tower'));
+  const byId={}; for(const o of own) (byId[o.wallId]||(byId[o.wallId]=[])).push(o);
+  const ends=o=>{ const a=o.seg.ang||0, h=(o.seg.len||1)/2; return [[o.x+Math.cos(a)*h,o.z+Math.sin(a)*h],[o.x-Math.cos(a)*h,o.z-Math.sin(a)*h]]; };
+  const net=new Set([b.wallId]), todo=[b.wallId];
+  while(todo.length){ const id=todo.pop(); const E=byId[id].flatMap(ends);
+    for(const k in byId){ const kid=byId[k][0].wallId; if(net.has(kid)) continue;
+      if(byId[k].some(o=>ends(o).some(([x,z])=>E.some(([X,Z])=>Math.hypot(X-x,Z-z)<.6)))){ net.add(kid); todo.push(kid); } } }
+  return [...net].map(id=>byId[id]);
+}
 function wallTowerPlan(b){
-  const L=wallLine(b); if(!L.length) return [];
-  const a=b.seg.ang||0, ux=Math.cos(a), uz=Math.sin(a);
-  const pr=o=>(o.x-b.x)*ux+(o.z-b.z)*uz;
-  L.sort((p,q)=>pr(p)-pr(q));
-  const towers=L.filter(o=>o.kind==='tower').map(pr), out=[];
-  const near=t=>towers.some(x=>Math.abs(x-t)<WT_GAP*.55);
-  const walls=L.filter(o=>o.kind==='wall');
-  if(!walls.length) return [];
-  const t0=pr(L[0]), t1=pr(L[L.length-1]);
-  const want=[t0]; for(let t=t0+WT_GAP; t<t1-WT_GAP*.5; t+=WT_GAP) want.push(t); want.push(t1);
-  // Ecken: Enden, die an eine andere Palisade stoßen, bekommen ohnehin einen Turm (t0/t1)
-  for(const t of want){ if(near(t)) continue;
-    let best=null, bd=1e9; for(const w of walls){ const d=Math.abs(pr(w)-t); if(d<bd && !out.includes(w)){ bd=d; best=w; } }
-    if(best && bd<WT_GAP*.5){ out.push(best); towers.push(pr(best)); } }
+  const lines=wallNet(b), towers=[], out=[];
+  for(const L of lines) for(const o of L) if(o.kind==='tower') towers.push([o.x,o.z]);
+  const near=(x,z)=>towers.some(([X,Z])=>Math.hypot(X-x,Z-z)<WT_GAP*.55);
+  for(const L of lines){
+    const r=L[0], a=r.seg.ang||0, ux=Math.cos(a), uz=Math.sin(a), pr=o=>(o.x-r.x)*ux+(o.z-r.z)*uz;
+    L.sort((p,q)=>pr(p)-pr(q));
+    const walls=L.filter(o=>o.kind==='wall'); if(!walls.length) continue;
+    const t0=pr(L[0]), t1=pr(L[L.length-1]);
+    const want=[t0]; for(let t=t0+WT_GAP; t<t1-WT_GAP*.5; t+=WT_GAP) want.push(t); if(t1-t0>1) want.push(t1);
+    for(const t of want){ let best=null, bd=1e9;
+      for(const w of walls){ const d=Math.abs(pr(w)-t); if(d<bd && !out.includes(w)){ bd=d; best=w; } }
+      if(best && bd<WT_GAP*.5 && !near(best.x,best.z)){ out.push(best); towers.push([best.x,best.z]); } }
+  }
   return out;
 }
-function buildWallTowers(b){
-  if(!b || !b.seg) return; const p=G.players[0]; let plan=wallTowerPlan(b);
+function buildWallTowers(b, one){
+  if(!b || !b.seg) return; const p=G.players[0]; let plan=one?[b]:wallTowerPlan(b);
   if(!plan.length){ EE.toast('Diese Palisade hat schon genug Türme'); return; }
   // So viele Türme wie die Rohstoffe reichen – zuerst die Enden, dann die Mitte
   const all=plan.length, can=Math.min(all, ...Object.keys(WT_COST).map(r=>Math.floor(p.res[r]/WT_COST[r])));
