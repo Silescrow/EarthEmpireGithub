@@ -19,26 +19,22 @@
     if($('#dOnline')) return;
     const d=document.createElement('div'); d.className='dlg hidden'; d.id='dOnline';
     d.innerHTML=`<div class="card wide on-card">
-      <h2>Online spielen</h2>
-      <div id="onStart">
-        <p class="on-ich">Du spielst als <b id="onIch">–</b></p>
-        <div class="on-two">
-          <div class="on-box"><b>🔓 Offener Raum</b><small>Alle deine Freunde sehen den Raum und können direkt beitreten.</small><button class="btn main small" id="onHost">Raum erstellen</button></div>
-          <div class="on-box"><b>🔒 Raum mit Schloss</b><small>Freunde brauchen dein Passwort. Wen du einlädst, kommt ohne Passwort rein.</small><input id="onPw" maxlength="12" placeholder="Passwort (mind. 4 Zeichen)" autocomplete="off"><button class="btn small" id="onHostPw">Raum mit Schloss erstellen</button></div>
-        </div>
-        <div class="on-fr"><b>Räume deiner Freunde</b><div id="onFr"><small class="dim">Lade …</small></div></div>
-        <div class="acts"><button class="btn small" data-close>Zurück</button></div>
+      <div class="on-top"><h2>Online spielen</h2><span class="on-ich">als <b id="onIch">–</b></span><button class="on-x" data-close aria-label="Zurück">✕</button></div>
+      <div id="onStart" class="on-three">
+        <div class="on-box"><b>🔓 Offener Raum</b><small>Deine Freunde kommen direkt rein.</small><button class="btn main small" id="onHost">Raum erstellen</button></div>
+        <div class="on-box"><b>🔒 Raum mit Schloss</b><input id="onPw" maxlength="12" placeholder="Passwort (mind. 4 Zeichen)" autocomplete="off"><button class="btn small" id="onHostPw">Mit Schloss erstellen</button></div>
+        <div class="on-box"><b>🎮 Räume deiner Freunde</b><div id="onFr" class="on-frl"><small class="dim">Lade …</small></div></div>
       </div>
       <div id="onLobby" class="hidden">
-        <div class="on-head"><div id="onRaum">Dein Raum</div><div class="on-hb"><button class="btn small" id="onPwBtn">🔒 Passwort</button><button class="btn main small" id="onInv">👥 Freunde einladen</button></div></div>
         <div id="onSlots"></div>
-        <div class="on-set">
-          <div class="row"><label>Weltkarte</label><select id="onMap"><option value="0">Klein</option><option value="1">Mittel</option><option value="2">Groß</option><option value="3">Riesig</option></select></div>
-          <div class="row"><label>Computer-Gegner</label><select id="onDiff"><option value="0">Leicht</option><option value="1">Mittel</option><option value="2">Schwer</option></select></div>
+        <div class="on-side">
+          <div class="on-raum"><span id="onRaum">Dein Raum</span><button class="on-mini" id="onPwBtn">🔒</button></div>
+          <button class="btn main small" id="onInv">👥 Freunde einladen</button>
+          <div class="on-set"><select id="onMap" aria-label="Weltkarte"><option value="0">Karte: Klein</option><option value="1">Karte: Mittel</option><option value="2">Karte: Groß</option><option value="3">Karte: Riesig</option></select><select id="onDiff" aria-label="Computer-Gegner"><option value="0">KI: Leicht</option><option value="1">KI: Mittel</option><option value="2">KI: Schwer</option></select></div>
+          <div id="onChat"></div><div class="on-chatin"><input id="onMsg" maxlength="120" placeholder="Nachricht …"><button class="on-mini" id="onSend">➤</button></div>
+          <small id="onWait"></small>
+          <div class="on-acts"><button class="btn small" id="onLeave">Verlassen</button><button class="btn main small" id="onGo" disabled>Spiel starten</button></div>
         </div>
-        <div id="onChat"></div><div class="on-chatin"><input id="onMsg" maxlength="120" placeholder="Nachricht …"><button class="btn small" id="onSend">Senden</button></div>
-        <div class="acts"><button class="btn small" id="onLeave">Verlassen</button><button class="btn main small" id="onGo" disabled>Spiel starten</button></div>
-        <small id="onWait"></small>
       </div>
     </div>`;
     $('#menu').appendChild(d);
@@ -49,7 +45,7 @@
       if(SC.gesperrt){ SC.oeffnen('gesperrt'); return; }
       $('#onIch').textContent=name(); d.classList.remove('hidden'); friendsRooms(); };
     $('#menu .panel').insertBefore(btn, $('#menu .panel [data-open=dSet]'));
-    d.querySelector('[data-close]').onclick=()=>{ EE.click(); d.classList.add('hidden'); };
+    d.querySelector('[data-close]').onclick=()=>{ EE.click(); if(ON.lobby){ leave(true); return; } d.classList.add('hidden'); };
     $('#onHost').onclick=()=>host('');
     $('#onHostPw').onclick=()=>{ const pw=$('#onPw').value.trim(); if(pw.length<4){ EE.toast('Das Passwort braucht mindestens 4 Zeichen'); $('#onPw').focus(); return; } host(pw); };
     $('#onInv').onclick=()=>{ EE.click(); SC.einladen({code:ON.code, schluessel:ON.lobby.key}); };
@@ -65,7 +61,8 @@
   // offene Räume der Freunde (aus der Silescrow ID)
   function friendsRooms(){
     const el=$('#onFr'); if(!el) return; const l=SC.freundesRaeume();
-    el.innerHTML = l.length ? l.map(r=>`<div class="on-row2"><span>${esc(r.name)} ${r.schloss?'🔒':'🔓'}</span><button class="btn small" data-r="${r.uid}">Beitreten</button></div>`).join('')
+    const mehr=l.length-3; l.length=Math.min(l.length,3);
+    el.innerHTML = l.length ? l.map(r=>`<div class="on-row2"><span>${esc(r.name)} ${r.schloss?'🔒':'🔓'}</span><button class="btn small" data-r="${r.uid}">Beitreten</button></div>`).join('')+(mehr>0?`<small class="dim">+${mehr} weitere unter 👤 Freunde</small>`:'')
       : `<small class="dim">${SC.freunde().length?'Gerade hat keiner deiner Freunde einen Raum offen.':'Noch keine Freunde – füge sie über 👤 Silescrow ID → Freunde hinzu.'}</small>`;
     el.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{ const r=l.find(x=>x.uid===b.dataset.r); joinRoom({code:r.code, schloss:r.schloss, name:r.name}); });
   }
@@ -149,15 +146,15 @@
     const L=ON.lobby; if(!L) return;
     const me = L.slots.findIndex(s=>s.id===ON.myId), used=new Set(L.slots.filter(s=>s.civ).map(s=>s.civ));
     const civOpts = cur => `<option value="">– Volk wählen –</option>`+EE.CIVS.map(c=>`<option ${c[0]===cur?'selected':''} ${used.has(c[0])&&c[0]!==cur?'disabled':''}>${c[0]}</option>`).join('');
-    const teamOpts = cur => [1,2,3,4,5,6,7,8].map(t=>`<option value="${t}" ${t===cur?'selected':''}>Team ${t}</option>`).join('');
+    const teamOpts = cur => [1,2,3,4,5,6,7,8].map(t=>`<option value="${t}" ${t===cur?'selected':''}>T${t}</option>`).join('');
     $('#onSlots').innerHTML = L.slots.map((s,i)=>{
       const mine=i===me, canEdit = mine || (ON.host && s.kind==='ai');
       const flag = s.civ && civByName(s.civ) ? `<svg viewBox="0 0 30 36" class="on-flag">${civByName(s.civ)[2]}</svg>` : '<span class="on-flag none"></span>';
-      let who = s.kind==='human' ? `${s.name}${s.id==='host'?' <i>Gastgeber</i>':''}${mine?' <i>du</i>':''}` : s.kind==='ai' ? 'Computer' : s.kind==='open' ? '<span class="dim">Offen – wartet auf Spieler</span>' : '<span class="dim">Geschlossen</span>';
-      const ctl = ON.host && i>0 ? `<button class="on-sl" data-sl="${i}">${s.kind==='human'?'Entfernen':s.kind==='open'?'→ Computer':s.kind==='ai'?'→ Geschlossen':'→ Offen'}</button>` : '';
+      let who = s.kind==='human' ? `${s.name}${s.id==='host'?' <i>Gastgeber</i>':''}${mine?' <i>du</i>':''}` : s.kind==='ai' ? 'Computer' : s.kind==='open' ? '<span class="dim">Offen</span>' : '<span class="dim">Geschlossen</span>';
+      const ctl = ON.host && i>0 ? `<button class="on-sl" data-sl="${i}">${s.kind==='human'?'✕':s.kind==='open'?'→ KI':s.kind==='ai'?'→ zu':'→ offen'}</button>` : '';
       const play = s.kind==='human'||s.kind==='ai';
       return `<div class="on-row ${mine?'me':''} ${play?'':'off'}">${flag}<span class="on-who">${who}</span>
-        ${play ? (canEdit ? `<select data-civ="${i}">${civOpts(s.civ)}</select><select data-team="${i}">${teamOpts(s.team)}</select>` : `<span class="on-civ">${s.civ||'<span class="warn">wählt noch …</span>'}</span><span class="on-team">Team ${s.team}</span>`) : ''}
+        ${play ? (canEdit ? `<select data-civ="${i}">${civOpts(s.civ)}</select><select data-team="${i}">${teamOpts(s.team)}</select>` : `<span class="on-civ">${s.civ||'<span class="warn">wählt noch …</span>'}</span><span class="on-team">T${s.team}</span>`) : ''}
         ${s.kind==='human' ? (s.civ?'<span class="ok">✔</span>':'<span class="warn">…</span>') : '<span></span>'}${ctl}</div>`;
     }).join('');
     $('#onSlots').querySelectorAll('[data-civ]').forEach(el=>el.onchange=()=>setSlot(+el.dataset.civ,{civ:el.value||null}));
@@ -168,15 +165,15 @@
       else if(s.kind==='ai') L.slots[i]={kind:'closed', team:s.team}; else L.slots[i]={kind:'open', team:s.team};
       push(); });
     const host=L.slots[0]; $('#onRaum').innerHTML=`${ON.host?'Dein Raum':'Raum von '+esc(host.name||'')} ${L.pw?'🔒':'🔓'}`;
-    $('#onInv').classList.toggle('hidden', !ON.host); $('#onPwBtn').classList.toggle('hidden', !ON.host); $('#onPwBtn').textContent=L.pw?'🔒 Passwort ändern':'🔓 Schloss setzen';
+    $('#onInv').classList.toggle('hidden', !ON.host); $('#onPwBtn').classList.toggle('hidden', !ON.host); $('#onPwBtn').textContent=L.pw?'🔒':'🔓'; $('#onPwBtn').title=L.pw?'Passwort ändern oder entfernen':'Schloss setzen';
     $('#onMap').value=L.map; $('#onDiff').value=L.diff; $('#onMap').disabled=!ON.host; $('#onDiff').disabled=!ON.host;
-    $('#onChat').innerHTML=L.chat.map(m=>m.who?`<div><b>${esc(m.who)}:</b> ${esc(m.text)}</div>`:`<div class="sys">${esc(m.text)}</div>`).join(''); $('#onChat').scrollTop=1e9;
+    $('#onChat').innerHTML=L.chat.slice(-4).map(m=>m.who?`<div><b>${esc(m.who)}:</b> ${esc(m.text)}</div>`:`<div class="sys">${esc(m.text)}</div>`).join(''); $('#onChat').scrollTop=1e9;
     // Start nur, wenn alle Menschen ein Volk haben und mindestens 2 Mitspieler (Mensch oder Computer) dabei sind
     const waiting = L.slots.filter(s=>(s.kind==='human'||s.kind==='ai') && !s.civ).map(s=>s.kind==='ai'?'Computer':s.name);
     const players = L.slots.filter(s=>s.kind==='human'||s.kind==='ai').length;
     $('#onGo').classList.toggle('hidden', !ON.host);
     $('#onGo').disabled = !!waiting.length || players<2;
-    $('#onWait').textContent = waiting.length ? 'Warte auf: '+waiting.join(', ')+' (Volk wählen)' : players<2 ? 'Warte auf einen Mitspieler – lade Freunde ein oder setze einen Computer-Gegner' : ON.host ? 'Alle bereit – du kannst starten' : 'Alle bereit – warte auf den Gastgeber';
+    $('#onWait').textContent = waiting.length ? 'Warte auf: '+waiting.join(', ') : players<2 ? 'Lade Freunde ein oder setze einen Computer' : ON.host ? 'Alle bereit – du kannst starten' : 'Alle bereit – warte auf den Gastgeber';
   }
   const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   function setSlot(i, v){ const L=ON.lobby; if(ON.host){ Object.assign(L.slots[i], v); push(); } else { Object.assign(L.slots[i], v); render(); send(Object.assign({t:'set'}, v)); } }

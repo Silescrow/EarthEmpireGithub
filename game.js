@@ -140,7 +140,7 @@ function saveGame(){
       dip:Object.fromEntries(Object.entries(G.dip).map(([k,d])=>[k,{state:d.state, mood:Math.round(d.mood), ask:Math.round(d.ask||0)}])),
       builds:liveB.map(b=>({k:b.kind, o:b.owner, x:r1(b.x), z:r1(b.z), b:r1(b.built), hp:Math.round(b.hp), s:b.slow?1:0, r:b.recv||undefined,
         q:(b.queue||[]).length?b.queue.slice():undefined, w:b.wallId||undefined, seg:b.seg||undefined})),
-      units:G.units.filter(u=>!u.dead).map(u=>({i:u.inside&&!u.inside.dead?liveB.indexOf(u.inside):undefined, sl:u.inside?u.slot:undefined, k:u.kind, o:u.owner, x:r1(u.x), z:r1(u.z), hp:Math.round(u.hp), c:u.carry&&u.carry.amt?[u.carry.type,u.carry.amt]:undefined, sx:u.sex, g:u.kind==='kid'?[u.stage,Math.round(u.grow)]:undefined})),
+      units:G.units.filter(u=>!u.dead).map(u=>({i:u.inside&&!u.inside.dead?liveB.indexOf(u.inside):undefined, sl:u.inside?u.slot:undefined, k:u.kind, o:u.owner, x:r1(u.x), z:r1(u.z), hp:Math.round(u.hp), c:u.carry&&u.carry.amt?[u.carry.type,u.carry.amt]:undefined, sx:u.sex, au:u.auto?1:undefined, sk:u.seek?1:undefined, lt:u.lastType||undefined, g:u.kind==='kid'?[u.stage,Math.round(u.grow)]:undefined})),
       cam:{x:r1(G.camS.x), z:r1(G.camS.z), d:r1(G.camS.dist), y:r1(G.camS.yaw)} };
     localStorage.setItem(SAVE_KEY, JSON.stringify(sv));
   }catch(e){ console.warn('Speichern fehlgeschlagen', e); }
@@ -163,7 +163,7 @@ function applySave(sv){
     made.push(b); b.hp = s.hp; b.slow = !!s.s; if(s.r) b.recv=s.r; if(s.q) b.queue = s.q.slice();
   }
   WALL_ID = Math.max(WALL_ID, maxW+1);
-  for(const s of sv.units){ G.nextSex = s.sx; const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.g){ u.grow=s.g[1]; setStage(u,s.g[0]); } if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; if(s.i!=null && s.i>=0 && made[s.i]){ u.inside=made[s.i]; u.slot=s.sl|0; } }
+  for(const s of sv.units){ G.nextSex = s.sx; const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.au) u.auto=true; if(s.sk) u.seek=true; if(s.lt) u.lastType=s.lt; if(s.g){ u.grow=s.g[1]; setStage(u,s.g[0]); } if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; if(s.i!=null && s.i>=0 && made[s.i]){ u.inside=made[s.i]; u.slot=s.sl|0; } }
   G.t = sv.t||0;
   if(sv.cam) G.loadCam = sv.cam;
   G.quiet = false;
@@ -366,7 +366,11 @@ function drawPanel(){
     if(ws.length===1 && !G.buildMenu && !ws[0].dead){
       h += `<button class="ab tool" data-a="follow"><span class="ai"><svg viewBox="0 0 24 24"><path d="M3 8.5h3l1.6-2.5h8.8L18 8.5h3v10H3z" fill="none" stroke="#e8b64a" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="#e8b64a" stroke-width="2"/></svg></span>Folgen</button>`;
     }
+    if(ws[0].owner===0 && ws.some(u=>isSoldier(u)) && !G.buildMenu){
+      h += `<button class="ab tool" data-a="seek"><span class="ai"><svg viewBox="0 0 24 24"><path d="M4 4l11 11M20 4L9 15" stroke="#e8b64a" stroke-width="2.2" stroke-linecap="round"/><path d="M13 17l4 4M11 17l-4 4M15 15l2-2M9 15l-2-2" stroke="#ff7a6a" stroke-width="2.2" stroke-linecap="round"/></svg></span>Gegner suchen</button>`;
+    }
     if(ws[0].owner===0 && ws.some(u=>u.kind==='worker') && !G.buildMenu){
+      h += `<button class="ab tool" data-a="autowork"><span class="ai"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="#e8b64a" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="5" fill="none" stroke="#e8b64a" stroke-width="2"/><path d="M10 12l1.6 1.6L14.5 10.5" stroke="#7cff7c" stroke-width="2" fill="none" stroke-linecap="round"/></svg></span>Arbeit suchen</button>`;
       h += `<button class="ab tool" data-a="bmenu"><span class="ai">${hammerSVG()}</span>Bauen</button>`;
     }
     if(ws[0].owner===0 && ws.some(u=>u.kind==='worker') && G.buildMenu){
@@ -619,6 +623,8 @@ function updateBar(u){
 }
 const alive = t => t && t.hp>0 && !t.dead;
 function cmdAttack(u,t){ u.state='attack'; u.target=t; u.site=null; u.path=null; u.repath=0; }
+// „Gegner suchen“: nächster Feind in der Nähe, sonst der nächste Feind auf der ganzen Karte
+function seekFoe(u){ return nearestFoe(u,80) || nearestFoe(u,1e9); }
 function nearestFoe(u, R){
   let best=null, bd=R;
   for(const o of G.units){ if(!alive(o) || o.inside || !hostile(u.owner,o.owner)) continue; const d=Math.hypot(o.x-u.x,o.z-u.z); if(d<bd){ bd=d; best=o; } }
@@ -885,6 +891,11 @@ function action(a){
   if(a==='wtowers'){ buildWallTowers(G.selB); return; }
   if(a==='wtower1'){ buildWallTowers(G.selB, true); return; }
   if(a==='follow'){ startFollow(G.sel[0]); return; }
+  if(a==='seek'){ const ss=G.sel.filter(u=>isSoldier(u) && u.owner===0 && !u.dead && !u.inside); let first=null;
+    for(const u of ss){ const t=seekFoe(u); u.seek=!!t; u.auto=false; if(t){ cmdAttack(u,t); first=first||t; } }
+    if(first){ iconMarker(first,'sword'); marker(first.x,first.z,0xff4444); EE.toast(ss.length+(ss.length===1?' Soldat sucht':' Soldaten suchen')+' Gegner'); } else EE.toast('Kein Gegner gefunden – du bist mit niemandem im Krieg');
+    EE.sfx('click'); drawPanelSoon(); return; }
+  if(a==='autowork'){ const n=smartWork(G.sel.filter(u=>u.kind==='worker' && u.owner===0 && !u.dead)); EE.toast(n?n+(n===1?' Bauer sucht':' Bauern suchen')+' sich selbst Arbeit':'Keine Arbeit in der Nähe gefunden'); EE.sfx('click'); drawPanelSoon(); return; }
   const p = G.players[0];
   EE.click();
   if(a==='worker'){
@@ -2810,7 +2821,7 @@ function updateWorker(u,dt){
       followPath(u,dt); break; }
     case 'attack': {
       if(u.target && u.target.inside && u.target.inside.kind==='tower') u.target=u.target.inside;
-      const t=u.target; if(!alive(t)){ u.target=null; u.state='idle'; break; }
+      const t=u.target; if(!alive(t)){ u.target=null; const nx=u.seek && u.owner===0 ? seekFoe(u) : null; if(nx){ u.target=nx; u.repath=0; } else u.state='idle'; break; }
       const U=UNIT[u.kind], d=Math.hypot(t.x-u.x,t.z-u.z)-(t.size?t.size*.5+.2:.35);
       if(d<=U.range){ u.path=null; u.working=true; u.face=Math.atan2(t.x-u.x,t.z-u.z); u.cd-=dt; if(u.cd<=0){ u.cd=U.cd; hit(u,t); } }
       else { u.repath-=dt; if(u.repath<=0 || !u.path || u.pi>=u.path.length){ u.repath=.7; moveTo(u,t.x,t.z); } followPath(u,dt); }
@@ -2903,7 +2914,39 @@ function updateWorker(u,dt){
 let panelT = 0; function drawPanelSoon(){ panelT = .25; }
 function sfxAt(name, x, z, v){ if(!G || G.farView) return; const d=Math.hypot(x-G.camS.x, z-G.camS.z); const k=clamp(1-d/(G.camS.dist*.9+6),0,1); if(k>0) EE.sfx(name, (v||1)*k*k); }
 
+// Bauern mit „Arbeit suchen“ verteilen sich laufend neu: fehlt z. B. Holz, gehen mehr zum Holz (von Hand geschickte bleiben bei ihrer Arbeit)
+function autoBalance(){
+  const p=G.players[0], W={food:1.2, wood:1, stone:.35, gold:.3}, by={food:[],wood:[],stone:[],gold:[]};
+  for(const u of G.units) if(u.owner===0 && u.auto && !u.dead && !u.inside && u.state==='gather' && u.target && by[u.target.kind]) by[u.target.kind].push(u);
+  const all=Object.values(by).reduce((a,l)=>a+l.length,0); if(all<2) return;
+  const need=k=>W[k]/((p.res[k]||0)+200)/(by[k].length+1);
+  const ks=Object.keys(W), hi=ks.slice().sort((a,b)=>need(b)-need(a))[0];
+  const lo=ks.filter(k=>k!==hi && by[k].length>1).sort((a,b)=>need(a)-need(b))[0]; if(!lo) return;
+  if(need(hi) < need(lo)*2.2) return;                       // nur bei deutlichem Mangel umschichten
+  const u=by[lo].sort((a,b)=>a.carry.amt-b.carry.amt)[0], r=nearestRes(hi,u.x,u.z,70,0); if(r) cmdGather(u,r);
+}
+// „Arbeit suchen“: ausgewählte Bauern verteilen sich selbst – erst unfertige Gebäude in der Nähe, dann die Rohstoffe, die am meisten fehlen
+function smartWork(ws){
+  if(!ws.length) return 0;
+  const p=G.players[0], left=ws.slice(); let n=0;
+  const sites=G.builds.filter(b=>b.owner===0 && !b.dead && (b.built<1 || b.hp<BUILD[b.kind].hp*.6));
+  const help=new Map(); for(const u of G.units) if(u.owner===0 && u.state==='build' && u.site) help.set(u.site,(help.get(u.site)||0)+1);
+  for(const b of sites){ const want=Math.min(3,(b.wallId?2:3))-(help.get(b)||0); for(let k=0;k<want && left.length;k++){
+    left.sort((a,c)=>Math.hypot(a.x-b.x,a.z-b.z)-Math.hypot(c.x-b.x,c.z-b.z)); const u=left[0]; if(Math.hypot(u.x-b.x,u.z-b.z)>60) break;
+    left.shift(); u.auto=true; cmdBuild(u,b); help.set(b,(help.get(b)||0)+1); n++; } }
+  // Bedarf: wenig Vorrat und wenige Sammler = hoher Bedarf (Stein und Gold in der Steinzeit weniger wichtig)
+  const W={food:1.2, wood:1, stone:.35, gold:.3}, cnt={food:0,wood:0,stone:0,gold:0};
+  for(const u of G.units) if(u.owner===0 && u.kind==='worker' && u.state==='gather' && u.target && cnt[u.target.kind]!=null && !left.includes(u)) cnt[u.target.kind]++;
+  for(const u of left){
+    const kinds=Object.keys(W).sort((a,b)=>W[b]/((p.res[b]||0)+200)/(cnt[b]+1)-W[a]/((p.res[a]||0)+200)/(cnt[a]+1));
+    let r=null; for(const k of kinds){ r=nearestRes(k,u.x,u.z,70,0); if(r) break; }
+    if(r){ cmdGather(u,r); cnt[r.kind]++; n++; }
+    u.auto=true;
+  }
+  return n;
+}
 function autoJob(u){
+  if(u.owner===0){ if(u.auto) smartWork([u]); return; }   // eigene Bauern ohne Auftrag bleiben stehen (nur „Arbeit suchen“ arbeitet selbstständig)
   const r = nearestRes(u.lastType||'food', u.x,u.z, 14, u.owner) || nearestRes('wood', u.x,u.z, 20, u.owner);
   if(r) cmdGather(u,r);
 }
@@ -3137,6 +3180,7 @@ function updateAIWar(p, mine, tc){
    ============================================================ */
 function update(dt){
   pcUpdate(dt);
+  G.balT=(G.balT||0)-dt; if(G.balT<=0){ G.balT=6; autoBalance(); }
   if(!G.giftOk && G.t>2 && !G.inMenu){ G.giftOk=true; giftPending(); }
   G.t += dt;
   if((G.saveT-=dt)<=0){ G.saveT=30; saveGame(); }
@@ -3159,7 +3203,7 @@ function update(dt){
     // Kosten-Farben aktuell halten: neu zeichnen, wenn sich ändert, was bezahlbar ist
     const p0=G.players[0], aff=[...Object.values(BUILD),...Object.values(UNIT),{cost:WORKER_COST}].map(d=>d.cost?(canPay(p0,d.cost)?1:0):'').join('');
     if(G.sel.length===1 || aff!==G.affSig || (!G.sel.length && !G.selB && (G.t>=30)!==!!G.tipGone)){ G.affSig=aff; G.tipGone=G.t>=30; drawPanel(); } }
-  G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=.25; drawMinimap(); }
+  G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=EE.S.gfx===0?.2:.1; drawMinimap(); }
   if(G.place && !G.place.line) updateGhost();
   updateDip(dt);
 }
@@ -3340,7 +3384,11 @@ function drawMinimap(){
   for(const r of G.res){ if(!r.alive||r.deer||r.kind==='wood'||r.kind==='food'||r.kind==='stone') continue; x.fillStyle = r.kind==='gold'?'#ffd24a':r.kind==='metal'?'#c87a4a':r.kind==='oil'?'#111':'#d0d4d8'; x.fillRect(px(r.x)-1,pz(r.z)-1,2,2); }
   if(G.reg) drawRegionsMini(x, px, pz);
   for(const b of G.builds){ x.fillStyle='#'+COLORS[b.owner].toString(16).padStart(6,'0'); const z=Math.max(3,b.size*s); x.fillRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); x.strokeStyle='#000'; x.lineWidth=1; x.strokeRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); }
-  for(const u of G.units){ x.fillStyle='#'+COLORS[u.owner].toString(16).padStart(6,'0'); x.fillRect(px(u.x)-1,pz(u.z)-1,2,2); }
+  // Einheiten wie in Empire Earth 2: bewegen sich live, eigene größer mit dunklem Rand, Ausgewählte weiß
+  const sel=new Set(G.sel||[]);
+  for(const u of G.units){ if(u.dead || u.inside) continue; const own=u.owner===0, d=own?3:2.4, X=px(u.x), Z=pz(u.z);
+    if(own){ x.fillStyle='#000'; x.fillRect(X-d/2-.7,Z-d/2-.7,d+1.4,d+1.4); }
+    x.fillStyle = sel.has(u) ? '#ffffff' : '#'+COLORS[u.owner].toString(16).padStart(6,'0'); x.fillRect(X-d/2,Z-d/2,d,d); }
   const pts=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([a,b])=>groundAtNDC(a,b)).filter(Boolean);
   if(pts.length===4){ x.strokeStyle='#fff'; x.lineWidth=1.5; x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(px(p.x),pz(p.z)):x.moveTo(px(p.x),pz(p.z))); x.closePath(); x.stroke(); }
 }
@@ -3579,21 +3627,21 @@ function tapAt(sx,sy){
       } else select([hit.u], null);
       lastTap={t:now,u:hit.u}; EE.click(); return;
     }
-    if(mine.length){ if(hostile(0,hit.u.owner)){ mine.forEach(u=>cmdAttack(u,hit.u)); marker(hit.u.x,hit.u.z,0xff4444); EE.vib(12); drawPanel(); }
+    if(mine.length){ if(hostile(0,hit.u.owner)){ mine.forEach(u=>(u.auto=u.seek=false,0)||cmdAttack(u,hit.u)); marker(hit.u.x,hit.u.z,0xff4444); EE.vib(12); drawPanel(); }
       else EE.toast('Ihr habt keinen Krieg mit den '+G.players[hit.u.owner].civ[0]+' – das geht in der Diplomatie');
       return; }
     select([], null); EE.toast(UNIT[hit.u.kind].name+' der '+G.players[hit.u.owner].civ[0]); return;
   }
   if(mine.length){
     if(hit && hit.r && (hit.r.kind==='metal'||hit.r.kind==='oil')){ EE.toast(RES_DE[hit.r.kind]+'-Vorkommen – kann noch nicht abgebaut werden'); return; }
-    if(hit && hit.r){ mine.forEach(u=>cmdGather(u,hit.r)); marker(hit.r.x,hit.r.z,0xffd24a); EE.vib(10); drawPanel(); return; }
+    if(hit && hit.r){ mine.forEach(u=>(u.auto=u.seek=false,0)||cmdGather(u,hit.r)); marker(hit.r.x,hit.r.z,0xffd24a); if(mine.some(u=>u.kind==='worker')) iconMarker(hit.r, resIcon(hit.r)); EE.vib(10); drawPanel(); return; }
     if(hit && hit.b && hit.b.owner===0 && hit.b.kind==='tower' && hit.b.built>=1 && mine.some(isSoldier)){ const ss=mine.filter(isSoldier), free=Math.max(0,TOWER_MAX-crew(hit.b).length);
       if(!free){ EE.toast('Der Wachturm ist voll'); return; }
       ss.slice(0,free).forEach(u=>cmdGarrison(u,hit.b)); marker(hit.b.x,hit.b.z,0xffffff); EE.vib(10);
       EE.toast(Math.min(free,ss.length)+' Krieger '+(Math.min(free,ss.length)>1?'gehen':'geht')+' in den Wachturm'+(ss.length>free?' (voll)':'')); return; }
-    if(hit && hit.b && hit.b.owner===0 && (hit.b.built<1 || hit.b.hp<BUILD[hit.b.kind].hp)){ const bs=mine.filter(u=>u.kind==='worker'); if(!bs.length){ EE.toast('Nur Bauern können bauen'); return; } bs.forEach(u=>cmdBuild(u,hit.b)); if(bs.length>1) EE.toast(bs.length+' Bauern '+(hit.b.built<1?'bauen':'reparieren')+' zusammen – das geht schneller'); marker(hit.b.x,hit.b.z,0xffd24a); EE.vib(10); drawPanel(); return; }
+    if(hit && hit.b && hit.b.owner===0 && (hit.b.built<1 || hit.b.hp<BUILD[hit.b.kind].hp)){ const bs=mine.filter(u=>u.kind==='worker'); if(!bs.length){ EE.toast('Nur Bauern können bauen'); return; } bs.forEach(u=>cmdBuild(u,hit.b)); iconMarker(hit.b,'hammer'); if(bs.length>1) EE.toast(bs.length+' Bauern '+(hit.b.built<1?'bauen':'reparieren')+' zusammen – das geht schneller'); marker(hit.b.x,hit.b.z,0xffd24a); EE.vib(10); drawPanel(); return; }
     if(hit && hit.b && hit.b.owner===0 && BUILD[hit.b.kind].drop){ mine.forEach(u=>{ if(u.carry.amt>0){u.state='drop';u.path=null;} }); marker(hit.b.x,hit.b.z,0xffffff); return; }
-    if(hit && hit.b && hit.b.owner!==0){ if(hostile(0,hit.b.owner)){ mine.forEach(u=>cmdAttack(u,hit.b)); marker(hit.b.x,hit.b.z,0xff4444); EE.vib(12); }
+    if(hit && hit.b && hit.b.owner!==0){ if(hostile(0,hit.b.owner)){ mine.forEach(u=>(u.auto=u.seek=false,0)||cmdAttack(u,hit.b)); marker(hit.b.x,hit.b.z,0xff4444); EE.vib(12); }
       else EE.toast('Ihr habt keinen Krieg mit den '+G.players[hit.b.owner].civ[0]); return; }
     if(hit && hit.b){ tapBuilding(hit.b); return; }
     // Doppeltipp auf den Boden: Auswahl aufheben
@@ -3609,7 +3657,7 @@ function tapAt(sx,sy){
 }
 function formationMove(us,x,z){
   const n=us.length, cols=Math.ceil(Math.sqrt(n));
-  us.forEach((u,i)=>{ const cx=(i%cols)-(cols-1)/2, cz=Math.floor(i/cols)-(Math.ceil(n/cols)-1)/2; cmdMove(u, x+cx*.9, z+cz*.9); });
+  us.forEach((u,i)=>{ if(u.owner===0) u.auto=u.seek=false; const cx=(i%cols)-(cols-1)/2, cz=Math.floor(i/cols)-(Math.ceil(n/cols)-1)/2; cmdMove(u, x+cx*.9, z+cz*.9); });
 }
 function boxSelect(x0,y0,x1,y1){
   const ax=Math.min(x0,x1), bx=Math.max(x0,x1), ay=Math.min(y0,y1), by=Math.max(y0,y1);
@@ -3633,6 +3681,36 @@ function selectIdle(){
   const u = idle[G.idleI]; select([u],null); centerCamOn(u.x,u.z-4);
 }
 const markers=[];
+// Kleines Werkzeug-Symbol über dem Ziel, wenn man Bauern hinschickt (Axt am Baum, Spitzhacke am Stein/Gold, Hammer am Bau …)
+const ICON_SVG = {
+  axe:'<path d="M20 44L44 20" stroke="#8a5a2b" stroke-width="6" stroke-linecap="round"/><path d="M36 10c10 0 18 8 18 18l-8 2-12-12z" fill="#cfd6dc" stroke="#2b2b2b" stroke-width="3" stroke-linejoin="round"/>',
+  pick:'<path d="M22 46L42 18" stroke="#8a5a2b" stroke-width="6" stroke-linecap="round"/><path d="M14 20c10-10 30-12 42 2-12-4-26-2-34 6z" fill="#cfd6dc" stroke="#2b2b2b" stroke-width="3" stroke-linejoin="round"/>',
+  hammer:'<path d="M24 46L40 22" stroke="#8a5a2b" stroke-width="6" stroke-linecap="round"/><path d="M30 12l18 12-6 9-18-12z" fill="#9aa3aa" stroke="#2b2b2b" stroke-width="3" stroke-linejoin="round"/>',
+  spear:'<path d="M14 50L44 20" stroke="#8a5a2b" stroke-width="5" stroke-linecap="round"/><path d="M40 12l12-2-2 12-8 2-4-4z" fill="#cfd6dc" stroke="#2b2b2b" stroke-width="3" stroke-linejoin="round"/>',
+  sword:'<path d="M14 14l26 26M50 14L24 40" stroke="#cfd6dc" stroke-width="6" stroke-linecap="round"/><path d="M36 44l8 8M28 44l-8 8M42 38l4-4M22 38l-4-4" stroke="#c0283a" stroke-width="5" stroke-linecap="round"/>',
+  basket:'<path d="M14 28h36l-5 20H19z" fill="#c8913c" stroke="#5a3a16" stroke-width="3" stroke-linejoin="round"/><path d="M20 28c0-10 24-10 24 0" fill="none" stroke="#5a3a16" stroke-width="3"/><circle cx="26" cy="25" r="4" fill="#c0283a"/><circle cx="34" cy="24" r="4" fill="#c0283a"/><circle cx="40" cy="26" r="3.5" fill="#7b1f4a"/>'
+};
+const iconTex = {};
+function iconTexture(k){
+  if(iconTex[k]) return iconTex[k];
+  const c=document.createElement('canvas'); c.width=c.height=64; const tex=new T.CanvasTexture(c); iconTex[k]=tex;
+  const img=new Image(); img.onload=()=>{ const g=c.getContext('2d'); g.fillStyle='rgba(11,17,48,.85)'; g.beginPath(); g.arc(32,32,30,0,7); g.fill(); g.strokeStyle='#e8b64a'; g.lineWidth=3; g.stroke(); g.drawImage(img,4,4,56,56); tex.needsUpdate=true; };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'+ICON_SVG[k]+'</svg>');
+  return tex;
+}
+function iconMarker(obj, k){
+  if(!G || !obj || !ICON_SVG[k]) return;
+  let top=getH(obj.x,obj.z)+(obj.kind==='wood'?5.5:obj.kind==='stone'||obj.kind==='gold'?2.6:2.4);
+  try{ if(obj.mesh){ const bb=new T.Box3().setFromObject(obj.mesh); if(isFinite(bb.max.y)) top=Math.max(top, bb.max.y+.6); } }catch(e){}
+  const sp=new T.Sprite(new T.SpriteMaterial({map:iconTexture(k), transparent:true, depthTest:false, depthWrite:false}));
+  sp.renderOrder=12; sp.position.set(obj.x, top, obj.z); G.scene.add(sp);
+  const sz=Math.max(1.6, Math.min(3.2, G.camS.dist*.06));
+  let t=0; const step=()=>{ if(!G) return; t+=1/60;
+    const pop=t<.18 ? t/.18*1.15 : t<.3 ? 1.15-(t-.18)/.12*.15 : 1;          // kurz aufploppen
+    sp.scale.setScalar(sz*pop); sp.position.y=top+Math.min(t,.4)*.8; sp.material.opacity = t>1.2 ? Math.max(0,1-(t-1.2)/.5) : 1;
+    if(t<1.7) requestAnimationFrame(step); else { G.scene.remove(sp); sp.material.dispose(); } }; step();
+}
+function resIcon(r){ return r.kind==='wood'?'axe' : (r.kind==='stone'||r.kind==='gold')?'pick' : (r.deer||r.fish)?'spear' : 'basket'; }
 function marker(x,z,col){
   const m = new T.Mesh(new T.RingGeometry(.2,.4,20), new T.MeshBasicMaterial({color:col, transparent:true, depthWrite:false}));
   m.rotation.x=-Math.PI/2; m.position.set(x,getH(x,z)+.08,z); G.scene.add(m);
@@ -4151,7 +4229,7 @@ function confirmPlace(){
   if(!pl.workers.length){ const w=G.units.filter(u=>u.owner===0 && u.kind==='worker' && !u.inside && !u.dead).sort((a,b)=>Math.hypot(a.x-pl.x,a.z-pl.z)-Math.hypot(b.x-pl.x,b.z-pl.z)).slice(0,3); pl.workers=w; }
   pay(p,BUILD[pl.kind].cost);
   const b = addBuilding(pl.kind,0,pl.x,pl.z,false);
-  pl.workers.forEach(u=>cmdBuild(u,b));
+  pl.workers.forEach(u=>cmdBuild(u,b)); iconMarker(b,'hammer');
   if(pl.kind==='tc') EE.toast('Stadtzentrum wird gebaut – deine Bauern sind unterwegs');
   EE.sfx('place'); EE.vib(20);
   endPlace(); updateHUD(); select(pl.workers,null);
@@ -4172,5 +4250,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { gift, quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { gift, panel:()=>drawPanel(), icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();

@@ -129,31 +129,34 @@
   const css = `
 #scId{position:fixed;inset:0;z-index:90;display:grid;place-items:center;background:#02040cc8;backdrop-filter:blur(3px);font-family:"Barlow Semi Condensed",system-ui,sans-serif}
 #scId[hidden]{display:none}
-#scId .sc-box{position:relative;width:min(520px,94vw);max-height:90vh;overflow:auto;padding:18px 18px 16px;border:2px solid #e8b64a;border-radius:14px;background:linear-gradient(180deg,#18224a,#0a0f26);box-shadow:0 10px 40px #000;color:#fff7e2}
-#scId h2{margin:0 34px 10px;font:800 22px "Cinzel",Georgia,serif;color:#e8b64a;text-align:center;letter-spacing:.04em}
+#scId .sc-box{position:relative;width:min(640px,96vw);max-height:96vh;overflow:auto;padding:12px 16px 12px;border:2px solid #e8b64a;border-radius:14px;background:linear-gradient(180deg,#18224a,#0a0f26);box-shadow:0 10px 40px #000;color:#fff7e2}
+#scId h2{margin:0 34px 8px;font:800 22px "Cinzel",Georgia,serif;color:#e8b64a;text-align:center;letter-spacing:.04em}
 #scId .sc-zu{position:absolute;top:8px;right:10px;width:34px;height:34px;border-radius:50%;border:1.5px solid #e8b64a88;background:#0b1130;color:#ffe9b0;font-size:16px;cursor:pointer}
 #scId p{margin:6px 0;line-height:1.35}#scId .klein{font-size:13px;color:#cbb79a}
-#scId label{display:block;margin:8px 0 3px;color:#ffe9b0;font-size:14px}
-#scId input,#scId textarea,#scId select{width:100%;box-sizing:border-box;background:#0d1824;border:1px solid #c9a24a;color:#fff;border-radius:8px;padding:9px 10px;font:16px inherit}
-#scId .sc-k{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-#scId .sc-b{flex:1 1 auto;min-height:42px;padding:8px 12px;border:2px solid #e8b64a;border-radius:10px;background:linear-gradient(180deg,#1d2752,#0b1130);color:#ffe9b0;font:800 15px "Cinzel",Georgia,serif;cursor:pointer}
+#scId .g2{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}@media (max-width:560px){#scId .g2{grid-template-columns:1fr}}
+#scId label{display:block;margin:5px 0 3px;color:#ffe9b0;font-size:14px}
+#scId input,#scId textarea,#scId select{width:100%;box-sizing:border-box;background:#0d1824;border:1px solid #c9a24a;color:#fff;border-radius:8px;padding:7px 10px;font:16px inherit}
+#scId .sc-k{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+#scId .sc-b{flex:1 1 auto;min-height:38px;padding:8px 12px;border:2px solid #e8b64a;border-radius:10px;background:linear-gradient(180deg,#1d2752,#0b1130);color:#ffe9b0;font:800 15px "Cinzel",Georgia,serif;cursor:pointer}
 #scId .sc-b.gold{background:linear-gradient(180deg,#f6cf62,#c98a1e);color:#3a2203;border-color:#fff0b8}
 #scId .sc-b.rot{border-color:#ff8a8a;color:#ffb0b0}#scId .sc-b.mini{flex:0 0 auto;min-height:32px;padding:4px 9px;font-size:13px}
 #scId .sc-b:disabled{opacity:.45;filter:grayscale(1)}
 #scId .sc-msg{min-height:1.2em;margin-top:8px;font-size:14px;color:#9fe39a}#scId .sc-msg.f{color:#ffb04a}
-#scId .sc-list{display:flex;flex-direction:column;gap:5px;margin-top:8px;max-height:46vh;overflow:auto}
-#scId .sc-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:9px;background:#0006;border:1px solid #e8b64a33}
+#scId .sc-list{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+#scId .seiten{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:6px;color:#cbb79a;font-size:13px}
+#scId .sc-row{display:flex;align-items:center;gap:8px;padding:5px 9px;min-height:30px;border-radius:9px;background:#0006;border:1px solid #e8b64a33}
 #scId .sc-row .n{flex:1;min-width:0}#scId .sc-row small{display:block;color:#aab;font-size:12px;overflow:hidden;text-overflow:ellipsis}
 #scId .dot{width:9px;height:9px;border-radius:50%;background:#666;flex:0 0 auto}#scId .dot.an{background:#5f5}
 #scId .tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}#scId .tabs button{flex:1;padding:7px 4px;border:1.5px solid #e8b64a66;border-radius:8px;background:#0b1130;color:#ffe9b0;font:700 13px inherit;cursor:pointer}
 #scId .tabs button.on{background:#e8b64a;color:#2b1a02}
-#scId .wahl{display:flex;flex-direction:column;gap:6px;margin-top:6px}#scId .wahl button{padding:9px;border:1.5px solid #e8b64a66;border-radius:9px;background:#0b1130;color:#fff7e2;font:700 15px inherit;text-align:left;cursor:pointer}
+#scId .wahl{display:flex;flex-direction:column;gap:6px;margin-top:8px}#scId .wahl.g2{display:grid}#scId .wahl button{padding:9px;border:1.5px solid #e8b64a66;border-radius:9px;background:#0b1130;color:#fff7e2;font:700 15px inherit;text-align:left;cursor:pointer}
 #scId .wahl button.on{border-color:#ffd770;background:#2a3462}
-#scId .haken{display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer}#scId .haken i{width:22px;height:22px;border:2px solid #e8b64a;border-radius:5px;display:grid;place-items:center;font-style:normal;color:#7f7}
+#scId .haken{display:flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer}#scId .haken span{flex:1}#scId .haken i{width:22px;height:22px;border:2px solid #e8b64a;border-radius:5px;display:grid;place-items:center;font-style:normal;color:#7f7}
 #scId .res{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-#scId .chat{display:flex;flex-direction:column;gap:5px;max-height:40vh;overflow:auto;margin:6px 0}#scId .chat div{padding:6px 9px;border-radius:9px;background:#0007;max-width:85%}#scId .chat .adm{align-self:flex-end;background:#3a2e10}
-#scId .agb{max-height:50vh;overflow:auto;font-size:13px;line-height:1.4;color:#ddd}
+#scId .chat{display:flex;flex-direction:column;gap:5px;margin:6px 0}#scId .chat div{padding:6px 9px;border-radius:9px;background:#0007;max-width:85%}#scId .chat .adm{align-self:flex-end;background:#3a2e10}
+#scId .agb{font-size:13px;line-height:1.4;color:#ddd}
 #scEcke{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));z-index:40;flex-direction:row-reverse;display:flex;gap:6px;align-items:center}
+#scEcke[hidden]{display:none!important}
 #scEcke button{height:38px;padding:0 12px;border-radius:19px;border:2px solid #e8b64a;background:#0b1130cc;color:#ffe9b0;font:700 14px "Barlow Semi Condensed",system-ui,sans-serif;cursor:pointer;position:relative}
 #scEcke button .neu{position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:#f44;border:2px solid #fff}
 body:has(#game:not(.hidden)) #scEcke,body:has(#load:not(.hidden)) #scEcke{display:none!important}
@@ -204,6 +207,12 @@ html.sc-offline .sc-online{opacity:.4;filter:grayscale(1);pointer-events:none}`;
   setInterval(ecke, 2000);
   function klick(){ try{ SP&&SP.klick&&SP.klick(); }catch(e){} }
 
+  // Listen ohne Scrollen: Seiten mit ◀ ▶
+  const SEITE={};
+  function seite(key, l, n){ const max=Math.max(0,Math.ceil(l.length/n)-1); const i=Math.min(SEITE[key]||0,max); SEITE[key]=i;
+    return { teil:l.slice(i*n,i*n+n), nav: l.length>n ? `<div class="seiten"><button class="sc-b mini" data-sv="${key}" data-d="-1" ${i?'':'disabled'}>◀</button>Seite ${i+1} von ${max+1}<button class="sc-b mini" data-sv="${key}" data-d="1" ${i<max?'':'disabled'}>▶</button></div>` : '' }; }
+  function seitenKnoepfe(root, neu){ root.querySelectorAll('[data-sv]').forEach(b=>b.onclick=()=>{ SEITE[b.dataset.sv]=(SEITE[b.dataset.sv]||0)+(+b.dataset.d); neu(); }); }
+
   // ---------- Ansichten: Start, Registrieren, Anmelden ----------
   function vStart(){
     titel('👤 SILESCROW ID');
@@ -218,17 +227,16 @@ html.sc-offline .sc-online{opacity:.4;filter:grayscale(1);pointer-events:none}`;
   function vReg(){
     titel('✨ REGISTRIEREN');
     const e=entwurf;
-    box.innerHTML = `<label>Online-Name (3–12 Zeichen, a–z, 0–9, _)</label><input id="scN" maxlength="12" autocomplete="off" value="${esc(e.name||'')}">
-      <label>E-Mail (für „PIN vergessen“)</label><input id="scMail" type="email" autocomplete="email" value="${esc(e.mail||'')}">
-      <label>PIN (6 Ziffern)</label><input id="scP" inputmode="numeric" type="password" maxlength="6" autocomplete="new-password">
-      <label>PIN wiederholen</label><input id="scP2" inputmode="numeric" type="password" maxlength="6" autocomplete="new-password">
-      <label>Alter</label><div class="wahl"><button data-a="16">🧑 16 Jahre oder älter</button><button data-a="eltern">👪 Unter 16 – meine Eltern sind einverstanden</button></div>
-      <div class="haken" id="scH"><i id="scHi"></i><span>Ich akzeptiere die <u>Nutzungsbedingungen</u> und den <u>Datenschutz</u>.</span></div>
-      <div class="sc-k"><button class="sc-b mini" id="scAgb">📄 Lesen</button></div>
+    box.innerHTML = `<div class="g2"><div><label>Online-Name (3–12: a–z, 0–9, _)</label><input id="scN" maxlength="12" autocomplete="off" value="${esc(e.name||'')}"></div>
+      <div><label>E-Mail (für „PIN vergessen“)</label><input id="scMail" type="email" autocomplete="email" value="${esc(e.mail||'')}"></div>
+      <div><label>PIN (6 Ziffern)</label><input id="scP" inputmode="numeric" type="password" maxlength="6" autocomplete="new-password"></div>
+      <div><label>PIN wiederholen</label><input id="scP2" inputmode="numeric" type="password" maxlength="6" autocomplete="new-password"></div></div>
+      <div class="wahl g2"><button data-a="16">🧑 16 Jahre oder älter</button><button data-a="eltern">👪 Unter 16, Eltern einverstanden</button></div>
+      <div class="haken" id="scH"><i id="scHi"></i><span>Ich akzeptiere die Nutzungsbedingungen und den Datenschutz.</span><button class="sc-b mini" id="scAgb">📄 Lesen</button></div>
       <div class="sc-k"><button class="sc-b" id="scZ">◀ ZURÜCK</button><button class="sc-b gold" id="scOk">✔ ID ERSTELLEN</button></div><div class="sc-msg" id="scM"></div>`;
     const mal=()=>{ o.querySelectorAll('.wahl button').forEach(b=>b.classList.toggle('on', b.dataset.a===e.alter)); q('scHi').textContent=e.agb?'✔':''; };
     o.querySelectorAll('.wahl button').forEach(b=>b.onclick=()=>{ e.alter=b.dataset.a; mal(); });
-    q('scH').onclick=()=>{ e.agb=!e.agb; mal(); }; mal();
+    q('scH').onclick=ev=>{ if(ev.target.id==='scAgb') return; e.agb=!e.agb; mal(); }; mal();
     ['scP','scP2'].forEach(id=>q(id).oninput=function(){ this.value=this.value.replace(/\D/g,'').slice(0,6); });
     const merken=()=>{ e.name=nameNorm(q('scN').value); e.mail=q('scMail').value.trim().toLowerCase(); };
     q('scAgb').onclick=()=>{ merken(); entwurf.zurueck='reg'; zeige('agb'); };
