@@ -2143,6 +2143,23 @@ function makeBush(R){
   g.add(new T.Mesh(bg, F.berryMat));
   g.rotation.y = R()*6.28; return g;
 }
+// Golderz: heller als normaler Stein, mit glänzenden Goldadern, die im Licht funkeln (läuft im Shader, kostet kaum Leistung)
+function goldOreMat(base){
+  const x=base.clone(); x.color.setRGB(1.38,1.24,.92); x.emissive=new T.Color(0x140c00);
+  x.onBeforeCompile=sh=>{
+    sh.uniforms.uTime=TERRAIN_T;
+    sh.vertexShader='varying vec3 vOP;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vOP = position;');
+    sh.fragmentShader='uniform float uTime;\nvarying vec3 vOP;\n'+sh.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+      { vec3 q=vOP*3.1;
+        float n=sin(q.x*1.7+sin(q.y*2.3)*1.6)+sin(q.z*1.9+sin(q.x*1.3)*1.4)+sin(q.y*2.1+q.z*.7);
+        float vein=1.0-smoothstep(.0,.22,abs(n));                          // schmale Adern
+        float spark=pow(max(0.0,sin(dot(floor(q*6.0),vec3(12.9,78.2,37.7))*43.7+uTime*2.2)),40.0);   // Funkeln
+        vec3 gold=vec3(1.0,.74,.18);
+        diffuseColor.rgb=mix(diffuseColor.rgb, gold*1.05, vein*.85);
+        totalEmissiveRadiance += gold*(vein*.32 + spark*vein*1.6 + spark*.25); }`);
+  };
+  x.customProgramCacheKey=()=>'goldore'; return x;
+}
 function makeRock(R, kind){
   geos();
   const g = new T.Group();
@@ -2154,7 +2171,7 @@ function makeRock(R, kind){
   }
   if((kind==='gold'||kind==='metal') && MODELS.ore){
     const m = modelMesh('ore', 1.5+R()*.3);
-    if(gold){ m.material = MODELS.ore.goldMat || (MODELS.ore.goldMat = (()=>{ const x=MODELS.ore.mat.clone(); x.color.setRGB(1.12,1.0,.78); x.emissive=new T.Color(0x0d0800); return x; })()); }
+    if(gold){ m.material = MODELS.ore.goldMat || (MODELS.ore.goldMat = goldOreMat(MODELS.ore.mat)); }
     g.add(m);
     // keine gelben Kugeln mehr auf dem Golderz (V1.55)
     g.rotation.y = R()*6.28; return g;
