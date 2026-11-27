@@ -302,7 +302,7 @@ function buildUI(){
   <div id="placebar" class="hidden"><span id="pCost"></span><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">+ Tore</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
   <div id="fps" class="hidden"></div>
   <div id="offer" class="hidden"></div>
-  <div id="dip" class="hidden"><div class="dcard"><div class="dhead"><button class="dtab" data-t="rel">Beziehungen</button><button class="dtab" data-t="trade">Handel</button><button class="dtab" data-t="trib">Tribut</button><button class="dx" id="dClose" aria-label="Schließen">✕</button></div><div id="dipBody"></div></div></div>
+  <div id="dip" class="hidden"><div class="dcard"><div class="dhead"><button class="dtab" data-t="rel">Beziehungen</button><button class="dtab" data-t="trade">Handel</button><button class="dtab" data-t="trib">Tribut</button><button class="dtab" data-t="war">Krieg</button><button class="dx" id="dClose" aria-label="Schließen">✕</button></div><div id="dipBody"></div></div></div>
   <div id="rotate"><div>Bitte das Handy quer halten</div></div>
   <div id="pause" class="hidden"><div class="pcard"><h2>Pause</h2>
     <button class="btn main small" id="pWeiter">Weiter</button>
@@ -453,6 +453,8 @@ function drawPanel(){
         for(const [k,n] of FORMS) h += `<button class="ab tool${k===(G.form||'block')?' on':''}" data-a="fs-${k}"><span class="ai"><svg viewBox="0 0 24 24">${FORM_SVG[k]}</svg></span>${n}</button>`; }
       else h += `<button class="ab tool" data-a="form"><span class="ai"><svg viewBox="0 0 24 24">${FORM_SVG[f[0]]}</svg></span>Formation: ${f[1]}</button>`;
     }
+    if(ws[0].owner===0 && !G.buildMenu && ws.some(u=>u.kind!=='ox' && u.ageSt!=='greis')){ const on=ws.every(u=>u.state==='explore');
+      h += `<button class="ab tool${on?' on':''}" data-a="explore"><span class="ai"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#e8b64a" stroke-width="2"/><path d="M12 5l2.4 7H9.6z" fill="#ff6a5a"/><path d="M12 19l-2.4-7h4.8z" fill="#cfd6dc"/></svg></span>${on?'Erkundet …':'Erkunden'}</button>`; }
     if(ws[0].owner===0 && ws.some(u=>isSoldier(u)) && !G.buildMenu){
       h += `<button class="ab tool" data-a="seek"><span class="ai"><svg viewBox="0 0 24 24"><path d="M4 4l11 11M20 4L9 15" stroke="#e8b64a" stroke-width="2.2" stroke-linecap="round"/><path d="M13 17l4 4M11 17l-4 4M15 15l2-2M9 15l-2-2" stroke="#ff7a6a" stroke-width="2.2" stroke-linecap="round"/></svg></span>Gegner suchen</button>`;
     }
@@ -783,6 +785,7 @@ function damage(t, dmg, src){
   if(!t.size) bloodFx(t.x,t.z,5+(G.rand()*4|0), G.rand()<.35?.35:0);
   if(src && G.reg && friendlyLand(src.owner, src.x, src.z)) dmg *= 1.15; // Heimvorteil wie in EE2
   t.hp -= dmg;
+  if(t.owner===0) G.alarmAt={x:t.x,z:t.z,t:G.t};
   if(t.size){ if(t.owner===0 && !G.alarmT){ G.alarmT=8; EE.toast('Deine '+BUILD[t.kind].name+' wird angegriffen!'); EE.sfx('error',.6); } if(t.hp<=0) destroyBuilding(t); return; }
   if(t.owner===0 && !G.alarmT){ G.alarmT=8; EE.toast('Deine Leute werden angegriffen!'); EE.vib(40); }
   if(t.hp<=0){ killUnit(t); return; }
@@ -1079,6 +1082,10 @@ function action(a){
     if(ss.length>1){ const cx=ss.reduce((a,u)=>a+u.x,0)/ss.length, cz=ss.reduce((a,u)=>a+u.z,0)/ss.length; formationMove(ss, cx, cz); }
     EE.toast('Formation: '+FORMS.find(x=>x[0]===G.form)[1]); EE.sfx('click'); drawPanelSoon(); return; }
   if(a==='hutout'){ const b=G.selB; if(b) for(const u of G.units.filter(u=>u.inside===b && u.inHut)){ exitHut(u); u.lifeT=40; } EE.sfx('click'); drawPanelSoon(); return; }
+  if(a==='explore'){ const us=G.sel.filter(u=>u.owner===0 && !u.dead && !u.inside && u.kind!=='ox' && u.ageSt!=='greis'); if(!us.length) return;
+    const base=G.rand()*Math.PI*2;
+    us.forEach((u,i)=>{ u.auto=u.seek=u.hold=false; u.post=null; u.target=null; u.site=null; u.expA=base+i*2.39996; u.expN=0; exploreNext(u); });   // jede Einheit eine eigene Richtung (goldener Winkel)
+    EE.toast(us.length===1?'Erkundet die Welt – tippe einen Befehl, um ihn zurückzuholen':us.length+' Einheiten erkunden die Welt in alle Richtungen'); EE.sfx('confirm'); drawPanelSoon(); return; }
   if(a==='seek'){ const ss=G.sel.filter(u=>isSoldier(u) && u.owner===0 && !u.dead && !u.inside); let first=null;
     for(const u of ss){ const t=seekFoe(u); u.seek=!!t; u.auto=false; u.post=null; u.hold=false; if(u.pin) setPin(u,false); if(t){ cmdAttack(u,t); first=first||t; } }
     if(first){ iconMarker(first,'sword'); marker(first.x,first.z,0xff4444); EE.toast(ss.length+(ss.length===1?' Soldat sucht':' Soldaten suchen')+' Gegner'); } else EE.toast('Kein Gegner gefunden – du bist mit niemandem im Krieg');
@@ -1264,6 +1271,15 @@ function renderDip(){
       <div class="dlab">Menge</div><div class="dline">${amtBtns}</div>
       <div class="deal">${d.state==='enemy'?'Mit Feinden wird nicht gehandelt – schließe erst Frieden.':U.give===U.get?'Wähle zwei verschiedene Rohstoffe.':`${U.amt} ${RES_DE[U.give]} → <b>${q} ${RES_DE[U.get]}</b> <small>(${CN(p)} ${cv(p,"hat","haben")} ${Math.floor(p.res[U.get])})</small>`}
       <button class="btn main small" id="dTrade"${d.state==='enemy'||U.give===U.get?' disabled':''}>Handeln</button></div>`;
+  } else if(U.tab==='war'){
+    const allies=G.players.slice(1).filter(p=>G.dip[p.id].state==='ally'), foes=G.players.slice(1).filter(p=>G.dip[p.id].state==='enemy');
+    if(!allies.length) h += `<p class="dnote">Du hast noch keine Verbündeten. Schließe unter „Beziehungen“ ein Bündnis – dann kannst du hier gemeinsame Angriffe planen und Hilfe anfordern.</p>`;
+    else { if(!allies.some(p=>p.id===U.ally)) U.ally=allies[0].id; if(!foes.some(p=>p.id===U.foe)) U.foe=foes[0]?foes[0].id:null;
+      const a=G.players[U.ally], aS=G.units.filter(u=>u.owner===a.id && isSoldier(u) && !u.dead).length;
+      h += `<div class="dlab">Verbündeter</div><div class="dline">${allies.map(p=>`<button class="dciv${U.ally===p.id?' on':''}" data-al="${p.id}"><i style="background:${col(p.id)}"></i>${NM(p)}</button>`).join('')}</div>`;
+      h += `<div class="dlab">Angriffsziel</div><div class="dline">${foes.length?foes.map(p=>`<button class="dciv${U.foe===p.id?' on':''}" data-fo="${p.id}"><i style="background:${col(p.id)}"></i>${NM(p)}</button>`).join(''):'<small>Du bist mit niemandem im Krieg.</small>'}</div>`;
+      h += `<div class="deal">${NM(a)}: ${aS} Krieger · ${moodTxt(G.dip[a.id].mood)}${a.helpT>G.t?' · hilft dir gerade':''}${a.joint?' · greift gerade an':''}
+        <button class="btn small" id="dHelp">Hilfe anfordern</button><button class="btn main small" id="dPlan"${U.foe==null?' disabled':''}>Angriff planen</button></div>`; }
   } else {
     const p=G.players[U.who];
     h += `<div class="dlab">Land</div><div class="dline">${civBtns(false)}</div>
@@ -1282,6 +1298,10 @@ function renderDip(){
   const s=$('#dSend'); if(s) s.onclick=()=>sendTribute(U.who,U.give,U.amt);
   const dm=$('#dDemand'); if(dm) dm.onclick=()=>demandTribute(U.who,U.give,U.amt);
   const da=$('#dAsk'); if(da) da.onclick=()=>askTribute(U.who,U.give,U.amt);
+  el.querySelectorAll('[data-al]').forEach(b=>b.onclick=()=>{ EE.click(); U.ally=+b.dataset.al; renderDip(); });
+  el.querySelectorAll('[data-fo]').forEach(b=>b.onclick=()=>{ EE.click(); U.foe=+b.dataset.fo; renderDip(); });
+  const dh=$('#dHelp'); if(dh) dh.onclick=()=>askAllyHelp(U.ally);
+  const dp=$('#dPlan'); if(dp) dp.onclick=()=>planJointAttack(U.ally, U.foe);
   const by=$('#dBrYes'); if(by) by.onclick=()=>payBribe();
   const bn=$('#dBrNo'); if(bn) bn.onclick=()=>{ EE.click(); U.bribe=null; renderDip(); };
 }
@@ -1295,6 +1315,49 @@ function updateDip(dt){
     if(d.ask<=0){ d.ask = 150+G.rand()*200;
       if(!G.offer && d.state!=='ally' && d.mood>(d.state==='enemy'?5:30)) showOffer(+k, d.state==='enemy'?'neutral':'ally'); }
   }
+}
+/* ---------- Kriegsplan mit Verbündeten ----------
+   Hilfe anfordern: der Verbündete schickt einen Teil seiner Krieger zu deinem Stadtzentrum; sie kämpfen dort ~3 Minuten mit und ziehen dann heim.
+   Angriff planen: der Verbündete greift dein Ziel mit an (gemeinsame Welle). Ob er mitmacht, hängt von Stimmung und Stärke ab. */
+function allySoldiers(a){ return G.units.filter(u=>u.owner===a && isSoldier(u) && !u.dead && !u.inside && !u.wave); }
+function askAllyHelp(i){
+  const p=G.players[i], d=G.dip[i]; if(!p || d.state!=='ally'){ EE.toast('Nur Verbündete helfen'); return; }
+  if(p.helpT>G.t){ EE.toast(CN(p)+' '+cv(p,'hilft','helfen')+' dir schon'); return; }
+  const ss=allySoldiers(i), give=Math.floor(ss.length*(d.mood>=50?.6:d.mood>=15?.45:.3));
+  if(give<1 || d.mood<-10){ EE.toast(NM(p)+': „Wir können gerade niemanden entbehren.“'); EE.sfx('error',.5); d.ask=Math.max(d.ask,60); renderDip(); return; }
+  const me=G.players[0].tc; if(!me) return;
+  const t=(G.alarmAt && G.t-G.alarmAt.t<40) ? G.alarmAt : me;   // dorthin, wo du gerade angegriffen wirst – sonst zum Stadtzentrum
+  for(const s of ss.slice(0,give)){ s.help=true; cmdMove(s, t.x+(G.rand()-.5)*10, t.z+(G.rand()-.5)*10); }
+  p.helpT=G.t+180; d.mood=Math.max(-100,d.mood-4);
+  EE.toast(NM(p)+': „Wir schicken '+give+' Krieger zu dir!“'); EE.sfx('confirm'); EE.vib(25); marker(t.x,t.z,0x62e06a); renderDip();
+}
+function planJointAttack(i, vs){
+  const p=G.players[i], d=G.dip[i], X=G.players[vs]; if(!p || !X || d.state!=='ally') return;
+  if(p.joint){ EE.toast(CN(p)+' '+cv(p,'greift','greifen')+' schon '+cn(G.players[p.joint.vs],2)+' an'); return; }
+  const ss=allySoldiers(i), xs=G.units.filter(u=>u.owner===vs && isSoldier(u) && !u.dead).length;
+  if(G.dip[vs] && G.dipAI && G.dipAI[i] && G.dipAI[i][vs]==='ally'){ EE.toast(NM(p)+': „'+NM(X)+' ist unser Freund – da machen wir nicht mit.“'); return; }
+  if(ss.length<3 || d.mood<15 || ss.length<xs*.35){ EE.toast(NM(p)+': „'+(ss.length<3||ss.length<xs*.35?'Wir sind zu schwach für diesen Krieg.':'Dafür vertrauen wir dir noch nicht genug.')+'“'); EE.sfx('error',.5); return; }
+  p.joint={vs}; p.waveT=0; p.helpT=0; d.mood=Math.min(100,d.mood+5);
+  if(X.tc) marker(X.tc.x,X.tc.z,0xff4444);
+  EE.toast(NM(p)+': „Abgemacht – wir greifen '+cn(X,2)+' an!“ Schick deine Krieger dazu.'); EE.sfx('fanfare',.6); EE.vib(40); closeDip();
+}
+// Helfer-Krieger: bei dir kämpfen, nach der Zeit heimkehren
+function updateAllyHelp(p, soldiers, tc){
+  for(const s of soldiers){ if(!s.help) continue;
+    if(!(p.helpT>G.t)){ s.help=false; if(tc) cmdMove(s, tc.x+(G.rand()-.5)*8, tc.z+(G.rand()-.5)*8); continue; }
+    if(s.state==='attack' && alive(s.target)) continue;
+    const f=nearestFoe(s, 18); if(f && hostile(0,f.owner)) cmdAttack(s,f); }
+  if(p.helpT && p.helpT<=G.t && p.helpT>G.t-2 && p.id!==0){ p.helpT=0; EE.toast(NM(p)+': „Unsere Krieger ziehen wieder heim.“'); }
+}
+// Nächstes Erkundungsziel: 45–80 m weiter in die eigene Richtung, Richtung schwankt leicht; Wasser/Rand → abbiegen
+function exploreNext(u){
+  const hx=G.NX/2-4, hz=G.NZ/2-4;
+  for(let k=0;k<12;k++){ u.expA += (G.rand()-.5)*(k?1.6:.5); const d=45+G.rand()*35;
+    let x=u.x+Math.cos(u.expA)*d, z=u.z+Math.sin(u.expA)*d;
+    if(x<-hx||x>hx){ u.expA=Math.PI-u.expA; continue; } if(z<-hz||z>hz){ u.expA=-u.expA; continue; }
+    if(getH(x,z)<WATER_Y+.25 || G.grid[cellIdx(x,z)]){ continue; }
+    u.state='explore'; u.goal=null; moveTo(u,x,z); u.expN=(u.expN||0)+1; return; }
+  u.expA+=Math.PI; u.state='explore'; moveTo(u,u.x+Math.cos(u.expA)*30,u.z+Math.sin(u.expA)*30);
 }
 // Allgemeine Anfrage eines Volkes oben im Bild (Hilfe, gemeinsamer Angriff …)
 function showAsk(i, text, yesLabel, onYes, onNo){
@@ -3475,6 +3538,9 @@ function updateWorker(u,dt){
       if(d<=U.range || (t.size && u.pathEnd && (!u.path||u.pi>=u.path.length) && d<=U.range+2.2)){ u.path=null; u.working=true; u.face=Math.atan2(t.x-u.x,t.z-u.z); u.cd-=dt; if(u.cd<=0){ u.cd=U.cd; hit(u,t); } }
       else { u.repath-=dt; if(u.repath<=0 || !u.path || u.pi>=u.path.length){ u.repath=.7; moveTo(u,t.x,t.z); } followPath(u,dt); }
       break; }
+    case 'explore':   // Erkunden: quer durch die Welt, immer weiter in eine Richtung, an Küsten und Bergen abbiegen
+      if(followPath(u,dt) || (u.path && !u.path.length)) exploreNext(u);
+      break;
     case 'move':
       if(followPath(u,dt)){ const gl=u.goal; if(gl && Math.hypot(gl.x-u.x,gl.z-u.z)>2 && gl.tries++<40){ moveTo(u,gl.x,gl.z); } else u.state='idle'; }
       break;
@@ -3792,7 +3858,9 @@ function updateAIWar(p, mine, tc){
   const wantB = 1 + (G.t>900?1:0) + ((EE.S.diff|0)===2 && G.t>1500?1:0);
   if(barrs.length<wantB && workers.length>=6 && !building) aiPlace(p,'barracks',tc.x,tc.z,10,16,free,3);
   // Armee: gemischt (Axt 40 %, Speer 30 %, Bogen 30 %), Größe wächst mit der Zeit
-  const soldiers = mine.filter(u=>isSoldier(u) && !u.inside && u.state!=='garrison');
+  const soldiersAll = mine.filter(u=>isSoldier(u) && !u.inside && u.state!=='garrison');
+  updateAllyHelp(p, soldiersAll, tc);
+  const soldiers = soldiersAll.filter(u=>!u.help);
   const want = Math.round((atWar ? 5 + G.t/100 : 3 + G.t/300) * D.army);
   for(const b of barrs){ if(b.built<1 || b.queue.length>=2 || p.pop>=p.popCap) continue;
     if(soldiers.length + b.queue.length < want){ const r=G.rand(), k = r<.4?'club':r<.7?'spear':'bow', c=UNIT[k].cost; if(canPay(p,c)){ pay(p,c); b.queue.push(k); } } }
