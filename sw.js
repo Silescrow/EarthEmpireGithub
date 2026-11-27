@@ -2,7 +2,7 @@
 // Immer zuerst aus dem Netz (Updates kommen sofort). Ohne Internet: die zuletzt geladene Version aus dem Speicher.
 const CACHE = 'earth-empire-v1';
 const KERN = ['./', 'index.html', 'game.js', 'audio.js', 'online.js', 'silescrow.js', 'three.min.js', 'manifest.webmanifest',
-  'menue.jpg', 'laden.jpg', 'weltkarte.png', 'icon-192.png', 'icon-512.png', 'musik_menue.mp3', 'musik_spiel.mp3'];
+  'menue.jpg', 'laden.jpg', 'weltkarte.png', 'icon-192.png', 'icon-512.png', 'musik_menue.mp3', 'musik_krieg.mp3', 'musik_ruhig_1.mp3', 'musik_ruhig_2.mp3', 'musik_ruhig_3.mp3', 'musik_ruhig_4.mp3', 'musik_ruhig_5.mp3'];
 const STAMM = new URL('./', self.location.href).href;
 const schluessel = r => { if (r.mode === 'navigate') return STAMM; const x = new URL(r.url); if (x.origin === location.origin) x.search = ''; return x.href; };   // ?v=1.53 egal
 const ablegen = (k, res) => { if (res && (res.ok || res.type === 'opaque')) { const c = res.clone(); caches.open(CACHE).then(x => x.put(k, c)).catch(() => {}); } return res; };

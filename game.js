@@ -783,6 +783,7 @@ function updateArrows(dt){
 function damage(t, dmg, src){
   if(t.deer){ animalHit(t, dmg, src); return; }
   if(t.inside && t.inside.kind==='tower' && alive(t.inside)){ t=t.inside; dmg*=.35; }
+  if(t.owner===0 || (src && src.owner===0)) G.fightT=G.t;   // Kampf mit uns: Kriegsmusik
   if(!t.size) bloodFx(t.x,t.z,5+(G.rand()*4|0), G.rand()<.35?.35:0);
   if(src && G.reg && friendlyLand(src.owner, src.x, src.z)) dmg *= 1.15; // Heimvorteil wie in EE2
   t.hp -= dmg;
@@ -3939,6 +3940,8 @@ function updateAIWar(p, mine, tc){
    ============================================================ */
 function update(dt){
   pcUpdate(dt);
+  // Musik: bei Kämpfen „Valley of the War Horns“, 20 s nach dem letzten Treffer wieder ruhige Lieder
+  { const war = G.fightT!=null && G.t-G.fightT<20; if(war!==!!G.warMusic && !G.inMenu){ G.warMusic=war; EE.music(war?'war':'calm'); } }
   if(G.mkt) for(const k in G.mkt) G.mkt[k]+=(1-G.mkt[k])*dt*.004;
   G.balT=(G.balT||0)-dt; if(G.balT<=0){ G.balT=6; autoBalance(); }
   if(!G.giftOk && G.t>2 && !G.inMenu){ G.giftOk=true; giftPending(); }
