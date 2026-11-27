@@ -4379,12 +4379,12 @@ function pMove(e){
   if(gesture.type==='rpan'){ panBy(p.x-px, p.y-py); return; }
   if(gesture.type==='tap' && Math.hypot(p.x-p.sx,p.y-p.sy)>10){
     clearTimeout(longT);
-    if(G.place && G.place.line){ const g0=groundAt(p.sx,p.sy); if(g0){ G.place.ax=g0.x; G.place.az=g0.z; } gesture={type:'wall'}; }
+    if(G.place && G.place.line){ const g0=groundAt(p.sx,p.sy); if(g0){ G.place.ax=g0.x; G.place.az=g0.z; } G.place.trail = G.place.kind==='road' && g0 ? [[g0.x,g0.z]] : null; gesture={type:'wall'}; }
     else gesture = G.place ? {type:'ghost'} : {type:'box', x0:p.sx, y0:p.sy};
   }
   if(gesture.type==='pan'){ panBy(p.x-px, p.y-py); }
   else if(gesture.type==='ghost'){ const g=groundAt(p.x,p.y); if(g){ G.place.x=g.x; G.place.z=g.z; } }
-  else if(gesture.type==='wall'){ const g=groundAt(p.x,p.y); if(g){ G.place.bx=g.x; G.place.bz=g.z; updateWallGhost(); } }
+  else if(gesture.type==='wall'){ const g=groundAt(p.x,p.y); if(g){ G.place.bx=g.x; G.place.bz=g.z; const T0=G.place.trail; if(T0){ const l=T0[T0.length-1]; if(Math.hypot(g.x-l[0],g.z-l[1])>1.2) T0.push([g.x,g.z]); } updateWallGhost(); } }
   else if(gesture.type==='box'){ showBox(gesture.x0,gesture.y0,p.x,p.y); }
   else if(gesture.type==='two' && P.size===2){
     const [a,b]=[...P.values()];
@@ -4431,7 +4431,7 @@ function pickAt(sx,sy){
   return best;
 }
 function tapAt(sx,sy){
-  if(G.place){ const g=groundAt(sx,sy); if(g){ if(G.place.line){ G.place.bx=g.x; G.place.bz=g.z; updateWallGhost(); } else { G.place.x=g.x; G.place.z=g.z; } } return; }
+  if(G.place){ const g=groundAt(sx,sy); if(g){ if(G.place.line){ const pl=G.place; if(pl.kind==='road' && pl.tapped){ (pl.trail||(pl.trail=[[pl.ax,pl.az],[pl.bx,pl.bz]])).push([g.x,g.z]); } pl.tapped=true; pl.bx=g.x; pl.bz=g.z; updateWallGhost(); } else { G.place.x=g.x; G.place.z=g.z; } } return; }
   const hit = pickAt(sx,sy);
   const mine = G.sel.filter(u=>u.owner===0);
   const now = performance.now();
@@ -4648,14 +4648,44 @@ function snapEnd(x,z,ends){
   for(const p of ends){ const d=Math.hypot(p.x-x,p.z-z) - (p.free?.8:0); if(d<bd){ bd=d; best=p; } }
   return best && bd<1.5 ? best : null;
 }
+// Weg-Ende schnappt an ein eigenes Gebäude (Tür-Seite zum Weg hin) – so verbindet man Häuser
+function roadEndSnap(x,z){
+  let best=null, bd=1e9;
+  for(const b of G.builds){ if(b.owner!==0 || b.dead || b.seg) continue; const r=b.size*.5+3.2, d=Math.hypot(b.x-x,b.z-z); if(d<r && d<bd){ bd=d; best=b; } }
+  if(!best) return null; const a=Math.atan2(z-best.z, x-best.x), r=best.size*.5+.4;
+  return [best.x+Math.cos(a)*r, best.z+Math.sin(a)*r];
+}
+function roadCurveGhost(pl, pts){
+  // Chaikin-Glättung (zweimal), Ecken werden zu Kurven
+  for(let it=0; it<2 && pts.length>2; it++){ const o=[pts[0]]; for(let i=0;i<pts.length-1;i++){ const [x0,z0]=pts[i],[x1,z1]=pts[i+1]; o.push([x0*.75+x1*.25,z0*.75+z1*.25],[x0*.25+x1*.75,z0*.25+z1*.75]); } o.push(pts[pts.length-1]); pts=o; }
+  // gleichmäßig abtasten
+  const out=[]; let acc=0; const step=1.15; let total=0;
+  for(let i=1;i<pts.length;i++) total+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+  const n=Math.max(1,Math.min(160,Math.round(total/step))), sl=total/n; let i=1, px=pts[0][0], pz=pts[0][1], need=sl/2, cx=px, cz=pz;
+  const at=d=>{ let rem=d; for(let k=1;k<pts.length;k++){ const L=Math.hypot(pts[k][0]-pts[k-1][0],pts[k][1]-pts[k-1][1]); if(rem<=L||k===pts.length-1){ const t=L>0?Math.min(1,rem/L):0; return [pts[k-1][0]+(pts[k][0]-pts[k-1][0])*t, pts[k-1][1]+(pts[k][1]-pts[k-1][1])*t]; } rem-=L; } return pts[pts.length-1]; };
+  pl.cells=[]; let okCount=0;
+  for(let k=0;k<n;k++){ const d=(k+.5)*sl, [x,z]=at(d), [x0,z0]=at(Math.max(0,d-sl*.5)), [x1,z1]=at(Math.min(total,d+sl*.5)), ang=Math.atan2(z1-z0,x1-x0);
+    const ks=new Set(), ux=Math.cos(ang), uz=Math.sin(ang); for(let t=-.45;t<=.45;t+=.15) ks.add(cellIdx(x+ux*sl*t, z+uz*sl*t));
+    const arr=[...ks], ok=arr.every(q=>q>=0 && G.grid[q]!==1) && getH(x,z)>WATER_Y+.15;
+    pl.cells.push({ks:arr.filter(q=>!G.grid[q]), x, z, len:sl*1.08, ang, ok}); }
+  for(const c of pl.cells){ const gh=makeRoadPiece(c.x,c.z,c.len,c.ang);
+    gh.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.8; o.material.color.setHex(c.ok?0x66ff77:0xff5555); o.castShadow=false; } });
+    G.scene.add(gh); pl.ghosts.push(gh); if(c.ok) okCount++; }
+  pl.ang=pl.cells.length?pl.cells[0].ang:0; pl.cost=0; pl.ok=okCount>0; setCost({wood:0});
+  $('#pTxt').textContent = okCount ? 'Weg: '+Math.round(okCount*sl)+' m · kostenlos · Kurven: ziehen oder Punkte antippen' : 'Hier kann kein Weg entstehen';
+  $('#pOk').classList.toggle('dim', !pl.ok); $('#pOk').disabled=false;
+}
 function updateWallGhost(){
   const pl=G.place, NX=G.NX, NZ=G.NZ;
   for(const gh of pl.ghosts) G.scene.remove(gh); pl.ghosts=[];
   const road = pl.kind==='road';
   const ends = wallEnds(road), sa = snapEnd(pl.ax,pl.az,ends), sb = snapEnd(pl.bx,pl.bz,ends);
-  const AX = sa?sa.x:pl.ax, AZ = sa?sa.z:pl.az, BX = sb&&sb!==sa?sb.x:pl.bx, BZ = sb&&sb!==sa?sb.z:pl.bz;
+  let AX = sa?sa.x:pl.ax, AZ = sa?sa.z:pl.az, BX = sb&&sb!==sa?sb.x:pl.bx, BZ = sb&&sb!==sa?sb.z:pl.bz;
   const own = new Set(); for(const p of [sa,sb]) if(p) for(const k of p.cells||[]) own.add(k);
   pl.snapA=!!sa; pl.snapB=!!(sb&&sb!==sa);
+  if(road){ const R=roadEndSnap(BX,BZ); if(R && !pl.snapB){ BX=R[0]; BZ=R[1]; } const R0=roadEndSnap(AX,AZ); if(R0 && !pl.snapA){ AX=R0[0]; AZ=R0[1]; } }
+  // Kurven: beim Ziehen gemalte Spur bzw. angetippte Punkte → weiche Kurve, alle 1,15 m ein Wegstück
+  if(road && pl.trail && pl.trail.length>=2){ return roadCurveGhost(pl, [[AX,AZ], ...pl.trail.slice(1,-1), [BX,BZ]]); }
   const dx=BX-AX, dz=BZ-AZ, L=Math.min(Math.hypot(dx,dz), 150);
   const n = Math.max(1, Math.round(L/1.15)), seg = Math.max(.6, L/n);
   const ux = L>0.01?dx/Math.hypot(dx,dz):1, uz = L>0.01?dz/Math.hypot(dx,dz):0;
@@ -4691,7 +4721,7 @@ function confirmWall(){
   if(p.res.wood < pl.cost){ EE.toast('Es fehlen '+Math.ceil(pl.cost-p.res.wood)+' Holz ('+pl.cost+' nötig)'); EE.sfx('error'); EE.vib(30); return; }
   p.res.wood -= pl.cost;
   const id = WALL_ID++, ang = pl.ang||0, segs=[];
-  for(const c of pl.cells){ if(!c.ok) continue; segs.push(addWall(0, c, ang, id, pl.kind==='road')); }
+  for(const c of pl.cells){ if(!c.ok) continue; segs.push(addWall(0, c, c.ang!=null?c.ang:ang, id, pl.kind==='road')); }
   const ws = pl.workers;
   ws.forEach((u,i)=>{ const seg = segs[Math.floor(i*segs.length/Math.max(1,ws.length))]; if(seg) cmdBuild(u,seg); });
   EE.sfx('place'); EE.vib(20);
@@ -5050,8 +5080,18 @@ function startPlace(kind){
   $('#placebar').classList.remove('hidden');
   drawPanel();
 }
+// Gebäude schnappen an einen eigenen Weg: stehen dann sauber direkt neben der Straße
+function snapToRoad(pl){
+  const sz=BUILD[pl.kind].size||3; let best=null, bd=1e9;
+  for(const b of G.builds){ if(b.kind!=='road' || b.owner!==0 || b.dead || !b.seg) continue; const d=Math.hypot(b.x-pl.x,b.z-pl.z); if(d<bd){ bd=d; best=b; } }
+  if(!best || bd>sz*.5+2.6) return;
+  const a=best.seg.ang||0, nx=-Math.sin(a), nz=Math.cos(a), side=Math.sign((pl.x-best.x)*nx+(pl.z-best.z)*nz)||1;
+  const along=(pl.x-best.x)*Math.cos(a)+(pl.z-best.z)*Math.sin(a), off=.75+sz*.5+.15;
+  pl.x=best.x+Math.cos(a)*along+nx*side*off; pl.z=best.z+Math.sin(a)*along+nz*side*off; pl.snapRoad=true;
+}
 function updateGhost(){
-  const pl=G.place, fp=footprint(pl.kind,pl.x,pl.z);
+  const pl=G.place; pl.snapRoad=false; if(pl.kind!=='tc' && !pl.line) snapToRoad(pl);
+  const fp=footprint(pl.kind,pl.x,pl.z);
   const y = getH(fp.cx,fp.cz);
   pl.ghost.position.set(fp.cx,y,fp.cz); pl.pad.position.set(fp.cx,y+.1,fp.cz);
   pl.ok = validPlace(pl.kind,pl.x,pl.z,0);
