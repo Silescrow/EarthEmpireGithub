@@ -305,6 +305,18 @@ function drawPanel(){
   const el = $('#panel'); if(!el) return;
   const p = G.players[0];
   if(G.place){ el.innerHTML=''; el.className='hidden'; return; }
+  if(G.selB && G.selBs && G.selBs.length>1){
+    const bs=G.selBs.filter(o=>!o.dead), back={}; for(const o of bs){ const r=refundOf(o); for(const k in r) back[k]=(back[k]||0)+r[k]; }
+    const pl=wallTowerPlan(G.selB), tot={}; for(const r in WT_COST) tot[r]=WT_COST[r]*pl.length;
+    const nW=bs.filter(o=>o.kind==='wall').length, nT=bs.filter(o=>o.kind==='tower').length, nG=bs.filter(o=>o.kind==='gate').length;
+    const armed=G.multiDel && G.t-G.multiDel<3;
+    let h=`<div class="info"><b>${bs.length} Mauerteile</b><small>${nW} Palisade${nT?' · '+nT+' Türme':''}${nG?' · '+nG+' Tor'+(nG>1?'e':''):''}</small></div>`;
+    if(pl.length) h+=`<button class="ab" data-a="wtowers"><span class="ai">${towerSVG()}</span>${pl.length} Türme einbauen<span class="ac">${costText(tot)}</span></button>`;
+    h+=`<button class="ab del${armed?' armed':''}" data-a="demolishAll"><span class="ai"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" stroke="#ff7a6a" stroke-width="2" fill="none" stroke-linejoin="round"/></svg></span>${armed?'Wirklich alle?':'Alle abreißen'}<span class="ac">${armed?'nochmal tippen':'+'+costText(back).replace(/"c (ok|miss)"/g,'"c ok"')}</span></button>`;
+    el.innerHTML=h; el.className='';
+    el.querySelectorAll('.ab').forEach(b=>b.onclick=()=>action(b.dataset.a));
+    return;
+  }
   if(G.selB){
     const b = G.selB, d = BUILD[b.kind];
     let h = `<div class="info"><b>${b.wallT?'Mauerturm':d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):G.players[b.owner].civ[0]}</small></div>`;
@@ -859,6 +871,12 @@ const storeSVG = () => '<svg viewBox="0 0 24 24"><rect x="3" y="15" width="18" h
 // Beim Abreißen gibt es 40 % der Baukosten zurück
 function refundOf(b){ const c = b.wallT ? WT_COST : (BUILD[b.kind].cost||{}), out={}; for(const r in c) out[r]=Math.floor(c[r]*.4); return out; }
 function action(a){
+  if(a==='demolishAll'){ const bs=(G.selBs||[]).filter(o=>!o.dead && o.owner===0); if(!bs.length) return;
+    if(!(G.multiDel && G.t-G.multiDel<3)){ G.multiDel=G.t; EE.click(); drawPanel(); setTimeout(()=>{ if(G && G.selBs) drawPanel(); },3100); return; }
+    G.multiDel=0; const p0=G.players[0], back={};
+    for(const o of bs){ const r=refundOf(o); for(const k in r){ back[k]=(back[k]||0)+r[k]; p0.res[k]+=r[k]; } }
+    select([],null); for(const o of bs) destroyBuilding(o);
+    EE.vib(30); EE.toast(bs.length+' Teile abgerissen – zurück: '+Object.keys(back).filter(k=>back[k]>0).map(k=>'+'+back[k]+' '+RES_DE[k]).join(' · ')); drawPanel(); updateHUD(); return; }
   if(a==='demolish'){ const b=G.selB; if(!b || b.owner!==0) return;
     if(!(b.delArm && G.t-b.delArm<3)){ b.delArm=G.t; EE.click(); drawPanel(); setTimeout(()=>{ if(G && G.selB===b) drawPanel(); },3100); return; }
     const back=refundOf(b), p0=G.players[0]; for(const r in back) p0.res[r]+=back[r];
@@ -1430,9 +1448,12 @@ function tileNoise(size, cells, seed){
 }
 function fbmTile(size, seed){ const a=tileNoise(size,4,seed), b=tileNoise(size,8,seed+1), c=tileNoise(size,16,seed+2), d=tileNoise(size,32,seed+3), o=new Float32Array(size*size);
   for(let i=0;i<o.length;i++) o[i]=a[i]*.45+b[i]*.28+c[i]*.17+d[i]*.1; return o; }
+// Feinere Struktur für hochauflösende Texturen: zwei zusätzliche feine Rauschstufen
+function fbmTileHD(size, seed){ const o=fbmTile(size,seed), e=tileNoise(size,64,seed+4), f=tileNoise(size,128,seed+5);
+  for(let i=0;i<o.length;i++) o[i]=o[i]*.84+e[i]*.1+f[i]*.06; return o; }
 function makeGroundTex(kind){
-  const S=256, cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d'), img=x.createImageData(S,S);
-  const n=fbmTile(S, {grass:11,dirt:23,sand:37,rock:51,snow:67}[kind]);
+  const S=1024, cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d'), img=x.createImageData(S,S);   // HD-Boden (V1.78)
+  const n=fbmTileHD(S, {grass:11,dirt:23,sand:37,rock:51,snow:67}[kind]);
   const pal={grass:[[70,120,40],[112,160,62]], dirt:[[104,78,50],[150,118,80]], sand:[[205,166,104],[236,206,146]], rock:[[96,94,90],[150,148,140]], snow:[[214,224,236],[250,252,255]]}[kind];
   for(let i=0;i<S*S;i++){ const t=n[i], o=i*4, xx=i%S, yy=(i/S)|0;
     let v=t;
@@ -1447,7 +1468,7 @@ function makeGroundTex(kind){
       x.fillStyle=`rgba(${g},${g*.88|0},${g*.72|0},.85)`; x.beginPath(); x.arc(px,py,r,0,7); x.fill(); } }
   if(kind==='rock'){ for(let i=0;i<70;i++){ const px=rnd()*S, py=rnd()*S; x.strokeStyle='rgba(40,40,40,.35)'; x.lineWidth=1; x.beginPath(); x.moveTo(px,py); for(let k=0;k<4;k++) x.lineTo(px+(rnd()-.5)*30,py+(rnd()-.5)*30); x.stroke(); }
       for(let i=0;i<90;i++){ x.fillStyle='rgba(80,110,50,.35)'; x.beginPath(); x.arc(rnd()*S,rnd()*S,1+rnd()*3,0,7); x.fill(); } }
-  const t=new T.CanvasTexture(cv); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; t.generateMipmaps=true; t.minFilter=T.LinearMipmapLinearFilter;
+  const t=new T.CanvasTexture(cv); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.SRGBColorSpace; t.anisotropy=8; t.generateMipmaps=true; t.minFilter=T.LinearMipmapLinearFilter;
   return t;
 }
 // Höhenstufen wie in echten Gebirgen (z. B. Kilimandscharo): unten Grün, dann Bergwald bis zur Baumgrenze,
@@ -1613,13 +1634,13 @@ function updateTiles(force){
   }
 }
 function waterNormalTex(){
-  const S=256, h=fbmTile(S, 313), h2=tileNoise(S,24,517), cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const S=512, h=fbmTileHD(S, 313), h2=tileNoise(S,24,517), cv=document.createElement('canvas'); cv.width=cv.height=S;
   const x=cv.getContext('2d'), img=x.createImageData(S,S);
   const H=(i,j)=>{ i=(i+S)%S; j=(j+S)%S; return h[j*S+i]*1.0 + h2[j*S+i]*.35; };
   for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const dx=(H(i+1,j)-H(i-1,j))*6, dz=(H(i,j+1)-H(i,j-1))*6, L=Math.hypot(dx,1,dz), o=(j*S+i)*4;
     img.data[o]=(-dx/L*.5+.5)*255; img.data[o+1]=(-dz/L*.5+.5)*255; img.data[o+2]=(1/L*.5+.5)*255; img.data[o+3]=255; }
   x.putImageData(img,0,0);
-  const t=new T.CanvasTexture(cv); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.NoColorSpace; t.anisotropy=4;
+  const t=new T.CanvasTexture(cv); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.NoColorSpace; t.anisotropy=8;
   return t;
 }
 function waterDepthTex(){
@@ -2132,7 +2153,7 @@ function parseGLB(buf){
   return texP.then(()=>({geo, mat}));
 }
 // Grafik „Niedrig“: Gebäude in einfacher Fassung (models/niedrig/), ab „Mittel“ volle Qualität
-const MODEL_LOW = new Set(['bird','dolphin','fish','tower','warrior','bigtc','tent','store2','store3','barr1','barr2','barr3']);
+const MODEL_LOW = new Set(['antelope','bank','banner','barr1','barr2','barr3','barrikade','bigtc','bird','cavef','cavem','dolphin','fellgestell','fence','fire','fish','horse','house','leiter','palisade','rabbit','store','store2','store3','tc','tent','thron','tower','trog','warrior','werkzeuge']);   // Niedrig = einfache Fassung, sonst HD-Texturen (V1.78)
 let modelsLow = null;
 window.EE_MODEL_LIST=()=>{ const l=[]; for(const [k,f] of Object.entries(MODEL_FILES)){ l.push(f); if(MODEL_LOW.has(k)) l.push(f.replace('models/','models/niedrig/')); } return [...new Set(l)]; };   // für das Offline-Spielen
 function loadModels(gfx){
@@ -2195,7 +2216,7 @@ function floraAtlas(){
     for(let i=0;i<70;i++){ const t=i/70, px=772+t*246, L=(1-Math.pow(t,1.4)*.8)*(60+R()*18);
       for(const side of [-1,1]){ const g=110+R()*40|0; x.strokeStyle=`rgb(${50+R()*20|0},${g},${36})`; x.lineWidth=4.5*(1-t*.5);
         x.beginPath(); x.moveTo(px,oy); x.quadraticCurveTo(px+L*.35, oy+side*L*.45, px+L*.55, oy+side*L*.95); x.stroke(); } } }
-  const t=new T.CanvasTexture(cv); t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; t.flipY=false;
+  const t=new T.CanvasTexture(cv); t.colorSpace=T.SRGBColorSpace; t.anisotropy=8; t.flipY=false;
   return t;
 }
 // Geometrie-Baukasten
@@ -2427,7 +2448,7 @@ function civFlagTex(civ, color){
   if(civTexCache[key]) return civTexCache[key];
   if(stoneAge()){
     const W=256, H=184, [c,x]=hideCanvas(W,H,(civ[0].charCodeAt(0)*131+civ[0].length*17)|0);
-    const t=new T.CanvasTexture(c); t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; civTexCache[key]=t;
+    const t=new T.CanvasTexture(c); t.colorSpace=T.SRGBColorSpace; t.anisotropy=8; civTexCache[key]=t;
     const hex='#'+color.toString(16).padStart(6,'0');
     // Farbstreifen oben und unten wie aufgemalt
     x.globalAlpha=.85; x.fillStyle=hex; x.fillRect(16,14,W-34,9); x.fillRect(16,H-24,W-34,9); x.globalAlpha=1;
@@ -2485,26 +2506,38 @@ function civFlag(g, civ, color, x, y, z, h){
   fl.position.set(x+.05, y+h-.62, z); fl.castShadow=true; g.add(fl);
   return fl;
 }
-let GLOW_TEX=null, SMOKE_TEX=null;
+let GLOW_TEX=null, SMOKE_TEX=null, FLAME_TEX=null;
 function radialTex(inner, outer){ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'); const gr=x.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,inner); gr.addColorStop(1,outer); x.fillStyle=gr; x.fillRect(0,0,64,64); return new T.CanvasTexture(c); }
 function makeCampfire(){
   geos();
   const g = new T.Group();
   if(MODELS.fire){ const m=modelMesh('fire', 1.7); m.material = MODELS.fire.glowMat || (MODELS.fire.glowMat=(()=>{ const x=MODELS.fire.mat.clone(); x.emissive=new T.Color(0x3a1200); return x; })()); g.add(m); }
   else for(let i=0;i<5;i++){ const s2=mesh(GEO.rock, mat(0x777777), Math.cos(i*1.26)*.42,.06,Math.sin(i*1.26)*.42); s2.scale.set(.16,.12,.16); g.add(s2); }
-  const f1 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xff8a1a, transparent:true, opacity:.9})); f1.position.y=.55; g.add(f1);
-  const f2 = new T.Mesh(GEO.flame, new T.MeshBasicMaterial({color:0xffe27a, transparent:true, opacity:.95})); f2.position.y=.45; g.add(f2);
+  // Echtes Feuer aus vielen leuchtenden Flammen-Partikeln statt fester Kegel (V1.78)
+  if(!FLAME_TEX){ const c=document.createElement('canvas'); c.width=64; c.height=128; const x=c.getContext('2d');
+    const gr=x.createRadialGradient(32,92,2,32,80,44); gr.addColorStop(0,'rgba(255,250,220,1)'); gr.addColorStop(.25,'rgba(255,210,90,.95)'); gr.addColorStop(.55,'rgba(255,120,20,.55)'); gr.addColorStop(1,'rgba(200,40,0,0)');
+    x.fillStyle=gr; x.beginPath(); x.moveTo(32,4); x.bezierCurveTo(52,48,62,86,32,124); x.bezierCurveTo(2,86,12,48,32,4); x.fill();
+    FLAME_TEX=new T.CanvasTexture(c); FLAME_TEX.colorSpace=T.SRGBColorSpace; }
+  const flames=[]; for(let i=0;i<16;i++){ const sp=new T.Sprite(new T.SpriteMaterial({map:FLAME_TEX, blending:T.AdditiveBlending, depthWrite:false, transparent:true}));
+    sp.userData={t:i/16, a:Math.random()*6.28, r:.05+Math.random()*.28, s:.55+Math.random()*.5}; g.add(sp); flames.push(sp); }
+  const sparks=[]; for(let i=0;i<10;i++){ const sp=new T.Sprite(new T.SpriteMaterial({color:0xffc060, blending:T.AdditiveBlending, depthWrite:false, transparent:true}));
+    sp.userData={t:Math.random(), a:Math.random()*6.28, v:.6+Math.random()}; sp.scale.set(.05,.05,1); g.add(sp); sparks.push(sp); }
   if(!GLOW_TEX){ GLOW_TEX=radialTex('rgba(255,170,60,.85)','rgba(255,120,20,0)'); SMOKE_TEX=radialTex('rgba(90,90,90,.55)','rgba(90,90,90,0)'); }
   const glow = new T.Sprite(new T.SpriteMaterial({map:GLOW_TEX, blending:T.AdditiveBlending, depthWrite:false, transparent:true}));
   glow.scale.set(3.2,3.2,1); glow.position.y=.6; g.add(glow);
   const smoke=[]; for(let i=0;i<5;i++){ const sp=new T.Sprite(new T.SpriteMaterial({map:SMOKE_TEX, depthWrite:false, transparent:true, opacity:.5})); sp.userData.t=i/5; g.add(sp); smoke.push(sp); }
-  g.flames=[f1,f2]; g.glow=glow; g.smoke=smoke;
+  g.flames=flames; g.sparks=sparks; g.glow=glow; g.smoke=smoke;
   return g;
 }
 function animateFire(fx, t, dt){
-  const [f1,f2]=fx.flames;
-  f1.scale.set(1.3+Math.sin(t*13)*.18, 1.4+Math.sin(t*9.7)*.35, 1.3+Math.cos(t*11)*.18); f1.rotation.y=t*1.7;
-  f2.scale.set(.7+Math.sin(t*15)*.1, .9+Math.sin(t*12.3)*.25, .7);
+  // Flammen steigen auf, werden schmaler und verblassen; Funken fliegen hoch
+  for(const sp of fx.flames){ const u=sp.userData; u.t+=dt*(1.6+u.s*.6); if(u.t>=1){ u.t-=1; u.a=Math.random()*6.28; u.r=.04+Math.random()*.26; u.s=.55+Math.random()*.5; }
+    const k=u.t, w=u.s*(1-k*.75)*(.9+Math.sin(t*23+u.a*7)*.12), h=w*1.9;
+    sp.position.set(Math.cos(u.a)*u.r*(1-k)+Math.sin(t*6+u.a)*.06*k, .22+k*1.15+h*.4, Math.sin(u.a)*u.r*(1-k));
+    sp.scale.set(w,h,1); sp.material.opacity=Math.min(1,k*8)*(1-k)*.95;
+    sp.material.color.setRGB(1, .75-.35*k, .45-.4*k); }
+  for(const sp of fx.sparks){ const u=sp.userData; u.t+=dt*u.v*.5; if(u.t>=1){ u.t=0; u.a=Math.random()*6.28; }
+    sp.position.set(Math.cos(u.a)*.25+Math.sin(t*3+u.a)*.2*u.t, .4+u.t*3.2, Math.sin(u.a)*.25+Math.cos(t*2.6+u.a)*.2*u.t); sp.material.opacity=(1-u.t)*(.5+.5*Math.sin(t*30+u.a*9)); }
   fx.glow.material.opacity = .75+Math.sin(t*17)*.12+Math.sin(t*5.3)*.1;
   for(const sp of fx.smoke){ sp.userData.t=(sp.userData.t+dt*.22)%1; const k=sp.userData.t;
     sp.position.set(Math.sin(k*5+sp.id)*.35*k, 1+k*4.5, Math.cos(k*4)*.25*k); const sc=.6+k*2.4; sp.scale.set(sc,sc,1); sp.material.opacity=.45*(1-k)*Math.min(1,k*5); }
@@ -3410,7 +3443,7 @@ function pcSelectAt(sx,sy,add){
   }
   PC.lastClick={t:now,u:null};
   if(hit && hit.u){ select([],null); EE.toast(UNIT[hit.u.kind].name+' der '+G.players[hit.u.owner].civ[0]); return; }
-  if(hit && hit.b){ select([],hit.b); EE.click(); return; }
+  if(hit && hit.b){ tapBuilding(hit.b); return; }
   if(hit && hit.r){ if(!add) select([],null); EE.toast(RES_DE[hit.r.kind]+': '+Math.ceil(hit.r.amt)+' übrig'); return; }
   if(!add) select([],null);
 }
@@ -3562,7 +3595,7 @@ function tapAt(sx,sy){
     if(hit && hit.b && hit.b.owner===0 && BUILD[hit.b.kind].drop){ mine.forEach(u=>{ if(u.carry.amt>0){u.state='drop';u.path=null;} }); marker(hit.b.x,hit.b.z,0xffffff); return; }
     if(hit && hit.b && hit.b.owner!==0){ if(hostile(0,hit.b.owner)){ mine.forEach(u=>cmdAttack(u,hit.b)); marker(hit.b.x,hit.b.z,0xff4444); EE.vib(12); }
       else EE.toast('Ihr habt keinen Krieg mit den '+G.players[hit.b.owner].civ[0]); return; }
-    if(hit && hit.b){ select([],hit.b); EE.click(); return; }
+    if(hit && hit.b){ tapBuilding(hit.b); return; }
     // Doppeltipp auf den Boden: Auswahl aufheben
     if(now-lastTap.t<450 && lastTap.g && Math.hypot(sx-lastTap.x, sy-lastTap.y)<45){ lastTap={t:0,u:null}; select([],null); EE.click(); EE.toast('Auswahl aufgehoben'); return; }
     lastTap={t:now,u:null,g:true,x:sx,y:sy};
@@ -3570,7 +3603,7 @@ function tapAt(sx,sy){
     if(g){ formationMove(mine, g.x, g.z); marker(g.x,g.z,0x7cff7c); EE.vib(8); drawPanel(); }
     return;
   }
-  if(hit && hit.b){ select([],hit.b); EE.click(); return; }
+  if(hit && hit.b){ tapBuilding(hit.b); return; }
   if(hit && hit.r){ EE.toast(RES_DE[hit.r.kind]+': '+Math.ceil(hit.r.amt)+' übrig'); return; }
   select([],null);
 }
@@ -3587,6 +3620,7 @@ function select(us,b){
   us = us.filter(u=>!u.inside); G.buildMenu=false;
   for(const u of G.sel) u.ring.visible=false;
   if(G.selB) G.selB.ring.visible=false;
+  if(G.selBs){ for(const o of G.selBs) if(o.ring) o.ring.visible=false; G.selBs=null; }
   G.sel = us; G.selB = b;
   for(const u of us){ u.ring.visible=true; u.ring.material.color.setHex(0xffffff); }
   if(b){ b.ring.visible=true; }
@@ -3615,8 +3649,7 @@ function makeWallPiece(color, gate, len){
   geos();
   const g = new T.Group();
   if(gate){
-    const gm = mat(0x6e4626);   // Holzton der Palisade
-    for(const x of [-.5*len,.5*len]){ const p=mesh(GEO.box, gm, x, 1.1, 0); p.scale.set(.34,2.2,.34); g.add(p); }
+    // keine braunen Pfosten: das Tor besteht nur aus Palisade (V1.78)
     // kein Querbalken oben (V1.76)
     // Zwei Torflügel aus Holzbohlen, an den Pfosten eingehängt – öffnen sich wie bei einer Burg (V1.74)
     g.doors=[];
@@ -3625,7 +3658,6 @@ function makeWallPiece(color, gate, len){
       if(MODELS.palisade){   // Torflügel aus derselben Palisade wie die Mauer (gleiche Textur)
         const pm=modelMesh('palisade', w*1.04), bb=MODELS.palisade.geo.boundingBox; pm.scale.y=1.95/(bb.max.y-bb.min.y); pm.scale.z*=1.2;
         pm.position.set(-sd*(.06+w/2), -bb.min.y*pm.scale.y, 0); piv.add(pm);
-        const q=mesh(GEO.box, mat(0x5e3b1f), -sd*(.06+w/2), .7, .12); q.scale.set(w,.16,.08); piv.add(q);
       } else {
       for(let i=0;i<3;i++){ const pl=mesh(GEO.box, wood, -sd*(.06+(i+.5)*w/3), .95, 0); pl.scale.set(w/3-.02,1.8,.09); piv.add(pl); }
       for(const y of [.45,1.5]){ const q=mesh(GEO.box, dark, -sd*(.06+w/2), y, .06); q.scale.set(w,.12,.04); piv.add(q); } }
@@ -3648,13 +3680,13 @@ function wallCells(x0,z0,x1,z1){
 let ROAD_TEX=null, ROAD_MAT=null;
 function roadMat(){
   if(ROAD_MAT) return ROAD_MAT;
-  const S=128, cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d'), R=rng(77);
-  const img=x.createImageData(S,S), n=fbmTile(S,91);
+  const S=512, cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d'), R=rng(77);
+  const img=x.createImageData(S,S), n=fbmTileHD(S,91);
   for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const o=(j*S+i)*4, t=n[j*S+i], e=Math.abs(i/S-.5)*2, edge=clamp((1-e)*3.2 - (t-.5)*2.4,0,1);
     img.data[o]=118+t*60; img.data[o+1]=92+t*46; img.data[o+2]=62+t*30; img.data[o+3]=edge*235; }
   x.putImageData(img,0,0);
-  for(let i=0;i<70;i++){ const px=S*.2+R()*S*.6, py=R()*S; x.fillStyle=`rgba(${150+R()*50|0},${145+R()*45|0},${135+R()*40|0},.9)`; x.beginPath(); x.arc(px,py,.8+R()*1.8,0,7); x.fill(); }
-  for(let k=0;k<2;k++){ x.strokeStyle='rgba(70,50,30,.35)'; x.lineWidth=5; x.beginPath(); x.moveTo(S*(.36+k*.28),0); x.lineTo(S*(.36+k*.28),S); x.stroke(); }
+  for(let i=0;i<70*16;i++){ const px=S*.2+R()*S*.6, py=R()*S; x.fillStyle=`rgba(${150+R()*50|0},${145+R()*45|0},${135+R()*40|0},.9)`; x.beginPath(); x.arc(px,py,(.8+R()*1.8)*1.6,0,7); x.fill(); }
+  for(let k=0;k<2;k++){ x.strokeStyle='rgba(70,50,30,.35)'; x.lineWidth=5*S/128; x.beginPath(); x.moveTo(S*(.36+k*.28),0); x.lineTo(S*(.36+k*.28),S); x.stroke(); }
   ROAD_TEX=new T.CanvasTexture(cv); ROAD_TEX.wrapT=T.RepeatWrapping; ROAD_TEX.colorSpace=T.SRGBColorSpace;
   ROAD_MAT=new T.MeshLambertMaterial({map:ROAD_TEX, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
   return ROAD_MAT;
@@ -3759,6 +3791,19 @@ function gateParts(w){
 }
 function wallLine(b){ return G.builds.filter(o=>o.owner===b.owner && o.wallId===b.wallId && o.seg && !o.dead && (o.kind==='wall'||o.kind==='gate'||o.kind==='tower')); }
 // Alle zusammenhängenden Palisaden (auch mehrere gezogene Linien, die aneinander andocken) bekommen Türme
+const isWallPart = b => b && b.seg && (b.kind==='wall'||b.kind==='gate'||b.kind==='tower');
+// Tipp auf Gebäude; Doppeltipp auf ein Mauerteil wählt die ganze zusammenhängende Mauer (wie Empire Earth II)
+let lastBT={t:0,b:null};
+function tapBuilding(b){
+  const now=performance.now();
+  if(b.owner===0 && isWallPart(b) && lastBT.b && isWallPart(lastBT.b) && now-lastBT.t<420){ lastBT={t:0,b:null}; selectWallNet(b); return; }
+  lastBT={t:now,b}; select([],b); EE.click();
+}
+function selectWallNet(b){
+  const all=wallNet(b).flat().filter(o=>!o.dead);
+  select([],b); G.selBs=all; for(const o of all) if(o.ring) o.ring.visible=true;
+  EE.click(); EE.toast(all.length+' Mauerteile ausgewählt'); drawPanel();
+}
 function wallNet(b){
   const own=G.builds.filter(o=>o.owner===b.owner && o.seg && !o.dead && (o.kind==='wall'||o.kind==='gate'||o.kind==='tower'));
   const byId={}; for(const o of own) (byId[o.wallId]||(byId[o.wallId]=[])).push(o);
@@ -4127,5 +4172,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { gift, quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { gift, quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
