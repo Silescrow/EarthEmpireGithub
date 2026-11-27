@@ -232,7 +232,6 @@ function buildUI(){
   <canvas id="mini" width="150" height="150"></canvas>
   <div id="kinds"></div>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
-  <div id="joy" aria-label="Laufen"><i></i></div><button id="bAct" aria-label="Arbeiten"><span>✋</span><small>Arbeiten</small></button><button id="bRun" aria-label="Rennen">🏃</button>
   <button id="bFollowOff" aria-label="Kamera zurück"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Zurück</button>
   <button class="hb" id="bNorth" aria-label="Kameradrehung zurücksetzen"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" stroke="currentColor" stroke-width="1.6" fill="none" opacity=".7"/><g id="needle"><path d="M12 4.2l3 7.8h-6z" fill="#e2453b"/><path d="M12 19.8l3-7.8h-6z" fill="currentColor"/></g></svg></button>
   <div id="panel"></div>
@@ -257,7 +256,6 @@ function buildUI(){
     const mo = new MutationObserver(done); mo.observe(d,{attributes:true, attributeFilter:['class']}); };
   $('#kinds').onclick = e => { const b=e.target.closest('[data-k]'); if(b) selectKind(b.dataset.k); };
   $('#bFollowOff').onclick = () => stopFollow();
-  initCtrlUI();
   $('#bNorth').onclick = () => { EE.click(); G.camReset = true; };
   $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); } };
   $('#pOk').onclick = confirmPlace;
@@ -374,7 +372,7 @@ function drawPanel(){
       h += `<button class="gpic${u0.owner!==0?' foe':''}" data-g="${k}" aria-label="${g.n} ${UNIT_DE[k]||k}">${unitPic(u0)}<b>${g.n}</b><i style="width:${Math.round(hp*100)}%;background:${hp>.5?'#62e06a':hp>.25?'#f2c230':'#e23b3b'}"></i></button>`; }
     h += `<button class="sx" data-a="desel" aria-label="Auswahl aufheben">✕</button></div>${ws.length===1?`<small>${UNIT[ws[0].kind]?UNIT[ws[0].kind].name:''} · ${ws[0].ageSt==='greis'?'spielt mit den Kindern':job}${carry}${ws[0].kind==='worker'&&ws[0].age!=null?' · '+ageYears(ws[0])+' Jahre'+(ws[0].ageSt==='greis'?' (zu alt zum Arbeiten)':ws[0].ageSt==='alt'?' (alt)':''):''}</small>`:''}</div>`;
     if(ws.length===1 && !G.buildMenu && !ws[0].dead){
-      h += `<button class="ab tool" data-a="follow"><span class="ai"><svg viewBox="0 0 24 24"><path d="M3 8.5h3l1.6-2.5h8.8L18 8.5h3v10H3z" fill="none" stroke="#e8b64a" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="#e8b64a" stroke-width="2"/></svg></span>Steuern</button>`;
+      h += `<button class="ab tool" data-a="follow"><span class="ai"><svg viewBox="0 0 24 24"><path d="M3 8.5h3l1.6-2.5h8.8L18 8.5h3v10H3z" fill="none" stroke="#e8b64a" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="#e8b64a" stroke-width="2"/></svg></span>Folgen</button>`;
     }
     if(ws[0].owner===0 && !G.buildMenu){ const allPin=ws.every(u=>u.pin);
       h += `<button class="ab tool${allPin?' on':''}" data-a="pin"><span class="ai"><svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 3H7l3-3z" fill="#e23b3b" stroke="#7a1010" stroke-width="1.2" stroke-linejoin="round"/><path d="M12 12v9" stroke="#cfd6dc" stroke-width="2" stroke-linecap="round"/></svg></span>${allPin?'Bleibt hier ✓':'Hier bleiben'}</button>`;
@@ -1281,94 +1279,23 @@ function onResize(){
   G.cam.aspect = w/h; G.cam.updateProjectionMatrix();
   G.W = w; G.H = h;
 }
-// ===== Selbst steuern (Third Person, Schulterperspektive) =====
-function canWalk(x,z){ const k=cellIdx(x,z); if(k<0) return false; if(G.grid[k] && !(G.gateAt && G.gateAt[k] && !hostile(G.gateAt[k].owner,0))) return false; const h=getH(x,z); return h>WATER_Y-.15 && h<WATER_Y+snowLineAt(x,z)+2; }
-function updateManual(u,dt){
-  const U=UNIT[u.kind], p=G.players[u.owner]; let jx=G.joy?G.joy.x:0, jy=G.joy?G.joy.y:0;
-  const K=PC.keys; if(K.has('w')||K.has('arrowup')) jy=-1; if(K.has('s')||K.has('arrowdown')) jy=1; if(K.has('a')||K.has('arrowleft')) jx=-1; if(K.has('d')||K.has('arrowright')) jx=1;
-  const run = G.run || K.has('shift'), act = G.act || K.has(' ') || K.has('e') || K.has('f');
-  const fx=Math.sin(G.fyaw), fz=Math.cos(G.fyaw), rx=Math.cos(G.fyaw), rz=-Math.sin(G.fyaw);
-  let vx=fx*(-jy)+rx*(-jx), vz=fz*(-jy)+rz*(-jx); const vl=Math.min(1,Math.hypot(vx,vz));
-  u.moving=false; u.working=false;
-  if(vl>.12){ vx/=Math.hypot(vx,vz); vz/=Math.hypot(vx,vz)||1;
-    const sp=(u.speed||U.speed)*(run?1.45:1)*vl*dt, ck=cellIdx(u.x,u.z), road=ck>=0&&G.road[ck]?1.5:1;
-    const nx=u.x+vx*sp*road, nz=u.z+vz*sp*road;
-    if(canWalk(nx,nz)){ u.x=nx; u.z=nz; } else if(canWalk(nx,u.z)) u.x=nx; else if(canWalk(u.x,nz)) u.z=nz;
-    u.face=Math.atan2(vx,vz); u.moving=true;
-    let d=u.face-G.fyaw; d=Math.atan2(Math.sin(d),Math.cos(d)); if(Math.abs(d)<2.6) G.fyaw+=d*Math.min(1,dt*1.6);   // Kamera schwenkt langsam hinter die Figur
-  }
-  u.cd=(u.cd||0)-dt;
-  // Abladen: in der Nähe von Lager/Hauptgebäude automatisch
-  if(u.kind==='worker' && u.carry.amt>=1){ const b=dropoffFor(u); if(b && b.kind!=='ox' && near(u,b.x,b.z,b.size*.5+1.6)){ p.res[u.carry.type]+=u.carry.amt; EE.toast('+'+Math.floor(u.carry.amt)+' '+RES_DE[u.carry.type]); u.carry.amt=0; updateHUD(); u.fullMsg=false; } }
-  if(!act) return;
-  const ahead=(o,r,cone)=>{ const dx=o.x-u.x, dz=o.z-u.z, d=Math.hypot(dx,dz)-(o.size?o.size*.5:o.r||0); if(d>r) return 1e9; const dot=(dx*Math.sin(u.face)+dz*Math.cos(u.face))/(Math.hypot(dx,dz)||1); return dot>=cone||d<.6 ? d : 1e9; };
-  if(isSoldier(u)){
-    const R=U.ranged?U.range:U.range+.8, cone=U.ranged?.8:.35; let best=null, bd=1e9;
-    for(const o of G.units){ if(o.dead||o.inside||!hostile(u.owner,o.owner)) continue; const d=ahead(o,R,cone); if(d<bd){ bd=d; best=o; } }
-    for(const a of G.deer){ if(a.dead||!a.alive) continue; const d=ahead(a,R,cone); if(d<bd){ bd=d; best=a; } }
-    for(const b of G.builds){ if(b.dead||!hostile(u.owner,b.owner)||b.kind==='road') continue; const d=ahead(b,R,cone); if(d<bd){ bd=d; best=b; } }
-    u.working=true;
-    if(u.cd<=0){ u.cd=U.cd; if(best){ u.face=Math.atan2(best.x-u.x,best.z-u.z); if(best.deer && best.hp==null){ animalDie(best); } else hit(u,best); } else sfxAt('chop',u.x,u.z,.3); }
-    return;
-  }
-  // Bauer: arbeiten an dem, was vor ihm ist
-  if(u.ageSt==='greis'){ if(!u.fullMsg){ u.fullMsg=true; EE.toast('Zu alt zum Arbeiten'); } return; }
-  let job=null, jd=1e9;
-  for(const b of G.builds){ if(b.owner!==u.owner||b.dead) continue; if(b.built>=1 && b.hp>=BUILD[b.kind].hp) continue; const d=ahead(b,1.6,.2); if(d<jd){ jd=d; job={b}; } }
-  for(const r of G.res){ if(!r.alive||r.amt<=0) continue; const tx=r.fish?r.gx:r.x, tz=r.fish?r.gz:r.z; const d=ahead({x:tx,z:tz,r:r.fish?0:r.r},1.3,.2); if(d<jd){ jd=d; job={r}; } }
-  if(!job){ u.working=true; return; }
-  u.working=true; u.hitT=(u.hitT||0)+dt;
-  if(job.b){ const b=job.b; u.face=Math.atan2(b.x-u.x,b.z-u.z); if(u.hitT>.9){ u.hitT=0; sfxAt('build',u.x,u.z,.8); }
-    if(b.built>=1){ b.hp=Math.min(BUILD[b.kind].hp, b.hp+dt*BUILD[b.kind].hp/BUILD[b.kind].time*.5); return; }
-    b.built=Math.min(1,b.built+dt/BUILD[b.kind].time/(b.slow?3:1)); b.hp=Math.max(1,BUILD[b.kind].hp*b.built);
-    if(b.kind==='road') b.mesh.children[0].material.opacity=.35+.6*b.built; else b.mesh.scale.y=.25+.75*b.built;
-    if(b.built>=1) finishBuilding(b); return; }
-  const r=job.r; u.face=Math.atan2(r.x-u.x,r.z-u.z);
-  if(r.deer && !r.dead){ if(r.hp!=null){ if(u.cd<=0){ u.cd=1; animalHit(r,9,u); } } else { sfxAt('deer',r.x,r.z); animalDie(r); } return; }   // jagen
-  if(u.carry.amt>=CARRY){ if(!u.fullMsg){ u.fullMsg=true; EE.toast('Voll – bring es zum Lager oder Hauptgebäude'); } u.working=false; return; }
-  if(u.carry.amt>0 && u.carry.type!==r.kind) u.carry.amt=0;
-  if(u.hitT>1.05){ u.hitT=0; sfxAt(r.kind==='wood'?'chop':r.kind==='stone'?'stone':r.kind==='gold'?'gold':'berry', u.x,u.z,.8); }
-  const amount=Math.min(r.amt, dt*(r.kind==='wood'?1:r.kind==='food'?1.15:.8)*(u.ageSt==='alt'?.75:1));
-  r.amt-=amount; u.carry.type=r.kind; u.carry.amt+=amount; u.lastType=r.kind; u.lastSrc=srcType(r);
-  if(r.deer) r.mesh.scale.setScalar(.5+.5*r.amt/r.max);
-  if(r.amt<=0) removeRes(r);
-}
-function initCtrlUI(){
-  const joy=$('#joy'), knob=joy.querySelector('i'); let jid=null, cx=0, cy=0;
-  const set=(x,y)=>{ const R=joy.offsetWidth*.42, dx=x-cx, dy=y-cy, l=Math.hypot(dx,dy), k=l>R?R/l:1; knob.style.transform=`translate(${dx*k}px,${dy*k}px)`; G.joy={x:dx*k/R, y:dy*k/R}; };
-  joy.addEventListener('pointerdown',e=>{ e.preventDefault(); e.stopPropagation(); jid=e.pointerId; joy.setPointerCapture(jid); const r=joy.getBoundingClientRect(); cx=r.left+r.width/2; cy=r.top+r.height/2; set(e.clientX,e.clientY); });
-  joy.addEventListener('pointermove',e=>{ if(e.pointerId===jid) set(e.clientX,e.clientY); });
-  const end=e=>{ if(e.pointerId!==jid) return; jid=null; knob.style.transform=''; if(G) G.joy={x:0,y:0}; };
-  joy.addEventListener('pointerup',end); joy.addEventListener('pointercancel',end);
-  const hold=(el,key)=>{ el.addEventListener('pointerdown',e=>{ e.preventDefault(); e.stopPropagation(); el.setPointerCapture(e.pointerId); if(G) G[key]=key==='run'?!G.run:true; el.classList.toggle('on', key==='run'?!!(G&&G.run):true); });
-    if(key==='act'){ const up=()=>{ if(G) G.act=false; el.classList.remove('on'); }; el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up); } };
-  hold($('#bAct'),'act'); hold($('#bRun'),'run');
-}
 // ===== Verfolger-Kamera: hinter der Schulter einer Figur, die Figur arbeitet selbst weiter =====
 function startFollow(u){
   if(!u || u.dead) return; EE.click();
   G.follow=u; G.fcam=null; G.camReset=false; select([],null);
   document.querySelector('#game').classList.add('fview'); applyRes();
-  // Third Person: du steuerst die Figur selbst (Bauer arbeitet nur, wenn du es tust; Soldat kämpft, wenn du zuschlägst)
-  if(u.owner===0 && (u.kind==='worker' || isSoldier(u))){
-    u.manual=true; u.state='manual'; u.path=null; u.target=null; u.site=null; u.auto=u.seek=false; if(u.pin) setPin(u,false);
-    G.fyaw=u.mesh ? u.mesh.rotation.y : (u.face||0); G.joy={x:0,y:0}; G.act=false; G.run=false;
-    document.querySelector('#game').classList.add('fctrl');
-    $('#bAct small').textContent = isSoldier(u) ? 'Angreifen' : 'Arbeiten'; $('#bAct span').textContent = isSoldier(u) ? (UNIT[u.kind].ranged?'🏹':'⚔️') : '✋';
-    EE.toast(isSoldier(u) ? 'Du steuerst den Krieger – links laufen, rechts angreifen' : 'Du steuerst den Bauern – links laufen, rechts arbeiten');
-  } else EE.toast('Kamera folgt – „Zurück“ beendet');
+EE.toast('Kamera folgt – „Zurück“ beendet');
 }
 function stopFollow(quiet){
   const u=G.follow; if(!u) return; G.follow=null;
-  document.querySelector('#game').classList.remove('fview'); document.querySelector('#game').classList.remove('fctrl'); applyRes();
-  if(u.manual){ u.manual=false; u.state='idle'; u.moving=u.working=false; u.hold=true; if(isSoldier(u)) u.post={x:u.x,z:u.z}; }
+  document.querySelector('#game').classList.remove('fview'); applyRes();
   if(!quiet) EE.click();
   if(u && !u.dead){ G.camS.x=u.x; G.camS.z=u.z; G.camS.dist=Math.max(G.camS.dist,14); }
 }
 function followCam(){
   const u=G.follow;
   if(!u || u.dead || !G.units.includes(u)){ stopFollow(true); return false; }
-  const m=u.mesh, f=u.manual ? G.fyaw : m ? m.rotation.y : (u.face||0);
+  const m=u.mesh, f=m ? m.rotation.y : (u.face||0);
   const fx=Math.sin(f), fz=Math.cos(f), rx=Math.cos(f), rz=-Math.sin(f);
   const gy=getH(u.x,u.z);
   const tx=u.x-fx*2.6-rx*.5, tz=u.z-fz*2.6-rz*.5;
@@ -3250,8 +3177,7 @@ function updateWorker(u,dt){
   else if(u.kind==='worker' && u.ageSt!=='greis' && u.owner===0 && u.state==='idle' && !u.hold && !u.pin && !u.auto && !u.homeless){ if(u.lifeT==null) u.lifeT=10+G.rand()*14; u.lifeT-=dt*(badWeather()?2:1); if(u.lifeT<=0){ u.lifeT=null; idleLife(u); } }
   else if(u.homeless && u.kind==='worker' && u.state!=='idle' && u.state!=='move'){ u.state='idle'; u.path=null; }
   if(u.pfWait && performance.now() < G.pfDeadline){ const w=u.pfWait; u.pfWait=null; u.path=findPath(u.x,u.z,w.x,w.z); u.pi=0; }
-  if(u.manual) updateManual(u,dt);
-  else if(!u.pfWait) switch(u.state){
+  if(!u.pfWait) switch(u.state){
     case 'gohome': { const h=u.site; if(!h || h.dead){ u.state='idle'; u.site=null; break; }
       if(Math.hypot(h.x-u.x,h.z-u.z) < h.size*.5+1.2){ u.inside=h; u.inHut=true; u.hutT=(badWeather()?45:20)+G.rand()*30; u.site=null; u.path=null; u.state='idle'; u.ring.visible=false; break; }
       if(followPath(u,dt)) moveTo(u,h.x,h.z); break; }
@@ -3982,7 +3908,6 @@ function pcPanel(a){ if(a.startsWith('b-') && !G.buildMenu && !document.querySel
 function pcKey(e){
   if(!G || G.inMenu || e.target.closest('input,textarea,select')) return;
   const k=e.key.toLowerCase(), ctrl=e.ctrlKey||e.metaKey;
-  if(G.follow && G.follow.manual){ if(k==='escape'){ stopFollow(); return; } if([' ','w','a','s','d','e','f','shift','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){ e.preventDefault(); PC.keys.add(k); } return; }
   if(/^[1-9]$/.test(k)){ e.preventDefault();
     if(ctrl){ PC.groups[k]=G.sel.filter(u=>u.owner===0 && !u.dead); EE.toast('Gruppe '+k+' gespeichert ('+PC.groups[k].length+')'); return; }
     const g=(PC.groups[k]||[]).filter(u=>!u.dead && !u.inside); if(!g.length) return; select(g,null);
@@ -4009,7 +3934,6 @@ function pcKey(e){
 }
 function pcUpdate(dt){
   if(!G || G.inMenu) return;
-  if(G.follow && G.follow.manual) return;   // WASD steuert die Figur
   const K=PC.keys, sp=G.camS.dist*1.1*dt; let dx=0, dz=0;
   if(K.has('w')||K.has('arrowup')) dz-=1; if(K.has('s')||K.has('arrowdown')) dz+=1; if(K.has('a')||K.has('arrowleft')) dx-=1; if(K.has('d')||K.has('arrowright')) dx+=1;
   // Bildschirmrand (nur Maus, nur wenn das Fenster den Mauszeiger hat)
@@ -4027,7 +3951,6 @@ function initPC(c){
 }
 function pDown(e){
   e.preventDefault(); $('#gc').setPointerCapture(e.pointerId);
-  if(G && G.follow && G.follow.manual){ P.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t:performance.now()}); gesture={type:'look'}; return; }   // Umschauen
   if(e.pointerType==='mouse'){ // PC: Maus wie in Empire Earth 2
     P.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t:performance.now()});
     gesture = e.button===2 ? {type:'rclick', mouse:true} : e.button===1 ? {type:'rotate', mouse:true} : {type:'tap', mouse:true, add:e.shiftKey};
@@ -4047,7 +3970,6 @@ function pMove(e){
   const p = P.get(e.pointerId); if(!p) return;
   const px=p.x, py=p.y; p.x=e.clientX; p.y=e.clientY;
   if(!gesture) return;
-  if(gesture.type==='look'){ G.fyaw -= (p.x-px)*.007; return; }
   if(gesture.type==='rotate'){ G.camReset=false; G.camS.yaw -= (p.x-px)*.008; return; }
   if(gesture.type==='rclick'){ if(Math.hypot(p.x-p.sx,p.y-p.sy)>6) gesture.type='rpan'; }
   if(gesture.type==='rpan'){ panBy(p.x-px, p.y-py); return; }
@@ -4073,7 +3995,6 @@ function pUp(e){
   const p = P.get(e.pointerId); P.delete(e.pointerId);
   clearTimeout(longT);
   if(!p || !gesture) return;
-  if(gesture.type==='look'){ if(P.size===0) gesture=null; return; }
   if(gesture.mouse){ if(gesture.type==='tap') pcSelectAt(p.x,p.y,gesture.add); else if(gesture.type==='rclick') pcCommandAt(p.x,p.y); else if(gesture.type==='box'){ boxSelect(gesture.x0,gesture.y0,p.x,p.y); hideBox(); } else if(gesture.type==='ghost'||gesture.type==='wall'){} gesture=null; return; }
   if(gesture.type==='tap' && P.size===0) tapAt(p.x,p.y);
   else if(gesture.type==='box' && P.size===0){ boxSelect(gesture.x0,gesture.y0,p.x,p.y); hideBox(); }

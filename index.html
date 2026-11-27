@@ -158,14 +158,6 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 #bFollowOff{display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));align-items:center;gap:6px;padding:9px 18px 9px 12px;border-radius:12px;border:2px solid var(--gold);background:#0b1130e6;color:var(--gold2);font:700 16px "Cinzel",Georgia,serif;z-index:6;cursor:pointer}
 #bFollowOff svg{width:20px;height:20px}
 #game.fview #bFollowOff{display:flex}
-#joy,#bAct,#bRun{display:none}
-#game.fctrl #joy{display:block;position:absolute;left:max(22px,env(safe-area-inset-left));bottom:max(22px,env(safe-area-inset-bottom));width:132px;height:132px;border-radius:50%;background:radial-gradient(circle,#ffffff18,#0b113066);border:2px solid #e8b64a88;touch-action:none;z-index:6}
-#game.fctrl #joy i{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffe9b0,#c98a1e);box-shadow:0 3px 10px #000a;pointer-events:none}
-#game.fctrl #bAct{display:flex;flex-direction:column;align-items:center;justify-content:center;position:absolute;right:max(26px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:96px;height:96px;border-radius:50%;border:3px solid #ffe9b0;background:radial-gradient(circle at 40% 35%,#f6cf62,#b8761a);color:#2b1a02;font:800 13px system-ui,sans-serif;touch-action:none;z-index:6;box-shadow:0 4px 14px #000a}
-#game.fctrl #bAct span{font-size:30px;line-height:1}#game.fctrl #bAct.on{transform:scale(.92);filter:brightness(1.15)}
-#game.fctrl #bRun{display:block;position:absolute;right:max(132px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;border:2px solid #e8b64a;background:#0b1130cc;font-size:26px;touch-action:none;z-index:6}
-#game.fctrl #bRun.on{background:#e8b64a}
-#game.fctrl #mini,#game.fctrl .minimap{display:none!important}
 #game.fview #panel,#game.fview #bHome,#game.fview #bNorth{display:none!important}
 #bNorth{position:absolute;left:calc(max(10px,env(safe-area-inset-left)) + clamp(150px,24vw,210px) + 60px);bottom:10px}
 #bNorth #needle{transition:none}   /* neben der Minikarte, nichts überlappt */
@@ -338,7 +330,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.90</div>
+    <div class="ver2">Version 1.91</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -359,7 +351,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="corner2">
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V1.90</div>
+  <div class="ver">Siles Empire · V1.91</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -388,7 +380,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.90"></script>
+<script src="audio.js?v=1.91"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -560,7 +552,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={VER:'1.90',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={VER:'1.91',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -585,10 +577,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.90"></script>
-<script src="game.js?v=1.90"></script>
-<script src="silescrow.js?v=1.90"></script>
-<script src="online.js?v=1.90"></script>
+<script src="three.min.js?v=1.91"></script>
+<script src="game.js?v=1.91"></script>
+<script src="silescrow.js?v=1.91"></script>
+<script src="online.js?v=1.91"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,
