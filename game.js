@@ -221,11 +221,11 @@ function buildUI(){
   <canvas id="gc"></canvas>
   <div id="sel-box"></div>
   <div id="topbar">
-    <div class="rs" id="r-food">${ICON.food}<b>0</b></div>
-    <div class="rs" id="r-wood">${ICON.wood}<b>0</b></div>
-    <div class="rs" id="r-stone">${ICON.stone}<b>0</b></div>
-    <div class="rs" id="r-gold">${ICON.gold}<b>0</b></div>
-    <div class="rs" id="r-pop">${ICON.pop}<b>0/0</b></div>
+    <div class="rs" id="r-food">${ICON.food}<span class="rv"><b>0</b><small>Nahrung</small></span></div>
+    <div class="rs" id="r-wood">${ICON.wood}<span class="rv"><b>0</b><small>Holz</small></span></div>
+    <div class="rs" id="r-stone">${ICON.stone}<span class="rv"><b>0</b><small>Stein</small></span></div>
+    <div class="rs" id="r-gold">${ICON.gold}<span class="rv"><b>0</b><small>Gold</small></span></div>
+    <div class="rs" id="r-pop">${ICON.pop}<span class="rv"><b>0/0</b><small>Leute</small></span></div>
     <div class="age"><div><span>${G.civ[0]}</span> · Steinzeit</div><div class="wxi" id="wx"></div></div>
     <button class="hb" id="bPause" aria-label="Menü"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
   </div>
