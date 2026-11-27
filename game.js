@@ -3605,14 +3605,20 @@ function makeWallPiece(color, gate, len){
   geos();
   const g = new T.Group();
   if(gate){
-    for(const x of [-.5*len,.5*len]){ const p=mesh(GEO.box, mat(0x5a3818), x, 1.2, 0); p.scale.set(.3,2.4,.3); g.add(p); }
-    const top=mesh(GEO.box, mat(0x6a4422), 0, 2.25, 0); top.scale.set(len+.4,.22,.3); g.add(top);
+    const gm = mat(0x6e4626);   // Holzton der Palisade
+    for(const x of [-.5*len,.5*len]){ const p=mesh(GEO.box, gm, x, 1.1, 0); p.scale.set(.34,2.2,.34); g.add(p); }
+    // kein Querbalken oben (V1.76)
     // Zwei Torflügel aus Holzbohlen, an den Pfosten eingehängt – öffnen sich wie bei einer Burg (V1.74)
     g.doors=[];
     for(const sd of [-1,1]){ const piv=new T.Group(); piv.position.set(sd*.5*len,0,0); g.add(piv);
       const w=len*.5-.1, wood=mat(0x6b4524), dark=mat(0x3e2612);
+      if(MODELS.palisade){   // Torflügel aus derselben Palisade wie die Mauer (gleiche Textur)
+        const pm=modelMesh('palisade', w*1.04), bb=MODELS.palisade.geo.boundingBox; pm.scale.y=1.95/(bb.max.y-bb.min.y); pm.scale.z*=1.2;
+        pm.position.set(-sd*(.06+w/2), -bb.min.y*pm.scale.y, 0); piv.add(pm);
+        const q=mesh(GEO.box, mat(0x5e3b1f), -sd*(.06+w/2), .7, .12); q.scale.set(w,.16,.08); piv.add(q);
+      } else {
       for(let i=0;i<3;i++){ const pl=mesh(GEO.box, wood, -sd*(.06+(i+.5)*w/3), .95, 0); pl.scale.set(w/3-.02,1.8,.09); piv.add(pl); }
-      for(const y of [.45,1.5]){ const q=mesh(GEO.box, dark, -sd*(.06+w/2), y, .06); q.scale.set(w,.12,.04); piv.add(q); }
+      for(const y of [.45,1.5]){ const q=mesh(GEO.box, dark, -sd*(.06+w/2), y, .06); q.scale.set(w,.12,.04); piv.add(q); } }
       g.doors.push(piv); }
     g.open=0;
     return g;
