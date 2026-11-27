@@ -307,7 +307,7 @@ function drawPanel(){
   if(G.place){ el.innerHTML=''; el.className='hidden'; return; }
   if(G.selB){
     const b = G.selB, d = BUILD[b.kind];
-    let h = `<div class="info"><b>${d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):G.players[b.owner].civ[0]}</small></div>`;
+    let h = `<div class="info"><b>${b.wallT?'Mauerturm':d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):G.players[b.owner].civ[0]}</small></div>`;
     if(b.owner===0 && homeCap(b)) h += `<div class="info"><small>${residentsTxt(b)}</small></div>`;
     if(b.owner===0 && b.built>=1 && d.drop){ const R=b.recv||{}, keys=d.drop.filter(k=>k in RES_DE);
       const chip=(o)=>keys.map(k=>`<span class="c">${ICON[k]||''}${Math.floor(o[k]||0)}</span>`).join('');
@@ -335,6 +335,9 @@ function drawPanel(){
       for(const k of ['club','spear','bow']) h += `<button class="ab" data-a="t-${k}"><span class="ai">${unitPic({owner:0,kind:k,hp:1,maxHp:1})}</span>${UNIT[k].name}<span class="ac">${costText(UNIT[k].cost)}</span>${q&&b.queue[0]===k?'<i class="q">'+q+'</i>':''}</button>`;
       if(q){ const qt=b.queue[0]==='worker'?WORKER_TIME:UNIT[b.queue[0]].time; h += `<div class="bar"><div style="width:${(b.qT/qt*100)|0}%"></div></div>`; }
     }
+    // Einzelne Bauteile abreißen (Palisadenstück, Turm, Tor, Gebäude) – zweimal tippen zur Sicherheit
+    if(b.owner===0){ const armed=b.delArm && G.t-b.delArm<3;
+      h += `<button class="ab del${armed?' armed':''}" data-a="demolish"><span class="ai"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" stroke="#ff7a6a" stroke-width="2" fill="none" stroke-linejoin="round"/></svg></span>${armed?'Wirklich?':'Abreißen'}<span class="ac">${armed?'nochmal tippen':'+'+costText(refundOf(b)).replace(/"c (ok|miss)"/g,'"c ok"')}</span></button>`; }
     el.innerHTML = h; el.className='';
   } else if(G.sel.length){
     const ws = G.sel.slice();
@@ -853,7 +856,14 @@ const wallSVG = () => '<svg viewBox="0 0 24 24"><path d="M3 21V8l2-3 2 3v13M9 21
 const hutSVG = () => '<svg viewBox="0 0 24 24"><path d="M12 3L3 18h18z" fill="#c9a46a"/><path d="M12 3L8 18h8z" fill="#8a5a2b"/></svg>';
 const storeSVG = () => '<svg viewBox="0 0 24 24"><rect x="3" y="15" width="18" height="4" fill="#8a5a2b"/><rect x="4" y="10" width="7" height="5" rx="2" fill="#a86d36"/><rect x="12" y="11" width="8" height="4" rx="2" fill="#a86d36"/><path d="M8 10l2-4 3 3z" fill="#9aa3ad"/></svg>';
 
+// Beim Abreißen gibt es 40 % der Baukosten zurück
+function refundOf(b){ const c = b.wallT ? WT_COST : (BUILD[b.kind].cost||{}), out={}; for(const r in c) out[r]=Math.floor(c[r]*.4); return out; }
 function action(a){
+  if(a==='demolish'){ const b=G.selB; if(!b || b.owner!==0) return;
+    if(!(b.delArm && G.t-b.delArm<3)){ b.delArm=G.t; EE.click(); drawPanel(); setTimeout(()=>{ if(G && G.selB===b) drawPanel(); },3100); return; }
+    const back=refundOf(b), p0=G.players[0]; for(const r in back) p0.res[r]+=back[r];
+    const txt=Object.keys(back).filter(r=>back[r]>0).map(r=>'+'+back[r]+' '+RES_DE[r]).join(' · ');
+    G.selB=null; destroyBuilding(b); EE.vib(25); if(txt) EE.toast('Abgerissen – zurück: '+txt); drawPanel(); updateHUD(); return; }
   if(a==='wtowers'){ buildWallTowers(G.selB); return; }
   if(a==='wtower1'){ buildWallTowers(G.selB, true); return; }
   if(a==='follow'){ startFollow(G.sel[0]); return; }
