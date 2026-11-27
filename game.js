@@ -1251,7 +1251,7 @@ function showOffer(i, st){
 function initRenderer(){
   const c = $('#gc');
   const r = new T.WebGLRenderer({canvas:c, antialias:G.gfx>=1, powerPreference:'high-performance'});
-  r.setPixelRatio(Math.min(window.devicePixelRatio||1, [1.5,1.5,2][G.gfx]));
+  r.setPixelRatio(Math.min(window.devicePixelRatio||1, [1,1.25,1.75][G.gfx])*(G.dynScale||1));
   r.shadowMap.enabled = G.gfx>=1;
   r.shadowMap.type = T.PCFSoftShadowMap; r.shadowMap.autoUpdate = false;
   r.outputColorSpace = T.SRGBColorSpace;
@@ -2303,7 +2303,7 @@ function makeAnimal(key, height){
   r.hips.forEach(h=>{ const b=new T.Bone(); b.position.copy(h); root.add(b); bones.push(b); });
   const nb=new T.Bone(); nb.position.copy(r.neck); root.add(nb); bones.push(nb);
   const sk=new T.SkinnedMesh(r.geo, r.mat); sk.add(root); sk.bind(new T.Skeleton(bones));
-  sk.castShadow=true; sk.receiveShadow=true;
+  sk.castShadow=!G || G.gfx>=2; sk.receiveShadow=true;
   const inner=new T.Group(); inner.scale.setScalar(height/r.H); inner.add(sk);
   const g=new T.Group(); g.add(inner); g.quad={legs:bones.slice(1,5), neck:nb, inner}; g.userData.deadY=r.L*height/r.H*.0+.08;
   return g;
@@ -3436,6 +3436,8 @@ function updateDeer(d,dt){
   d.phase += dt*(moving?10:1);
   m.position.set(d.x, getH(d.x,d.z), d.z);
   if(m.userData.swim){ m.userData.swim.ph += dt*(moving?4:.6); const sw=m.userData.swim; sw.bones.forEach((b,i)=>{ if(i) b.rotation.y=Math.sin(sw.ph-i*.9)*(moving?.22:.05); }); return; }
+  if(!m.visible) return;
+  if(Math.abs(d.x-G.camS.x)+Math.abs(d.z-G.camS.z) > G.camS.dist*2.2+30) return;   // weit weg: nicht animieren (spart viel)
   if(m.quad){ if(!moving && d.wait>0) d.graze = d.graze ?? (G.rand()<.6); if(moving) d.graze=null; if(m.visible) poseAnimal(m, moving?'move':(d.graze?'graze':'idle'), d.phase); return; }
   const s = moving?Math.sin(d.phase)*.5:0;
   m.legs[0].rotation.x=s; m.legs[3].rotation.x=s; m.legs[1].rotation.x=-s; m.legs[2].rotation.x=-s;
@@ -3754,7 +3756,7 @@ function updateWeather(dt){
 // Grafik im laufenden Spiel umstellen
 async function applyGfx(g){
   const r=G.renderer; G.gfx=g;
-  r.setPixelRatio(Math.min(window.devicePixelRatio||1, [1.5,1.5,2][g])); r.setSize(G.W, G.H, false);
+  r.setPixelRatio(Math.min(window.devicePixelRatio||1, [1,1.25,1.75][g])*(G.dynScale||1)); r.setSize(G.W, G.H, false);
   const sh = g>=1;
   if(r.shadowMap.enabled!==sh){ r.shadowMap.enabled=sh; G.scene.traverse(o=>{ if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); } }); }
   const sz = g>=2 ? 2048 : 1024; if(G.sun.shadow.mapSize.x!==sz){ G.sun.shadow.mapSize.set(sz,sz); if(G.sun.shadow.map){ G.sun.shadow.map.dispose(); G.sun.shadow.map=null; } }
@@ -3766,8 +3768,19 @@ async function applyGfx(g){
   for(const b of G.builds) b.mesh.traverse(o=>{ if(!o.isMesh) return; for(const k in swap){ const [a,n]=swap[k]; if(o.geometry===a.geo){ o.geometry=n.geo; o.material=Array.isArray(o.material)?o.material:n.mat; if(!o.material.transparent) o.material=n.mat; o.scale.multiplyScalar(w(a)/w(n)); } } });
   EE.toast('Grafik: '+['Niedrig','Mittel','Hoch'][g]+(g===0?' (einfache Gebäude)':''));
 }
-let fpsN=0, fpsT=0;
-function fpsTick(now){ fpsN++; if(now-fpsT>=500){ const el=document.getElementById('fps'); if(el){ const on=!!(EE.S.fps|0); el.classList.toggle('hidden',!on); if(on) el.textContent=Math.round(fpsN*1000/(now-fpsT))+' FPS'; } fpsN=0; fpsT=now; } }
+let fpsN=0, fpsT=0, fpsLow=0, fpsHigh=0;
+// Automatische Auflösung: fällt die Bildrate unter ~24, rechnet das Spiel mit weniger Bildpunkten (bis 45 %), steigt sie wieder, wird es schärfer
+function dynRes(fps){
+  if(!G || !G.renderer || G.inMenu || document.hidden) return;
+  if(fps<24){ fpsLow++; fpsHigh=0; } else if(fps>48){ fpsHigh++; fpsLow=0; } else { fpsLow=0; fpsHigh=0; }
+  let sc=G.dynScale||1;
+  if(fpsLow>=2 && sc>.45){ sc=Math.max(.45, sc-.15); fpsLow=0; }
+  else if(fpsHigh>=6 && sc<1){ sc=Math.min(1, sc+.1); fpsHigh=0; }
+  else return;
+  G.dynScale=sc; G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, [1,1.25,1.75][G.gfx])*sc); G.renderer.setSize(G.W, G.H, false);
+  if(sc<.75 && G.renderer.shadowMap.enabled && G.gfx<2){ G.renderer.shadowMap.enabled=false; G.noShadowDyn=true; G.scene.traverse(o=>{ if(o.material) (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); }); }
+}
+function fpsTick(now){ fpsN++; if(now-fpsT>=500){ dynRes(fpsN*1000/Math.max(1,now-fpsT)); const el=document.getElementById('fps'); if(el){ const on=!!(EE.S.fps|0); el.classList.toggle('hidden',!on); if(on) el.textContent=Math.round(fpsN*1000/(now-fpsT))+' FPS'; } fpsN=0; fpsT=now; } }
 function camResetStep(dt){
   const S=G.camS, n=$('#needle');
   // Zurück zur Achse der Weltkarte: Norden oben, wie auf der Minikarte
