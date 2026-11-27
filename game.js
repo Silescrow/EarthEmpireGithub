@@ -140,7 +140,7 @@ function saveGame(){
       dip:Object.fromEntries(Object.entries(G.dip).map(([k,d])=>[k,{state:d.state, mood:Math.round(d.mood), ask:Math.round(d.ask||0)}])),
       builds:liveB.map(b=>({k:b.kind, o:b.owner, x:r1(b.x), z:r1(b.z), b:r1(b.built), hp:Math.round(b.hp), s:b.slow?1:0, r:b.recv||undefined,
         q:(b.queue||[]).length?b.queue.slice():undefined, w:b.wallId||undefined, seg:b.seg||undefined})),
-      units:G.units.filter(u=>!u.dead).map(u=>({i:u.inside&&!u.inside.dead?liveB.indexOf(u.inside):undefined, sl:u.inside?u.slot:undefined, k:u.kind, o:u.owner, x:r1(u.x), z:r1(u.z), hp:Math.round(u.hp), c:u.carry&&u.carry.amt?[u.carry.type,u.carry.amt]:undefined, sx:u.sex, au:u.auto?1:undefined, sk:u.seek?1:undefined, ht:u.inHut?Math.round(u.hutT):undefined, pn:u.pin?1:undefined, hd:u.hold?1:undefined, ps:u.post?[r1(u.post.x),r1(u.post.z)]:undefined, lt:u.lastType||undefined, g:u.kind==='kid'?[u.stage,Math.round(u.grow)]:undefined})),
+      units:G.units.filter(u=>!u.dead).map(u=>({i:u.inside&&!u.inside.dead?liveB.indexOf(u.inside):undefined, sl:u.inside?u.slot:undefined, k:u.kind, o:u.owner, x:r1(u.x), z:r1(u.z), hp:Math.round(u.hp), c:u.carry&&u.carry.amt?[u.carry.type,u.carry.amt]:undefined, sx:u.sex, au:u.auto?1:undefined, sk:u.seek?1:undefined, ht:u.inHut?Math.round(u.hutT):undefined, ag:u.age!=null?Math.round(u.age):undefined, dz:u.dieAt!=null?Math.round(u.dieAt):undefined, pn:u.pin?1:undefined, hd:u.hold?1:undefined, ps:u.post?[r1(u.post.x),r1(u.post.z)]:undefined, lt:u.lastType||undefined, g:u.kind==='kid'?[u.stage,Math.round(u.grow)]:undefined})),
       cam:{x:r1(G.camS.x), z:r1(G.camS.z), d:r1(G.camS.dist), y:r1(G.camS.yaw)} };
     localStorage.setItem(SAVE_KEY, JSON.stringify(sv));
   }catch(e){ console.warn('Speichern fehlgeschlagen', e); }
@@ -163,7 +163,7 @@ function applySave(sv){
     made.push(b); b.hp = s.hp; b.slow = !!s.s; if(s.r) b.recv=s.r; if(s.q) b.queue = s.q.slice();
   }
   WALL_ID = Math.max(WALL_ID, maxW+1);
-  for(const s of sv.units){ G.nextSex = s.sx; const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.au) u.auto=true; if(s.sk) u.seek=true; if(s.lt) u.lastType=s.lt; if(s.g){ u.grow=s.g[1]; setStage(u,s.g[0]); } if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; if(s.i!=null && s.i>=0 && made[s.i]){ u.inside=made[s.i]; u.slot=s.sl|0; if(s.ht){ u.inHut=true; u.hutT=s.ht; } } if(s.hd) u.hold=true; if(s.ps) u.post={x:s.ps[0],z:s.ps[1]}; if(s.pn) setPin(u,true); }
+  for(const s of sv.units){ G.nextSex = s.sx; const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.au) u.auto=true; if(s.sk) u.seek=true; if(s.lt) u.lastType=s.lt; if(s.g){ u.grow=s.g[1]; setStage(u,s.g[0]); } if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; if(s.i!=null && s.i>=0 && made[s.i]){ u.inside=made[s.i]; u.slot=s.sl|0; if(s.ht){ u.inHut=true; u.hutT=s.ht; } } if(s.ag!=null){ u.age=s.ag; if(s.dz!=null) u.dieAt=s.dz; if(u.kind==='worker'){ if(u.age>AGE_VOLD) setAgeStage(u,'greis'); else if(u.age>AGE_OLD) setAgeStage(u,'alt'); } } if(s.hd) u.hold=true; if(s.ps) u.post={x:s.ps[0],z:s.ps[1]}; if(s.pn) setPin(u,true); }
   G.t = sv.t||0;
   if(sv.cam) G.loadCam = sv.cam;
   G.quiet = false;
@@ -363,7 +363,7 @@ function drawPanel(){
     let h = `<div class="selx kompakt"><div class="grp">`;
     for(const k in groups){ const g=groups[k], u0=ws[g.list[0]], hp=g.list.reduce((a,i)=>a+ws[i].hp/ws[i].maxHp,0)/g.n;
       h += `<button class="gpic${u0.owner!==0?' foe':''}" data-g="${k}" aria-label="${g.n} ${UNIT_DE[k]||k}">${unitPic(u0)}<b>${g.n}</b><i style="width:${Math.round(hp*100)}%;background:${hp>.5?'#62e06a':hp>.25?'#f2c230':'#e23b3b'}"></i></button>`; }
-    h += `<button class="sx" data-a="desel" aria-label="Auswahl aufheben">✕</button></div>${ws.length===1?`<small>${UNIT[ws[0].kind]?UNIT[ws[0].kind].name:''} · ${job}${carry}</small>`:''}</div>`;
+    h += `<button class="sx" data-a="desel" aria-label="Auswahl aufheben">✕</button></div>${ws.length===1?`<small>${UNIT[ws[0].kind]?UNIT[ws[0].kind].name:''} · ${ws[0].ageSt==='greis'?'spielt mit den Kindern':job}${carry}${ws[0].kind==='worker'&&ws[0].age!=null?' · '+ageYears(ws[0])+' Jahre'+(ws[0].ageSt==='greis'?' (zu alt zum Arbeiten)':ws[0].ageSt==='alt'?' (alt)':''):''}</small>`:''}</div>`;
     if(ws.length===1 && !G.buildMenu && !ws[0].dead){
       h += `<button class="ab tool" data-a="follow"><span class="ai"><svg viewBox="0 0 24 24"><path d="M3 8.5h3l1.6-2.5h8.8L18 8.5h3v10H3z" fill="none" stroke="#e8b64a" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="#e8b64a" stroke-width="2"/></svg></span>Folgen</button>`;
     }
@@ -482,8 +482,32 @@ function bornAt(b){
   u.home=b; u.grow=0; setStage(u,'baby');
   if(b.owner===0){ EE.toast(u.sex==='f' ? 'Ein Mädchen ist geboren!' : 'Ein Junge ist geboren!'); EE.sfx('trained',.5); updateHUD(); }
 }
+/* ---------- ALTER: Bauern werden älter (1 Spielminute ≈ 0,85 Jahre). Ab ca. 50 Jahren „alt“ (langsamer),
+   ab ca. 67 „Greis“: arbeitet nicht mehr, spielt mit den Kindern; mit 75–85 Jahren stirbt er friedlich. ---------- */
+const AGE_OLD = 40*60, AGE_VOLD = 60*60, AGE_DIE = 70*60;
+const ageYears = u => Math.floor(16 + (u.age||0)/60*.85);
+function setAgeStage(u, st){
+  u.ageSt=st; u.stoop = st==='greis' ? .5 : st==='alt' ? .22 : 0;
+  u.speed = UNIT.worker.speed * (st==='greis' ? .6 : st==='alt' ? .82 : 1);
+  if(st==='greis'){ if(['gather','build','hunt','drop'].includes(u.state)){ u.state='idle'; u.target=null; u.site=null; u.path=null; } u.auto=false; u.carry.amt=0; }
+}
+function updateAge(u,dt){
+  u.age=(u.age||0)+dt;
+  if(!u.ageSt && u.age>AGE_OLD){ setAgeStage(u,'alt'); }
+  else if(u.ageSt==='alt' && u.age>AGE_VOLD){ setAgeStage(u,'greis'); if(u.owner===0) EE.toast('Ein Bauer ist jetzt zu alt zum Arbeiten – er kümmert sich um die Kinder'); }
+  if(u.ageSt==='greis'){
+    if(u.dieAt==null) u.dieAt = AGE_DIE + G.rand()*12*60;
+    if(u.age>u.dieAt){ if(u.owner===0){ EE.toast('Ein alter Mensch ist mit '+ageYears(u)+' Jahren friedlich gestorben'); } killUnit(u,true); return true; }
+    // spielt mit den Kindern: geht zu einem Kind in der Nähe, sonst ein paar Schritte ums Haus
+    if(u.state==='idle' && !u.inside){ u.playT=(u.playT||0)-dt; if(u.playT<=0){ u.playT=5+G.rand()*7;
+      const kids=G.units.filter(k=>k.kind==='kid' && k.owner===u.owner && !k.inside && Math.hypot(k.x-u.x,k.z-u.z)<35);
+      if(kids.length){ const k=kids[(G.rand()*kids.length)|0], a=G.rand()*6.28; u.state='move'; u.goal={x:k.x+Math.cos(a)*1.2, z:k.z+Math.sin(a)*1.2, tries:30}; moveTo(u,u.goal.x,u.goal.z); }
+      else idleLife(u); } }
+  }
+  return false;
+}
 function growUp(u){
-  u.kind='worker'; u.hp=u.maxHp=UNIT.worker.hp; setStage(u,null); u.stage=null;
+  u.kind='worker'; u.age=0; u.hp=u.maxHp=UNIT.worker.hp; setStage(u,null); u.stage=null;
   const old=u.home; u.home=null; u.moveOut=true; u.oldHome=old;
   const nh = findHome(u, occupancy(), old);
   if(nh){ u.home=nh; cmdMove(u, nh.x+(G.rand()-.5)*3, nh.z+nh.size*.5+1.2); }
@@ -495,6 +519,8 @@ function updateKid(u,dt){
   if(u.grow>=BABY_T+CHILD_T){ growUp(u); return; }
   if(u.state!=='idle' && u.state!=='move') u.state='idle';
   u.wanderT=(u.wanderT||0)-dt;
+  if(u.state==='idle' && u.wanderT<=0 && u.stage==='child' && G.rand()<.4){ const g=G.units.find(o=>o.ageSt==='greis' && o.owner===u.owner && !o.inside && Math.hypot(o.x-u.x,o.z-u.z)<25);
+    if(g){ u.wanderT=4+G.rand()*5; const a=G.rand()*6.28; cmdMove(u, g.x+Math.cos(a)*1.3, g.z+Math.sin(a)*1.3); } }
   if(u.state==='idle' && u.wanderT<=0){ u.wanderT = 4+G.rand()*6; const h=u.home||G.players[u.owner].tc; if(h){ const a=G.rand()*6.28, r=h.size*.5+1.5+G.rand()*(u.stage==='baby'?1.5:5); cmdMove(u, h.x+Math.cos(a)*r, h.z+Math.sin(a)*r); } }
 }
 // Tempo im Stadtzentrum: Hütten im selben Gebiet (+5 % je Hütte, höchstens 6) und Helfer drinnen (+10 % je Helfer, höchstens 3)
@@ -784,13 +810,13 @@ function hit(u,t){
   const U=UNIT[u.kind]; const dmg = (t.size ? U.atk*U.bld : U.atk) * (.85+G.rand()*.3);
   if(U.ranged) shootArrow(u,t,dmg); else { damage(t,dmg,u); sfxAt('chop',u.x,u.z,.6); }
 }
-function killUnit(u){
-  bloodFx(u.x,u.z,10,.8);
+function killUnit(u, natural){
+  if(!natural) bloodFx(u.x,u.z,10,.8);
   u.dead=true; u.hp=0; const i=G.units.indexOf(u); if(i>=0) G.units.splice(i,1);
   G.players[u.owner].pop = Math.max(0, G.players[u.owner].pop-1);
   if(G.sel.includes(u)){ G.sel=G.sel.filter(x=>x!==u); drawPanelSoon(); }
   u.ring.visible=false; if(u.bar) u.bar.visible=false;
-  const m=u.mesh; let t=0; const fall=()=>{ if(!G) return; t+=.016; m.rotation.x=-Math.min(1,t*2.2)*Math.PI/2; m.position.y = getH(u.x,u.z)+.12 - Math.max(0,t-1.6)*.6;
+  const m=u.mesh, sl=natural?.35:1; let t=0; const fall=()=>{ if(!G) return; t+=.016*sl; m.rotation.x=-Math.min(1,t*2.2)*Math.PI/2; m.position.y = getH(u.x,u.z)+.12 - Math.max(0,t-1.6)*.6;
     if(t<2.6) requestAnimationFrame(fall); else { G.scene.remove(m); G.scene.remove(u.ring); if(u.bar) G.scene.remove(u.bar); } }; fall();
   if(u.owner===0) updateHUD();
 }
@@ -2704,6 +2730,7 @@ function spawnWorker(owner,x,z,kind){
   const U = UNIT[kind];
   const u = {kind, hp:U.hp, maxHp:U.hp, cd:0, sex:(m.userData.key==='cavef'?'f':'m'), owner, x, z, mesh:m, ring, state:'idle', path:null, pi:0, carry:{type:null,amt:0},
              target:null, site:null, speed:U.speed, phase:Math.random()*6, face:0, repath:0, gt:0, lastType:null};
+  if(kind==='worker') u.age = G.rand()*AGE_OLD*.45;          // Erwachsene starten verschieden alt
   if(G.farView) m.visible=false;
   G.units.push(u);
   G.players[owner].pop++;
@@ -2910,13 +2937,14 @@ function updateWorker(u,dt){
   if(u.dead) return;
   const p = G.players[u.owner];
   u.moving=false; u.working=false;
-  const gatherRate = ((u.owner===0 && G.civ[0]==='Chinesen') ? 1.15 : 1) * (u.owner!==0 ? aiD().gather : 1);
+  const gatherRate = ((u.owner===0 && G.civ[0]==='Chinesen') ? 1.15 : 1) * (u.owner!==0 ? aiD().gather : 1) * (u.ageSt==='alt' ? .75 : 1);
   if(u.inside && u.inside.kind==='tower'){ updateTowerCrew(u,dt); u.ring.visible=false; return; }
   if(isSoldier(u)){ u.scanT=(u.scanT||0)-dt; if(u.scanT<=0){ u.scanT=.5; if(u.state==='idle'){ const f=nearestFoe(u, u.pin ? UNIT[u.kind].range+.6 : UNIT[u.kind].ranged?10:7); if(f) cmdAttack(u,f);
       else if(u.post && Math.hypot(u.post.x-u.x,u.post.z-u.z)>1.6){ u.state='move'; u.goal={x:u.post.x,z:u.post.z,tries:0}; moveTo(u,u.post.x,u.post.z); } } } }   // nach dem Kampf zurück an den Platz
   if(u.inside){ u.x=u.inside.x; u.z=u.inside.z; u.mesh.position.set(u.x,-100,u.z); u.ring.visible=false; if(u.inHut){ u.hutT-=dt; if(u.hutT<=0 || u.inside.dead){ exitHut(u); return; } } else if(u.inside.dead){ u.inside=null; } return; }
+  if(u.kind==='worker' && updateAge(u,dt)) return;
   if(u.kind==='kid') updateKid(u,dt);
-  else if(u.kind==='worker' && u.owner===0 && u.state==='idle' && !u.hold && !u.pin && !u.auto && !u.homeless){ if(u.lifeT==null) u.lifeT=10+G.rand()*14; u.lifeT-=dt*(badWeather()?2:1); if(u.lifeT<=0){ u.lifeT=null; idleLife(u); } }
+  else if(u.kind==='worker' && u.ageSt!=='greis' && u.owner===0 && u.state==='idle' && !u.hold && !u.pin && !u.auto && !u.homeless){ if(u.lifeT==null) u.lifeT=10+G.rand()*14; u.lifeT-=dt*(badWeather()?2:1); if(u.lifeT<=0){ u.lifeT=null; idleLife(u); } }
   else if(u.homeless && u.kind==='worker' && u.state!=='idle' && u.state!=='move'){ u.state='idle'; u.path=null; }
   if(u.pfWait && performance.now() < G.pfDeadline){ const w=u.pfWait; u.pfWait=null; u.path=findPath(u.x,u.z,w.x,w.z); u.pi=0; }
   if(!u.pfWait) switch(u.state){
@@ -3008,7 +3036,7 @@ function updateWorker(u,dt){
   let df = u.face - m.rotation.y; df = Math.atan2(Math.sin(df),Math.cos(df)); m.rotation.y += df*Math.min(1,dt*10);
   u.phase += dt*(u.moving?8.5:u.working?6:2);
   if(m.isRigged && u.kind==='worker') fishSpear(m, u.working && u.state==='gather' && u.target && u.target.fish);
-  if(m.isRigged){ const shoot = u.working && UNIT[u.kind] && UNIT[u.kind].ranged; if(m.bowK) setBowSlot(m, shoot); if(!G.farView && m.visible) poseRig(m, u.moving?'walk':shoot?'shoot':u.working?'work':'idle', shoot ? 1-clamp(u.cd/UNIT[u.kind].cd,0,1) : u.phase); }
+  if(m.isRigged){ const shoot = u.working && UNIT[u.kind] && UNIT[u.kind].ranged; if(m.bowK) setBowSlot(m, shoot); if(!G.farView && m.visible) poseRig(m, u.moving?'walk':shoot?'shoot':u.working?'work':'idle', shoot ? 1-clamp(u.cd/UNIT[u.kind].cd,0,1) : u.phase); if(u.stoop && m.rig && m.rig.spine){ m.rig.spine.rotation.x+=u.stoop; m.rig.neck && (m.rig.neck.rotation.x-=u.stoop*.5); } }
   else {
   const sw = u.moving ? Math.sin(u.phase)*.7 : 0;
   m.legs[0].rotation.x = sw; m.legs[1].rotation.x = -sw;
@@ -3037,7 +3065,7 @@ function autoBalance(){
 }
 // „Arbeit suchen“: ausgewählte Bauern verteilen sich selbst – erst unfertige Gebäude in der Nähe, dann die Rohstoffe, die am meisten fehlen
 function smartWork(ws){
-  if(!ws.length) return 0;
+  ws=ws.filter(u=>u.ageSt!=='greis'); if(!ws.length) return 0;
   const p=G.players[0], left=ws.slice(); let n=0;
   const sites=G.builds.filter(b=>b.owner===0 && !b.dead && (b.built<1 || b.hp<BUILD[b.kind].hp*.6));
   const help=new Map(); for(const u of G.units) if(u.owner===0 && u.state==='build' && u.site) help.set(u.site,(help.get(u.site)||0)+1);
@@ -3749,7 +3777,8 @@ function tapAt(sx,sy){
   }
   if(mine.length){
     if(hit && hit.r && (hit.r.kind==='metal'||hit.r.kind==='oil')){ EE.toast(RES_DE[hit.r.kind]+'-Vorkommen – kann noch nicht abgebaut werden'); return; }
-    if(hit && hit.r){ mine.forEach(u=>(u.auto=u.seek=u.hold=false,u.post=null,u.pin&&setPin(u,false),0)||cmdGather(u,hit.r)); marker(hit.r.x,hit.r.z,0xffd24a); if(mine.some(u=>u.kind==='worker')) iconMarker(hit.r, resIcon(hit.r)); EE.vib(10); drawPanel(); return; }
+    if(hit && hit.r && mine.length && mine.every(u=>u.ageSt==='greis')){ EE.toast('Zu alt zum Arbeiten'); return; }
+    if(hit && hit.r){ mine.filter(u=>u.ageSt!=='greis').forEach(u=>(u.auto=u.seek=u.hold=false,u.post=null,u.pin&&setPin(u,false),0)||cmdGather(u,hit.r)); marker(hit.r.x,hit.r.z,0xffd24a); if(mine.some(u=>u.kind==='worker')) iconMarker(hit.r, resIcon(hit.r)); EE.vib(10); drawPanel(); return; }
     if(hit && hit.b && hit.b.owner===0 && hit.b.kind==='tower' && hit.b.built>=1 && mine.some(isSoldier)){ const ss=mine.filter(isSoldier), free=Math.max(0,TOWER_MAX-crew(hit.b).length);
       if(!free){ EE.toast('Der Wachturm ist voll'); return; }
       ss.slice(0,free).forEach(u=>cmdGarrison(u,hit.b)); marker(hit.b.x,hit.b.z,0xffffff); EE.vib(10);
