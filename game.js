@@ -3123,6 +3123,27 @@ function footprint(kind,x,z){
   for(let j=0;j<s;j++) for(let i=0;i<s;i++) cells.push(cellIdx(x0+i+.5, z0+j+.5));
   return {cells, cx:x0+s/2, cz:z0+s/2};
 }
+// Teile, die über die Grundfläche hinausragen (Felle, Gestelle, Feuer, Vordächer), sperren ihre Felder auch –
+// sonst laufen Bauern mitten hindurch und bleiben daran hängen
+function meshCells(m, own){
+  m.updateMatrixWorld(true); const set=new Set(own), out=[], bb=new T.Box3(), y0=m.position.y;
+  m.traverse(o=>{ if(!o.isMesh || !o.geometry) return;
+    bb.setFromObject(o); if(bb.isEmpty() || bb.min.y-y0>1.2) return;               // hoch hängende Teile (Fahnentuch) sperren nichts
+    const x0=Math.floor(bb.min.x+.25), x1=Math.floor(bb.max.x-.25), z0=Math.floor(bb.min.z+.25), z1=Math.floor(bb.max.z-.25);
+    if(x1<x0 || z1<z0 || (x1-x0+1)*(z1-z0+1)>400) return;
+    for(let z=z0;z<=z1;z++) for(let x=x0;x<=x1;x++){ const k=cellIdx(x+.5,z+.5); if(k>=0 && !set.has(k) && !G.grid[k]){ set.add(k); out.push(k); G.grid[k]=1; } } });
+  return out;
+}
+// freier Platz in der Nähe (für Marschziele, die mitten in einem Gebäude liegen); used = schon vergebene Felder
+function freeSpot(x,z,used){
+  const k0=cellIdx(x,z); if(k0>=0 && !G.grid[k0] && !(used&&used.has(k0))){ used&&used.add(k0); return [x,z]; }
+  const NX=G.NX, i=Math.floor(x+NX/2), j=Math.floor(z+G.NZ/2);
+  for(let r=1;r<16;r++){ let best=-1, bd=1e9;
+    for(let dj=-r;dj<=r;dj++) for(let di=-r;di<=r;di++){ if(Math.max(Math.abs(di),Math.abs(dj))!==r) continue;
+      const k=cellIdx(i+di-NX/2+.5, j+dj-G.NZ/2+.5); if(k<0 || G.grid[k] || (used&&used.has(k))) continue; const d=di*di+dj*dj; if(d<bd){ bd=d; best=k; } }
+    if(best>=0){ used&&used.add(best); return [best%NX-NX/2+.5, ((best/NX)|0)-G.NZ/2+.5]; } }
+  return [x,z];
+}
 function addBuilding(kind, owner, x, z, done){
   const fp = footprint(kind,x,z);
   const d = BUILD[kind], col = COLORS[owner];
@@ -3136,6 +3157,7 @@ function addBuilding(kind, owner, x, z, done){
   const b = {kind, owner, x:fp.cx, z:fp.cz, size:d.size, mesh:m, ring, cells:fp.cells, built:done?1:0, hp:done?d.hp:1, queue:[], qT:0, slow:!done && kind!=='tc' && kind!=='road' && G.reg && !friendlyLand(owner,fp.cx,fp.cz)};
   if(!done){ m.scale.y = .25; m.traverse(o=>{ if(o.material && o.isMesh){ o.material = o.material.clone(); o.material.transparent=true; o.material.opacity=.55; } }); }
   else if(d.pop) G.players[owner].popCap += d.pop;
+  if(kind!=='road') b.cells = b.cells.concat(meshCells(m, fp.cells));
   G.builds.push(b);
   if(kind==='tc' && G.borderGrp){ if(done) claimRegion(b); buildBorders(); }
   return b;
@@ -3243,8 +3265,10 @@ function findPath(x0,z0,x1,z1){
   return out;
 }
 function lineFree(x0,z0,x1,z1){
-  const d=Math.hypot(x1-x0,z1-z0), n=Math.ceil(d*2.5);
-  for(let i=1;i<n;i++){ const t=i/n; if(G.grid[cellIdx(lerp(x0,x1,t),lerp(z0,z1,t))]) return false; }
+  const d=Math.hypot(x1-x0,z1-z0), n=Math.ceil(d*4); if(d<1e-4) return true;
+  const nx=-(z1-z0)/d*.32, nz=(x1-x0)/d*.32;                 // Körperbreite: links und rechts mitprüfen
+  for(let i=1;i<n;i++){ const t=i/n, x=lerp(x0,x1,t), z=lerp(z0,z1,t);
+    if(G.grid[cellIdx(x,z)] || G.grid[cellIdx(x+nx,z+nz)] || G.grid[cellIdx(x-nx,z-nz)]) return false; }
   return true;
 }
 
@@ -3253,10 +3277,11 @@ function lineFree(x0,z0,x1,z1){
    ============================================================ */
 // Wegsuche mit Zeitbudget pro Bild: viele Befehle auf einmal lassen das Spiel nicht mehr ruckeln
 function moveTo(u,x,z){
+  u.pathEnd=false;
   if(!G.pfDeadline || performance.now() < G.pfDeadline){ u.pfWait=null; u.path = findPath(u.x,u.z,x,z); u.pi=0; return !!u.path; }
   u.pfWait={x,z}; u.path=null; u.pi=0; return true;
 }
-function cmdMove(u,x,z){ u.state='move'; u.target=null; u.site=null; u.goal={x,z,tries:0}; moveTo(u,x,z); }
+function cmdMove(u,x,z,used){ [x,z]=freeSpot(x,z,used); u.state='move'; u.target=null; u.site=null; u.goal={x,z,tries:0}; moveTo(u,x,z); }
 function cmdGather(u,r){
   if(u.kind==='ox'){ cmdMove(u, r.x+1.6, r.z+1.2); return; }   // Ochse stellt sich als Sammelstelle neben den Rohstoff
   u.target=r; u.site=null; u.lastType=r.kind; u.lastSrc=srcType(r);
@@ -3279,7 +3304,7 @@ function nextSame(u, maxD){
   if(!u.lastType) return null;
   if(u.owner!==0) return nearestRes(u.lastType, u.x, u.z, maxD, u.owner);
   const want=u.lastSrc||u.lastType; let best=null, bd=maxD;
-  for(const r of G.res){ if(!r.alive || r.amt<=0 || r.kind!==u.lastType || srcType(r)!==want) continue; const d=Math.hypot(r.x-u.x,r.z-u.z); if(d<bd){ bd=d; best=r; } }
+  for(const r of G.res){ if(!r.alive || r.amt<=0 || r.kind!==u.lastType || srcType(r)!==want || (r.blockT && G.t-r.blockT<60)) continue; const d=Math.hypot(r.x-u.x,r.z-u.z); if(d<bd){ bd=d; best=r; } }
   return best;
 }
 function nearestRes(kind,x,z,maxD,owner){
@@ -3297,11 +3322,13 @@ function followPath(u,dt){
   if(G.gateAt){ const nk=cellIdx(u.x+dx/d*Math.max(step,.35), u.z+dz/d*Math.max(step,.35)), gt=nk>=0 && nk!==ck ? G.gateAt[nk] : null;
     if(gt && alive(gt) && gt.built>=1 && hostile(gt.owner,u.owner)){ u.path=null; u.moving=false;
       if(isSoldier(u) && u.owner!==0){ cmdAttack(u,gt); } return true; } }
-  if(d<=step+.05){ u.x=tx; u.z=tz; u.pi++; return u.pi>=u.path.length; }
+  if(d<=step+.05){ u.x=tx; u.z=tz; u.pi++; if(u.pi>=u.path.length){ u.pathEnd=true; return true; } return false; }
   u.x += dx/d*step; u.z += dz/d*step; u.face = Math.atan2(dx,dz); u.moving=true;
   return false;
 }
 function near(u,x,z,r){ return Math.hypot(u.x-x,u.z-z)<=r; }
+// angekommen: nah genug – oder am Ende des Weges und knapp davor (Ziel ist rundum zugestellt)
+function reach(u,x,z,r){ const d=Math.hypot(u.x-x,u.z-z); return d<=r || (u.pathEnd && (!u.path || u.pi>=u.path.length) && d<=r+2.2); }
 
 /* ---------- Lebendige Welt: Bauern ohne Auftrag laufen herum, gehen in ihre Hütte (bei Regen, Schnee, Kälte öfter).
    Wer von Hand an eine Stelle geschickt wurde (hold) oder „Hier bleiben“ (pin) hat, bleibt stehen. Soldaten laufen nie herum. ---------- */
@@ -3311,7 +3338,7 @@ function idleLife(u){
   if(h && G.rand() < (bad?.8:.35)){ u.state='gohome'; u.site=h; u.target=null; moveTo(u,h.x,h.z); return; }
   const c = h || G.players[u.owner].tc; if(!c) return;
   const a=G.rand()*6.28, r=c.size*.5+1.5+G.rand()*5;          // ein paar Schritte ums Haus oder ans Feuer
-  u.state='move'; u.target=null; u.site=null; u.goal={x:c.x+Math.cos(a)*r, z:c.z+Math.sin(a)*r, tries:30}; moveTo(u,u.goal.x,u.goal.z);
+  u.state='move'; u.target=null; u.site=null; const [gx,gz]=freeSpot(c.x+Math.cos(a)*r, c.z+Math.sin(a)*r); u.goal={x:gx, z:gz, tries:30}; moveTo(u,gx,gz);
 }
 function exitHut(u){
   const b=u.inside; u.inside=null; u.inHut=false; u.hutT=0;
@@ -3341,14 +3368,16 @@ function updateWorker(u,dt){
   else if(u.kind==='worker' && u.ageSt!=='greis' && u.owner===0 && u.state==='idle' && !u.hold && !u.pin && !u.auto && !u.homeless){ if(u.lifeT==null) u.lifeT=10+G.rand()*14; u.lifeT-=dt*(badWeather()?2:1); if(u.lifeT<=0){ u.lifeT=null; idleLife(u); } }
   else if(u.homeless && u.kind==='worker' && u.state!=='idle' && u.state!=='move'){ u.state='idle'; u.path=null; }
   if(u.pfWait && performance.now() < G.pfDeadline){ const w=u.pfWait; u.pfWait=null; u.path=findPath(u.x,u.z,w.x,w.z); u.pi=0; }
+  if(!u.manual && (!u.path || u.pi>=u.path.length) && !u.inside){ const ck=cellIdx(u.x,u.z);
+    if(ck>=0 && G.grid[ck] && !(G.gateAt && G.gateAt[ck])){ const [fx,fz]=freeSpot(u.x,u.z), dd=Math.hypot(fx-u.x,fz-u.z), st=Math.min(dd,u.speed*dt*1.2); if(dd>1e-3){ u.x+=(fx-u.x)/dd*st; u.z+=(fz-u.z)/dd*st; u.face=Math.atan2(fx-u.x,fz-u.z); u.moving=true; } } }
   if(u.manual) updateManual(u,dt);
   else if(!u.pfWait) switch(u.state){
     case 'gohome': { const h=u.site; if(!h || h.dead){ u.state='idle'; u.site=null; break; }
-      if(Math.hypot(h.x-u.x,h.z-u.z) < h.size*.5+1.2){ u.inside=h; u.inHut=true; u.hutT=(badWeather()?45:20)+G.rand()*30; u.site=null; u.path=null; u.state='idle'; u.ring.visible=false; break; }
+      if(reach(u,h.x,h.z,h.size*.5+1.2)){ u.inside=h; u.inHut=true; u.hutT=(badWeather()?45:20)+G.rand()*30; u.site=null; u.path=null; u.state='idle'; u.ring.visible=false; break; }
       if(followPath(u,dt)) moveTo(u,h.x,h.z); break; }
     case 'garrison': {
       const b=u.site; if(!b || b.dead){ u.state='idle'; u.site=null; break; }
-      if(near(u,b.x,b.z,b.size*.5+1.4)){ enterTower(u,b); break; }
+      if(reach(u,b.x,b.z,b.size*.5+1.4)){ enterTower(u,b); break; }
       u.repath-=dt; if(!u.path || u.pi>=u.path.length){ if(u.repath<=0){ u.repath=1; moveTo(u,b.x,b.z); } }
       followPath(u,dt); break; }
     case 'attack': {
@@ -3356,7 +3385,7 @@ function updateWorker(u,dt){
       const t=u.target; if(!alive(t)){ u.target=null; const nx=u.seek && u.owner===0 ? seekFoe(u) : null; if(nx){ u.target=nx; u.repath=0; } else u.state='idle'; break; }
       const U=UNIT[u.kind], d=Math.hypot(t.x-u.x,t.z-u.z)-(t.size?t.size*.5+.2:.35);
       if(u.pin && d>U.range+.3){ u.target=null; u.state='idle'; break; }
-      if(d<=U.range){ u.path=null; u.working=true; u.face=Math.atan2(t.x-u.x,t.z-u.z); u.cd-=dt; if(u.cd<=0){ u.cd=U.cd; hit(u,t); } }
+      if(d<=U.range || (t.size && u.pathEnd && (!u.path||u.pi>=u.path.length) && d<=U.range+2.2)){ u.path=null; u.working=true; u.face=Math.atan2(t.x-u.x,t.z-u.z); u.cd-=dt; if(u.cd<=0){ u.cd=U.cd; hit(u,t); } }
       else { u.repath-=dt; if(u.repath<=0 || !u.path || u.pi>=u.path.length){ u.repath=.7; moveTo(u,t.x,t.z); } followPath(u,dt); }
       break; }
     case 'move':
@@ -3383,7 +3412,7 @@ function updateWorker(u,dt){
         if(r){ cmdGather(u,r); } else { u.state = u.carry.amt>0 ? 'drop' : 'idle'; u.path=null; }
         break;
       }
-      if(r.fish ? near(u,r.gx,r.gz,1.1) : near(u,r.x,r.z,r.r+.85)){
+      if(r.fish ? near(u,r.gx,r.gz,1.1) : reach(u,r.x,r.z,r.r+.85)){ u.stuckN=0;
         u.path=null; u.working=true; u.face=Math.atan2(r.x-u.x,r.z-u.z);
         u.hitT=(u.hitT||0)+dt; if(u.hitT>1.05){ u.hitT=0; sfxAt(r.kind==='wood'?'chop':r.kind==='stone'?'stone':r.kind==='gold'?'gold':'berry', u.x,u.z,.8); }
         const amount = Math.min(r.amt, dt*(r.kind==='wood'?1:r.kind==='food'?1.15:.8)*gatherRate);
@@ -3392,7 +3421,10 @@ function updateWorker(u,dt){
         if(r.amt<=0) removeRes(r);
         if(u.carry.amt>=CARRY){ u.state='drop'; u.path=null; }
       } else {
-        if(!u.path || u.pi>=u.path.length){ u.repath-=dt; if(u.repath<=0){ u.repath=1; if(!moveTo(u, r.fish?r.gx:r.x, r.fish?r.gz:r.z)){ u.state='idle'; } } }
+        if(!u.path || u.pi>=u.path.length){ u.repath-=dt; if(u.repath<=0){ u.repath=1;
+          // kommt nicht ran (rundum zugestellt): nach ein paar Versuchen den nächsten gleichen Rohstoff nehmen
+          if((u.stuckN=(u.stuckN||0)+1)>4){ u.stuckN=0; r.blockT=G.t; const o=nextSame(u,30); if(o && o!==r){ cmdGather(u,o); break; } u.state='idle'; break; }
+          if(!moveTo(u, r.fish?r.gx:r.x, r.fish?r.gz:r.z)){ u.state='idle'; } } }
         followPath(u,dt);
       }
       break; }
@@ -3404,7 +3436,7 @@ function updateWorker(u,dt){
         if(u.carry.amt>.5){ break; }
         const r = (u.target && u.target.alive && u.target.amt>0) ? u.target : nextSame(u, 16);
         if(r) cmdGather(u,r); else u.state='idle';
-      } else if(b.kind!=='ox' && near(u,b.x,b.z,b.size*.5+1.1)){
+      } else if(b.kind!=='ox' && reach(u,b.x,b.z,b.size*.5+1.1)){
         p.res[u.carry.type] += u.carry.amt; b.recv=b.recv||{}; b.recv[u.carry.type]=(b.recv[u.carry.type]||0)+u.carry.amt; u.carry.amt=0; u.path=null; if(G.selB===b) drawPanelSoon();
         if(u.owner===0) updateHUD();
         const r = (u.target && u.target.alive && u.target.amt>0) ? u.target : nextSame(u, 16);
@@ -3417,7 +3449,7 @@ function updateWorker(u,dt){
     case 'build': {
       const b = u.site;
       if(!b || b.dead || (b.built>=1 && b.hp>=BUILD[b.kind].hp)){ u.state='idle'; autoJob(u); break; }
-      if(near(u,b.x,b.z,b.size*.5+1.1)){
+      if(reach(u,b.x,b.z,b.size*.5+1.1)){
         u.path=null; u.working=true; u.face=Math.atan2(b.x-u.x,b.z-u.z);
         u.hitT=(u.hitT||0)+dt; if(u.hitT>.9){ u.hitT=0; sfxAt('build',u.x,u.z,.8); }
         if(b.built>=1){ b.hp = Math.min(BUILD[b.kind].hp, b.hp + dt*BUILD[b.kind].hp/BUILD[b.kind].time*.5); if(G.selB===b && u.owner===0) drawPanelSoon(); break; } // reparieren
@@ -4258,8 +4290,8 @@ function formationMove(us,x,z){
   let dx=x-cx, dz=z-cz; const dl=Math.hypot(dx,dz); if(dl<.5){ dx=0; dz=1; } else { dx/=dl; dz/=dl; }
   const rx=dz, rz=-dx, soldiers=us.every(isSoldier), form = soldiers ? (G.form||'block') : 'block';
   const order = us.slice().sort((a,b)=>((UNIT[a.kind]&&UNIT[a.kind].ranged)?1:0)-((UNIT[b.kind]&&UNIT[b.kind].ranged)?1:0));
-  const P = formationSlots(n, form);
-  order.forEach((u,i)=>{ const [lat,fwd]=P[i], tx=x+rx*lat+dx*fwd, tz=z+rz*lat+dz*fwd;
+  const P = formationSlots(n, form), used=new Set();
+  order.forEach((u,i)=>{ const [lat,fwd]=P[i], [tx,tz]=freeSpot(x+rx*lat+dx*fwd, z+rz*lat+dz*fwd, used);
     if(u.owner===0){ u.auto=u.seek=false; u.hold=true; u.post={x:tx,z:tz}; }
     cmdMove(u, tx, tz); });
 }
@@ -4855,5 +4887,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { tp:()=>TP, models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { spawnU:(o,x,z,k)=>spawnWorker(o,x,z,k), fmove:(us,x,z)=>formationMove(us,x,z), blocked:(x,z)=>!freeCell(x,z), gather:(u,r)=>cmdGather(u,r), models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
