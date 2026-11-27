@@ -1259,7 +1259,7 @@ function renderDip(){
     if(B && G.dip[B.i].state!==B.st){ const bp=G.players[B.i], ok=me.res.gold>=B.cost;
       h += `<div class="dbribe"><i style="background:${col(B.i)}"></i><span><b>${CN(bp)}</b> ${cv(bp,'lehnt','lehnen')} ${B.st==='ally'?'das Bündnis':'den Frieden'} ab – für <b class="${ok?'ok':'miss'}">${ICON.gold} ${B.cost} Gold</b> stimmen sie zu.</span><button class="btn small" id="dBrNo">Nein</button><button class="btn main small" id="dBrYes">Bestechen</button></div>`; }
     else { U.bribe=null; h += `<p class="dnote">Lehnen sie ab, hilft Gold: Neutrale billig, Kriegsgegner teuer, ⚔ unversöhnlich = nie.</p>`; }
-    h += `<div class="drows${G.players.length>7?' two':''}">`;
+    h += `<div class="drows${G.players.length>17?' three':G.players.length>7?' two':''}">`;
     for(const p of G.players.slice(1)){ const d=G.dip[p.id];
       h += `<div class="drow"><i style="background:${col(p.id)}"></i><div class="dn"><b>${NM(p)}${d.hard&&d.state==='enemy'?' <em class="hard" title="unversöhnlich">⚔</em>':''}</b><small>${d.hard&&d.state==='enemy'?'unversöhnlich':moodTxt(d.mood)}</small><span class="mood"><s style="width:${(d.mood+100)/2}%"></s></span></div>
         <div class="dst">${['ally','neutral','enemy'].map(s=>`<button class="${s}${d.state===s?' on':''}" data-p="${p.id}" data-s="${s}">${DIP_DE[s]}</button>`).join('')}</div></div>`; }
@@ -1289,7 +1289,7 @@ function renderDip(){
       <div class="deal">Du hast ${Math.floor(me.res[U.give])} ${RES_DE[U.give]} · ${NM(p)}: ${moodTxt(G.dip[U.who].mood)}, ${GEN_DE(genOf(U.who))}
       <button class="btn small" id="dAsk">Bitten</button><button class="btn small" id="dDemand">Fordern</button><button class="btn main small" id="dSend">Schenken</button></div>`;
   }
-  el.innerHTML=h;
+  el.innerHTML=h; el.parentElement.classList.toggle('many', G.players.length>10);
   el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>propose(+b.dataset.p, b.dataset.s));
   el.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{ EE.click(); U.who=+b.dataset.w; renderDip(); });
   el.querySelectorAll('[data-give]').forEach(b=>b.onclick=()=>{ EE.click(); U.give=b.dataset.give; renderDip(); });
