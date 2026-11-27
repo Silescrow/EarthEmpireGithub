@@ -302,15 +302,15 @@ function buildUI(){
   <div id="placebar" class="hidden"><span id="pCost"></span><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">+ Tore</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
   <div id="fps" class="hidden"></div>
   <div id="offer" class="hidden"></div>
-  <div id="dip" class="hidden"><div class="dcard"><div class="dhead"><button class="dtab" data-t="rel">Beziehungen</button><button class="dtab" data-t="trade">Handel</button><button class="dtab" data-t="trib">Tribut</button><button class="dtab" data-t="war">Krieg</button><button class="dx" id="dClose" aria-label="Schließen">✕</button></div><div id="dipBody"></div></div></div>
+  <div id="dip" class="hidden"><div class="dcard"><div class="dhead"><button class="dtab" data-t="rel">Beziehungen</button><button class="dtab" data-t="trade">Handel</button><button class="dtab" data-t="trib">Tribut</button><button class="dtab" data-t="war">Krieg</button><button class="dx winx" id="dClose" aria-label="Schließen">✕</button></div><div id="dipBody"></div></div></div>
   <div id="rotate"><div>Bitte das Handy quer halten</div></div>
-  <div id="pause" class="hidden"><div class="pcard"><h2>Pause</h2>
+  <div id="pause" class="hidden"><div class="pcard"><button class="winx" id="pX" aria-label="Schließen">✕</button><h2>Pause</h2>
     <button class="btn main small" id="pWeiter">Weiter</button>
     <button class="btn small" id="pSet">Einstellungen</button>
     <button class="btn small" id="pNeu">Neu starten</button>
     <button class="btn small" id="pMenu">Zum Hauptmenü</button></div></div>`;
   $('#bPause').onclick = () => { EE.click(); G.paused = true; $('#pause').classList.remove('hidden'); };
-  $('#pWeiter').onclick = () => { EE.click(); G.paused = false; $('#pause').classList.add('hidden'); };
+  $('#pWeiter').onclick = $('#pX').onclick = () => { EE.click(); G.paused = false; $('#pause').classList.add('hidden'); };
   // Hauptmenü: Spiel bleibt im Hintergrund erhalten – dort „Weiterspielen“ oder ein neues Spiel
   $('#pMenu').onclick = () => { EE.click(); toMenu(); };
   $('#pNeu').onclick = () => { EE.click(); start(); };
@@ -443,7 +443,8 @@ function drawPanel(){
     let h = `<div class="selx kompakt"><div class="grp">`;
     for(const k in groups){ const g=groups[k], u0=ws[g.list[0]], hp=g.list.reduce((a,i)=>a+ws[i].hp/ws[i].maxHp,0)/g.n;
       h += `<button class="gpic${u0.owner!==0?' foe':''}" data-g="${k}" aria-label="${g.n} ${UNIT_DE[k]||k}">${unitPic(u0)}<b>${g.n}</b><i style="width:${Math.round(hp*100)}%;background:${hp>.5?'#62e06a':hp>.25?'#f2c230':'#e23b3b'}"></i></button>`; }
-    h += `<button class="sx" data-a="desel" aria-label="Auswahl aufheben">✕</button></div>${ws.length===1?`<small>${UNIT[ws[0].kind]?UNIT[ws[0].kind].name:''} · ${ws[0].ageSt==='greis'?'spielt mit den Kindern':job}${carry}${ws[0].kind==='worker'&&ws[0].age!=null?' · '+ageYears(ws[0])+' Jahre'+(ws[0].ageSt==='greis'?' (zu alt zum Arbeiten)':ws[0].ageSt==='alt'?' (alt)':''):''}</small>`:''}</div>`;
+    if(!G.buildMenu && !G.formMenu) h += `<button class="pclose sx" aria-label="Auswahl aufheben">✕</button>`;
+    h += `</div>${ws.length===1?`<small>${UNIT[ws[0].kind]?UNIT[ws[0].kind].name:''} · ${ws[0].ageSt==='greis'?'spielt mit den Kindern':job}${carry}${ws[0].kind==='worker'&&ws[0].age!=null?' · '+ageYears(ws[0])+' Jahre'+(ws[0].ageSt==='greis'?' (zu alt zum Arbeiten)':ws[0].ageSt==='alt'?' (alt)':''):''}</small>`:''}</div>`;
     if(ws.length===1 && !G.buildMenu && !ws[0].dead){
       h += `<button class="ab tool" data-a="follow"><span class="ai"><svg viewBox="0 0 24 24"><path d="M3 8.5h3l1.6-2.5h8.8L18 8.5h3v10H3z" fill="none" stroke="#e8b64a" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="#e8b64a" stroke-width="2"/></svg></span>Folgen</button>`;
     }
