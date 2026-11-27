@@ -4504,9 +4504,9 @@ function boxSelect(x0,y0,x1,y1){
 function select(us,b){
   us = us.filter(u=>!u.inside); G.buildMenu=false;
   for(const u of G.sel) u.ring.visible=false;
-  if(G.selB) G.selB.ring.visible=false;
-  if(G.selBs){ for(const o of G.selBs) if(o.ring) o.ring.visible=false; G.selBs=null; }
-  G.sel = us; G.selB = b;
+  if(G.selB){ G.selB.ring.visible=false; hlRoad(G.selB,false); }
+  if(G.selBs){ for(const o of G.selBs){ if(o.ring) o.ring.visible=false; hlRoad(o,false); } G.selBs=null; }
+  G.sel = us; G.selB = b; if(b) hlRoad(b,true);
   for(const u of us){ u.ring.visible=true; u.ring.material.color.setHex(0xffffff); }
   if(b){ b.ring.visible=true; }
   drawPanel();
@@ -4653,9 +4653,11 @@ function snapEnd(x,z,ends){
 // Weg-Ende schnappt an ein eigenes Gebäude (Tür-Seite zum Weg hin) – so verbindet man Häuser
 function roadEndSnap(x,z){
   let best=null, bd=1e9;
-  for(const b of G.builds){ if(b.owner!==0 || b.dead || b.seg) continue; const r=b.size*.5+3.2, d=Math.hypot(b.x-x,b.z-z); if(d<r && d<bd){ bd=d; best=b; } }
-  if(!best) return null; const a=Math.atan2(z-best.z, x-best.x), r=best.size*.5+.4;
-  return [best.x+Math.cos(a)*r, best.z+Math.sin(a)*r];
+  for(const b of G.builds){ if(b.owner!==0 || b.dead || b.seg) continue; const r=b.size*.5+4, d=Math.hypot(b.x-x,b.z-z); if(d<r && d<bd){ bd=d; best=b; } }
+  if(!best) return null;
+  // an den Eingang: die Tür aller Gebäude zeigt nach vorne (+z, dort wo beim Hauptgebäude das Feuer brennt)
+  const r=best.size*.5+(best.kind==='tc'?2.2:.6);
+  return [best.x, best.z+r];
 }
 function roadCurveGhost(pl, pts){
   // Chaikin-Glättung (zweimal), Ecken werden zu Kurven
@@ -4744,6 +4746,12 @@ function gateParts(w){
 }
 function wallLine(b){ return G.builds.filter(o=>o.owner===b.owner && o.wallId===b.wallId && o.seg && !o.dead && (o.kind==='wall'||o.kind==='gate'||o.kind==='tower')); }
 // Alle zusammenhängenden Palisaden (auch mehrere gezogene Linien, die aneinander andocken) bekommen Türme
+// ausgewählte Wegstücke leuchten hell auf, damit man sieht, was gewählt ist
+let ROAD_HL=null;
+function hlRoad(b,on){ if(!b || b.kind!=='road' || !b.mesh) return;
+  if(!ROAD_HL && ROAD_MAT){ ROAD_HL=ROAD_MAT.clone(); ROAD_HL.color=new T.Color(0xffe27a); ROAD_HL.emissive=new T.Color(0x6a4a00); }
+  b.mesh.traverse(o=>{ if(!o.isMesh) return; if(on){ if(!o.userData.m0) o.userData.m0=o.material; if(ROAD_HL) o.material=ROAD_HL; } else if(o.userData.m0){ o.material=o.userData.m0; } });
+  if(b.ring) b.ring.visible=false; }
 const isWallPart = b => b && b.seg && (b.kind==='wall'||b.kind==='gate'||b.kind==='tower'||b.kind==='road');
 // Tipp auf Gebäude; Doppeltipp auf ein Mauerteil wählt die ganze zusammenhängende Mauer (wie Empire Earth II)
 let lastBT={t:0,b:null};
@@ -4754,7 +4762,7 @@ function tapBuilding(b){
 }
 function selectWallNet(b){
   const all=wallNet(b).flat().filter(o=>!o.dead);
-  select([],b); G.selBs=all; for(const o of all) if(o.ring) o.ring.visible=true;
+  select([],b); G.selBs=all; for(const o of all){ if(o.ring && o.kind!=='road') o.ring.visible=true; hlRoad(o,true); }
   EE.click(); EE.toast(all.length+(b.kind==='road'?' Wegstücke':' Mauerteile')+' ausgewählt'); drawPanel();
 }
 function wallNet(b){
