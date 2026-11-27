@@ -1026,6 +1026,7 @@ function updateDebris(dt){
   for(let i=DEBRIS.dust.length-1;i>=0;i--){ const p=DEBRIS.dust[i]; p.t+=dt; const s=p.s; s.position.x+=p.vx*dt; s.position.z+=p.vz*dt; s.position.y+=dt*.4; s.scale.setScalar(1.5+p.t*1.6); s.material.opacity=.55*Math.max(0,1-p.t/3.5); if(p.t>3.5){ G.scene.remove(s); s.material.dispose(); DEBRIS.dust.splice(i,1); } }
 }
 function destroyBuilding(b){
+  if(b.seg && b.kind!=='road') G.wallVer=(G.wallVer||0)+1;
   b.dead=true; b.hp=0; const i=G.builds.indexOf(b); if(i>=0) G.builds.splice(i,1);
   for(const k of b.cells) if(k>=0) G.grid[k]=0;
   const p=G.players[b.owner], d=BUILD[b.kind];
@@ -3185,7 +3186,25 @@ function placeCluster(type, cx, cz, count, spread, minB){
 /* ===== Nachwachsender Wald (V2.25): gefällter Baum → Stumpf → nach 1–2 min ein Setzling → wächst in ~3 min zum vollen Baum.
    Nur wo vorher Wald war: nie in der Nähe von Häusern (7 m), Mauern (5 m) oder Wegen (2 m) – in Dorf und Burg wächst kein Wald. Dichter Wald wächst schneller. ===== */
 let STUMP_GEO=null, STUMP_MAT=null;
-function nearBuilt(x,z){ return G.builds.some(b=>!b.dead && Math.hypot(b.x-x,b.z-z)<(b.kind==='road'?2:b.seg?5:b.size*.5+7)); }
+function nearBuilt(x,z){ return G.builds.some(b=>!b.dead && Math.hypot(b.x-x,b.z-z)<(b.kind==='road'?2:b.seg?5:b.size*.5+7)) || insideWalls(x,z); }
+// Liegt der Punkt in einem von Palisaden/Mauern umschlossenen Gebiet? (Flutfüllung über freie Felder; kommt sie nicht weit heraus → innen)
+const wallInCache=new Map();
+function insideWalls(x,z){
+  if(!G.wallVer) return false;
+  const k0=cellIdx(x,z); if(k0<0) return false;
+  const key=k0+'@'+G.wallVer; if(wallInCache.has(key)) return wallInCache.get(key);
+  if(wallInCache.size>4000) wallInCache.clear();
+  const NX=G.NX, i0=k0%NX, j0=(k0/NX)|0, R=70, seen=new Set([k0]), q=[k0]; let out=false;
+  while(q.length){ const k=q.pop(), i=k%NX, j=(k/NX)|0;
+    if(Math.abs(i-i0)>=R || Math.abs(j-j0)>=R || seen.size>9000){ out=true; break; }
+    for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){ const a=i+di, b=j+dj; if(a<0||b<0||a>=NX||b>=G.NZ){ out=true; break; } const n=b*NX+a; if(seen.has(n)) continue;
+      if(wallCell(n)) continue; seen.add(n); q.push(n); }   // Tore zählen auch als Grenze
+    if(out) break; }
+  wallInCache.set(key,!out); return !out;
+}
+// nur Mauer-/Palisaden-/Turm-/Torfelder zählen als Grenze (Wasser und Häuser nicht)
+let wallCellSet=null, wallCellVer=-1;
+function wallCell(n){ if(wallCellVer!==G.wallVer){ wallCellSet=new Set(); for(const b of G.builds) if(!b.dead && b.seg && b.kind!=='road') for(const k of (b.seg.ks||b.cells||[])) if(k>=0) wallCellSet.add(k); wallCellVer=G.wallVer; } return wallCellSet.has(n); }
 function treeFelled(r){
   if(nearBuilt(r.x,r.z)) return;   // im Dorf: kein Stumpf, nichts wächst nach
   if(!STUMP_GEO){ STUMP_GEO=new T.CylinderGeometry(.16,.22,.28,9); STUMP_MAT=new T.MeshLambertMaterial({color:0x6e4a2a}); }
@@ -4873,6 +4892,7 @@ function towerAutoFire(b,dt){
   if(b.owner===0 || (G.follow && Math.hypot(b.x-G.camS.x,b.z-G.camS.z)<30)) sfxAt('bow',b.x,b.z,.5);
 }
 function addWall(owner, c, ang, id, road){
+  if(!road) G.wallVer=(G.wallVer||0)+1;
   const kind = road?'road':c.gate?'gate':'wall', d=BUILD[kind];
   const m = road ? makeRoadPiece(c.x,c.z,c.len,ang) : makeWallPiece(COLORS[owner], c.gate, c.len);
   if(!road){ m.position.set(c.x, getH(c.x,c.z)-.03, c.z); m.rotation.y = -ang; }
