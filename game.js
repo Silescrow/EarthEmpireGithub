@@ -232,6 +232,12 @@ function buildUI(){
   <canvas id="mini" width="150" height="150"></canvas>
   <div id="kinds"></div>
   <button class="hb" id="bHome" aria-label="Zur Basis"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M6 10v10h12V10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg></button>
+  <div id="tpHud"><b id="tpName"></b><div class="tpbar"><i id="tpHp"></i></div><div class="tpbar c"><i id="tpCarry"></i></div><small id="tpCarryT"></small></div>
+  <div id="tpPrompt"></div>
+  <button id="bTake">🎮 Übernehmen</button>
+  <div id="joy" aria-label="Laufen"><i></i></div>
+  <button id="bAct" aria-label="Aktion"><span id="bActI">✋</span><small id="bActL">Arbeiten</small></button>
+  <button id="bRun" aria-label="Rennen">🏃</button>
   <button id="bFollowOff" aria-label="Kamera zurück"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Zurück</button>
   <button class="hb" id="bNorth" aria-label="Kameradrehung zurücksetzen"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" stroke="currentColor" stroke-width="1.6" fill="none" opacity=".7"/><g id="needle"><path d="M12 4.2l3 7.8h-6z" fill="#e2453b"/><path d="M12 19.8l3-7.8h-6z" fill="currentColor"/></g></svg></button>
   <div id="panel"></div>
@@ -256,6 +262,7 @@ function buildUI(){
     const mo = new MutationObserver(done); mo.observe(d,{attributes:true, attributeFilter:['class']}); };
   $('#kinds').onclick = e => { const b=e.target.closest('[data-k]'); if(b) selectKind(b.dataset.k); };
   $('#bFollowOff').onclick = () => stopFollow();
+  initTP();
   $('#bNorth').onclick = () => { EE.click(); G.camReset = true; };
   $('#bHome').onclick = () => { EE.click(); const tc=G.players[0].tc; if(tc){ centerCamOn(tc.x,tc.z); } };
   $('#pOk').onclick = confirmPlace;
@@ -1279,36 +1286,176 @@ function onResize(){
   G.cam.aspect = w/h; G.cam.updateProjectionMatrix();
   G.W = w; G.H = h;
 }
-// ===== Verfolger-Kamera: hinter der Schulter einer Figur, die Figur arbeitet selbst weiter =====
+// ===== THIRD PERSON: „Folgen“ = Kamera hinter der Schulter, die Figur arbeitet selbst (KI).
+//       „Übernehmen“ = selbst steuern (Joystick / WASD, Aktion je nach Ziel), „Loslassen“ = die KI macht weiter. =====
+const TP = { yaw:0, pitch:.22, dist:3.6, lookT:0, ctxT:0, ctx:null, stepT:0, mark:null, vx:0, vz:0 };
+function canTake(u){ return u && u.owner===0 && !u.dead && (u.kind==='worker' || isSoldier(u)) && !G.online; }
 function startFollow(u){
   if(!u || u.dead) return; EE.click();
   G.follow=u; G.fcam=null; G.camReset=false; select([],null);
-  document.querySelector('#game').classList.add('fview'); applyRes();
-EE.toast('Kamera folgt – „Zurück“ beendet');
+  TP.yaw = u.mesh ? u.mesh.rotation.y : (u.face||0); TP.pitch=.22; TP.dist=3.6; TP.lookT=0;
+  G.cam.fov=58; G.cam.updateProjectionMatrix();
+  const g=document.querySelector('#game'); g.classList.add('fview'); g.classList.toggle('tpcan', canTake(u)); applyRes();
+  tpHudName(u);
+  EE.toast(canTake(u) ? 'Kamera folgt – „Übernehmen“ zum Selbststeuern' : 'Kamera folgt – „Zurück“ beendet');
+}
+function takeControl(on){
+  const u=G.follow; if(!u || !canTake(u)) return; EE.click();
+  const g=document.querySelector('#game');
+  if(on){
+    u.manual=true; u.memo={state:u.state, target:u.target, site:u.site, lastType:u.lastType};
+    u.state='manual'; u.path=null; u.auto=u.seek=false; if(u.pin) setPin(u,false); TP.vx=TP.vz=0; G.joy={x:0,y:0}; G.act=false;
+    g.classList.add('tpctrl'); $('#bTake').textContent='🤖 Loslassen';
+    EE.toast(isSoldier(u) ? 'Du führst den Krieger – Joystick laufen, ⚔ angreifen' : 'Du steuerst den Bauern – Joystick laufen, Knopf zum Arbeiten');
+  } else {
+    u.manual=false; u.moving=u.working=false; G.act=false; g.classList.remove('tpctrl'); $('#bTake').textContent='🎮 Übernehmen'; tpMark(null);
+    // die KI macht mit der letzten Aufgabe weiter
+    const r = u.kind==='worker' ? (u.lastType ? nextSame(u, 25) : null) : null;
+    if(r) cmdGather(u,r); else { u.state='idle'; u.hold=true; if(isSoldier(u)) u.post={x:u.x,z:u.z}; }
+    EE.toast('Die Figur macht selbst weiter');
+  }
 }
 function stopFollow(quiet){
-  const u=G.follow; if(!u) return; G.follow=null;
-  document.querySelector('#game').classList.remove('fview'); applyRes();
+  const u=G.follow; if(!u) return;
+  if(u.manual) takeControl(false);
+  G.follow=null; tpMark(null);
+  const g=document.querySelector('#game'); g.classList.remove('fview','tpctrl','tpcan'); applyRes();
+  G.cam.fov=42; G.cam.updateProjectionMatrix();
   if(!quiet) EE.click();
   if(u && !u.dead){ G.camS.x=u.x; G.camS.z=u.z; G.camS.dist=Math.max(G.camS.dist,14); }
 }
+// Kamera-Arm: Schulter rechts, weich gefedert, stößt nicht in Hänge oder Gebäude
+function tpBlocked(x,z,y){ if(y < getH(x,z)+.35) return true; const k=cellIdx(x,z); if(k>=0 && G.grid[k]){ for(const b of G.builds){ if(!b.dead && Math.abs(b.x-x)<b.size*.5 && Math.abs(b.z-z)<b.size*.5 && y < getH(b.x,b.z)+b.size*.9) return true; } } return false; }
 function followCam(){
   const u=G.follow;
   if(!u || u.dead || !G.units.includes(u)){ stopFollow(true); return false; }
-  const m=u.mesh, f=m ? m.rotation.y : (u.face||0);
-  const fx=Math.sin(f), fz=Math.cos(f), rx=Math.cos(f), rz=-Math.sin(f);
-  const gy=getH(u.x,u.z);
-  const tx=u.x-fx*2.6-rx*.5, tz=u.z-fz*2.6-rz*.5;
-  const ty=Math.max(getH(tx,tz)+.6, gy+1.65, WATER_Y+.5);
-  const lx=u.x+fx*5, lz=u.z+fz*5, ly=gy+1.05;
+  const dt=G.dtW||.016, m=u.mesh;
+  // ohne eigenes Umschauen schwenkt die Kamera langsam hinter die Figur
+  TP.lookT=Math.max(0,TP.lookT-dt);
+  const face = m ? m.rotation.y : (u.face||0);
+  if(TP.lookT<=0){ let d=face-TP.yaw; d=Math.atan2(Math.sin(d),Math.cos(d)); TP.yaw+=d*Math.min(1,dt*(u.manual?(u.moving?1.8:.4):1.2)); }
+  const gy=getH(u.x,u.z), sc=(m && m.scale.y)||1, ph=1.45*Math.min(1.2,sc/ .8 * .8);
+  const px=u.x, py=gy+ph, pz=u.z;
+  const cy=Math.cos(TP.pitch), fx=Math.sin(TP.yaw), fz=Math.cos(TP.yaw), rx=Math.cos(TP.yaw), rz=-Math.sin(TP.yaw), sh=.42;
+  let dist=TP.dist;
+  for(let i=0;i<6;i++){ const x=px-fx*dist*cy+rx*sh, z=pz-fz*dist*cy+rz*sh, y=py+Math.sin(TP.pitch)*dist; if(!tpBlocked(x,z,y)) break; dist*=.78; }
+  let tx=px-fx*dist*cy+rx*sh, tz=pz-fz*dist*cy+rz*sh, ty=py+Math.sin(TP.pitch)*dist;
+  ty=Math.max(ty, getH(tx,tz)+.45, WATER_Y+.35);
+  const lx=px+fx*2.2+rx*sh*.6, lz=pz+fz*2.2+rz*sh*.6, ly=py-.15+Math.sin(TP.pitch)*.4;
   if(!G.fcam) G.fcam={x:tx,y:ty,z:tz,lx,ly,lz};
-  const c=G.fcam, k=Math.min(1,(G.dtW||.016)*5);
-  c.x+=(tx-c.x)*k; c.y+=(ty-c.y)*k; c.z+=(tz-c.z)*k; c.lx+=(lx-c.lx)*k; c.ly+=(ly-c.ly)*k; c.lz+=(lz-c.lz)*k;
-  G.cam.position.set(c.x,c.y,c.z); G.cam.near=.1; G.cam.far=G.gfx>=2?170:120; G.cam.updateProjectionMatrix();
+  const c=G.fcam, k=Math.min(1,dt*(u.manual?11:6)), kl=Math.min(1,dt*(u.manual?14:6));
+  c.x+=(tx-c.x)*k; c.y+=(ty-c.y)*k; c.z+=(tz-c.z)*k; c.lx+=(lx-c.lx)*kl; c.ly+=(ly-c.ly)*kl; c.lz+=(lz-c.lz)*kl;
+  G.cam.position.set(c.x,c.y,c.z); G.cam.near=.08; G.cam.far=G.gfx>=2?170:120; G.cam.updateProjectionMatrix();
   G.cam.lookAt(c.lx,c.ly,c.lz);
-  G.scene.fog.near=G.gfx>=2?35:25; G.scene.fog.far=G.gfx>=2?150:105;   // Nebel in der Ferne: weniger zu zeichnen
+  G.scene.fog.near=G.gfx>=2?35:25; G.scene.fog.far=G.gfx>=2?150:105;
   G.sun.position.set(u.x+30, gy+55, u.z+18); G.sun.target.position.set(u.x,gy,u.z);
-  G.camMoved=true; return true;
+  G.camMoved=true; tpHud(u); return true;
+}
+function tpHudName(u){ const n=$('#tpName'); if(n) n.textContent=(UNIT[u.kind]?UNIT[u.kind].name:'')+(u.kind==='worker'&&u.age!=null?' · '+ageYears(u)+' Jahre':''); }
+function tpHud(u){
+  G.tpHudT=(G.tpHudT||0)-(G.dtW||.016); if(G.tpHudT>0) return; G.tpHudT=.12;
+  const U=UNIT[u.kind]; $('#tpHp').style.width=Math.max(0,100*u.hp/U.hp)+'%';
+  const cw=u.kind==='worker' && u.carry; $('#tpCarry').parentNode.style.display=cw?'':'none';
+  if(cw){ $('#tpCarry').style.width=Math.min(100,100*u.carry.amt/CARRY)+'%'; $('#tpCarryT').textContent=u.carry.amt>=1?Math.floor(u.carry.amt)+'/'+CARRY+' '+RES_DE[u.carry.type]:''; } else $('#tpCarryT').textContent='';
+}
+// Ziel-Markierung über dem anvisierten Gegner / Rohstoff
+function tpMark(o, kind){
+  if(!o){ if(TP.mark){ TP.mark.visible=false; } TP.markObj=null; return; }
+  if(!TP.mark){ TP.mark=new T.Sprite(new T.SpriteMaterial({map:iconTexture('sword'), transparent:true, depthTest:false, depthWrite:false})); TP.mark.renderOrder=13; G.scene.add(TP.mark); }
+  if(TP.markKind!==kind){ TP.mark.material.map=iconTexture(kind); TP.mark.material.needsUpdate=true; TP.markKind=kind; }
+  TP.markObj=o; TP.mark.visible=true;
+  const top = o.size ? getH(o.x,o.z)+o.size*.9 : o.kind==='wood' ? getH(o.x,o.z)+4.6 : getH(o.x,o.z)+(o.mesh&&o.mesh.scale?2.2:2);
+  TP.mark.position.set(o.x, top+Math.sin(G.t*4)*.12, o.z); TP.mark.scale.setScalar(.7);
+}
+// Was liegt vor der Figur? (für den Aktionsknopf)
+function tpContext(u){
+  const U=UNIT[u.kind], f=u.face;
+  const ahead=(x,z,rad,R,cone)=>{ const dx=x-u.x, dz=z-u.z, dd=Math.hypot(dx,dz), d=dd-rad; if(d>R) return 1e9; const dot=(dx*Math.sin(f)+dz*Math.cos(f))/(dd||1); return (dot>=cone||d<.5) ? d-dot*.4 : 1e9; };
+  if(isSoldier(u)){
+    const R=U.ranged?U.range:U.range+1.6, cone=U.ranged?.55:.1; let best=null, bd=1e9;
+    for(const o of G.units){ if(o.dead||o.inside||!hostile(u.owner,o.owner)) continue; const d=ahead(o.x,o.z,0,R,cone); if(d<bd){ bd=d; best=o; } }
+    for(const a of G.deer){ if(a.dead||!a.alive) continue; const d=ahead(a.x,a.z,a.r||.5,R,cone); if(d<bd){ bd=d; best=a; } }
+    for(const b of G.builds){ if(b.dead||!hostile(u.owner,b.owner)||b.kind==='road') continue; const d=ahead(b.x,b.z,b.size*.5,R,cone); if(d<bd){ bd=d; best=b; } }
+    return best ? {t:best, a:'attack', ic:U.ranged?'🏹':'⚔️', l:best.deer?'Jagen':best.size?'Angreifen':'Angreifen', mk:'sword'} : {a:'swing', ic:U.ranged?'🏹':'⚔️', l:U.ranged?'Schießen':'Zuschlagen'};
+  }
+  if(u.ageSt==='greis') return {a:'none', ic:'🧓', l:'Zu alt'};
+  // abladen
+  if(u.carry.amt>=1){ const b=dropoffFor(u); if(b && b.kind!=='ox' && Math.hypot(b.x-u.x,b.z-u.z)<b.size*.5+2.2) return {t:b, a:'drop', ic:'📦', l:'Abladen'}; }
+  let best=null, bd=1e9, act=null;
+  for(const b of G.builds){ if(b.owner!==u.owner||b.dead) continue; if(b.built>=1 && b.hp>=BUILD[b.kind].hp) continue; const d=ahead(b.x,b.z,b.size*.5,1.8,0); if(d<bd){ bd=d; best=b; act=b.built<1?'build':'repair'; } }
+  for(const r of G.res){ if(!r.alive||r.amt<=0) continue; const tx=r.fish?r.gx:r.x, tz=r.fish?r.gz:r.z; const d=ahead(tx,tz,r.fish?0:(r.r||.5),1.6,0); if(d<bd){ bd=d; best=r; act='gather'; } }
+  if(!best) return {a:'none', ic:'✋', l:'Arbeiten'};
+  if(act!=='gather') return {t:best, a:act, ic:'🔨', l:act==='build'?'Bauen':'Reparieren', mk:'hammer'};
+  const r=best; if(r.deer && !r.dead) return {t:r, a:'hunt', ic:'🗡️', l:'Jagen', mk:'spear'};
+  if(u.carry.amt>=CARRY) return {t:r, a:'full', ic:'📦', l:'Voll!', mk:resIcon(r)};
+  return {t:r, a:'gather', ic:{wood:'🪓',stone:'⛏️',gold:'⛏️',food:r.fish?'🎣':'🧺'}[r.kind]||'✋', l:{wood:'Fällen',stone:'Abbauen',gold:'Abbauen',food:r.fish?'Fischen':r.dead?'Zerlegen':'Pflücken'}[r.kind]||'Arbeiten', mk:resIcon(r)};
+}
+function canWalk(x,z){ const k=cellIdx(x,z); if(k<0) return false; if(G.grid[k] && !(G.gateAt && G.gateAt[k] && !hostile(G.gateAt[k].owner,0))) return false; const h=getH(x,z); return h>WATER_Y-.15 && h<WATER_Y+snowLineAt(x,z)+2; }
+function updateManual(u,dt){
+  const U=UNIT[u.kind], p=G.players[u.owner]; let jx=G.joy?G.joy.x:0, jy=G.joy?G.joy.y:0;
+  const K=PC.keys; if(K.has('w')||K.has('arrowup')) jy=-1; if(K.has('s')||K.has('arrowdown')) jy=1; if(K.has('a')||K.has('arrowleft')) jx=-1; if(K.has('d')||K.has('arrowright')) jx=1;
+  const run = G.run || K.has('shift'), act = G.act || K.has(' ') || K.has('e') || G.mouseAct;
+  const fx=Math.sin(TP.yaw), fz=Math.cos(TP.yaw), rx=Math.cos(TP.yaw), rz=-Math.sin(TP.yaw);
+  let wx=fx*(-jy)+rx*(-jx), wz=fz*(-jy)+rz*(-jx); const wl=Math.min(1,Math.hypot(wx,wz)); if(wl>.01){ const n=Math.hypot(wx,wz); wx/=n; wz/=n; }
+  const maxSp=(u.speed||U.speed)*(run?1.5:1)*(wl>.12?wl:0)*(act && !isSoldier(u) ? .3 : 1);
+  // weich beschleunigen und abbremsen
+  const kk=Math.min(1,dt*9); TP.vx+=(wx*maxSp-TP.vx)*kk; TP.vz+=(wz*maxSp-TP.vz)*kk;
+  const sp=Math.hypot(TP.vx,TP.vz); u.moving=sp>.25; u.working=false;
+  if(sp>.02){ const ck=cellIdx(u.x,u.z), road=ck>=0&&G.road[ck]?1.4:1; const nx=u.x+TP.vx*dt*road, nz=u.z+TP.vz*dt*road;
+    if(canWalk(nx,nz)){ u.x=nx; u.z=nz; } else if(canWalk(nx,u.z)){ u.x=nx; TP.vz*=.5; } else if(canWalk(u.x,nz)){ u.z=nz; TP.vx*=.5; } else { TP.vx=TP.vz=0; }
+    if(wl>.12){ const want=Math.atan2(wx,wz); let d=want-u.face; d=Math.atan2(Math.sin(d),Math.cos(d)); u.face+=d*Math.min(1,dt*12); } }
+  if(u.moving){ TP.stepT-=dt*sp; if(TP.stepT<=0){ TP.stepT=.95; EE.sfx('step',.25); } }
+  u.cd=(u.cd||0)-dt;
+  // Abladen automatisch, wenn man am Lager vorbeiläuft
+  if(u.kind==='worker' && u.carry.amt>=1){ const b=dropoffFor(u); if(b && b.kind!=='ox' && near(u,b.x,b.z,b.size*.5+1.4)) tpDrop(u,b); }
+  // Kontext alle 0,12 s
+  TP.ctxT-=dt; if(TP.ctxT<=0){ TP.ctxT=.12; TP.ctx=tpContext(u); const c=TP.ctx; $('#bActI').textContent=c.ic; $('#bActL').textContent=c.l; $('#bAct').classList.toggle('dim', c.a==='none'||c.a==='full');
+    $('#tpPrompt').textContent = c.t ? (c.a==='full'?'Voll – zum Lager oder Hauptgebäude bringen':c.l+(c.t.size?' · '+BUILD[c.t.kind].name:c.t.deer&&c.t.animal?' · '+(ANIMAL[c.t.animal]&&ANIMAL[c.t.animal].name||'Tier'):'')) : '';
+    tpMark(c.t && c.mk ? c.t : null, c.mk); }
+  else if(TP.markObj) tpMark(TP.markObj, TP.markKind);
+  if(!act) return;
+  const c=TP.ctx||{a:'none'}; u.working = c.a!=='none';
+  if(c.t) { const dx=c.t.x-u.x, dz=c.t.z-u.z; let d=Math.atan2(dx,dz)-u.face; d=Math.atan2(Math.sin(d),Math.cos(d)); u.face+=d*Math.min(1,dt*14); }   // zum Ziel drehen (Zielhilfe)
+  if(isSoldier(u)){
+    if(u.cd<=0){ u.cd=U.cd; u.working=true;
+      if(c.a==='attack' && c.t && !c.t.dead){ const t=c.t; if(t.deer && t.hp==null){ animalDie(t); EE.sfx('hit',.7); } else { hit(u,t); if(!U.ranged) EE.sfx('hit',.7); } EE.vib(18); }
+      else EE.sfx(U.ranged?'bow':'swing',.5); }
+    return;
+  }
+  if(c.a==='drop'){ tpDrop(u,c.t); return; }
+  if(c.a==='none' || c.a==='full'){ u.working=false; return; }
+  const t=c.t; u.hitT=(u.hitT||0)+dt;
+  if(c.a==='build' || c.a==='repair'){ const b=t; if(u.hitT>.9){ u.hitT=0; sfxAt('build',u.x,u.z,.9); EE.vib(8); }
+    if(b.built>=1){ b.hp=Math.min(BUILD[b.kind].hp, b.hp+dt*BUILD[b.kind].hp/BUILD[b.kind].time*.6); return; }
+    b.built=Math.min(1,b.built+dt/BUILD[b.kind].time/(b.slow?3:1)*1.2); b.hp=Math.max(1,BUILD[b.kind].hp*b.built);
+    if(b.kind==='road') b.mesh.children[0].material.opacity=.35+.6*b.built; else b.mesh.scale.y=.25+.75*b.built;
+    if(b.built>=1){ finishBuilding(b); EE.sfx('done',.6); } return; }
+  const r=t;
+  if(c.a==='hunt'){ if(r.hp!=null){ if(u.cd<=0){ u.cd=1; animalHit(r, 10, u); EE.sfx('hit',.7); EE.vib(18); } } else { EE.sfx('hit',.7); animalDie(r); } return; }
+  if(u.carry.amt>0 && u.carry.type!==r.kind) u.carry.amt=0;
+  if(u.hitT>1.0){ u.hitT=0; sfxAt(r.kind==='wood'?'chop':r.kind==='stone'?'stone':r.kind==='gold'?'gold':'berry', u.x,u.z,1); EE.vib(6); }
+  const amount=Math.min(r.amt, CARRY-u.carry.amt, dt*(r.kind==='wood'?1.1:r.kind==='food'?1.25:.85)*(u.ageSt==='alt'?.75:1));
+  r.amt-=amount; u.carry.type=r.kind; u.carry.amt+=amount; u.lastType=r.kind; u.lastSrc=srcType(r);
+  if(r.deer) r.mesh.scale.setScalar(.5+.5*r.amt/r.max);
+  if(r.amt<=0) removeRes(r);
+}
+function tpDrop(u,b){ if(u.carry.amt<1) return; const n=Math.floor(u.carry.amt); G.players[u.owner].res[u.carry.type]+=u.carry.amt; EE.toast('+'+n+' '+RES_DE[u.carry.type]); EE.sfx('confirm',.4); u.carry.amt=0; updateHUD(); }
+function initTP(){
+  const joy=$('#joy'), knob=joy.querySelector('i'); let jid=null, cx=0, cy=0;
+  const set=(x,y)=>{ const R=joy.offsetWidth*.42, dx=x-cx, dy=y-cy, l=Math.hypot(dx,dy), k=l>R?R/l:1; knob.style.transform=`translate(${dx*k}px,${dy*k}px)`; G.joy={x:dx*k/R, y:dy*k/R}; };
+  joy.addEventListener('pointerdown',e=>{ e.preventDefault(); e.stopPropagation(); jid=e.pointerId; joy.setPointerCapture(jid); const r=joy.getBoundingClientRect(); cx=r.left+r.width/2; cy=r.top+r.height/2; set(e.clientX,e.clientY); });
+  joy.addEventListener('pointermove',e=>{ if(e.pointerId===jid) set(e.clientX,e.clientY); });
+  const end=e=>{ if(e.pointerId!==jid) return; jid=null; knob.style.transform=''; if(G) G.joy={x:0,y:0}; };
+  joy.addEventListener('pointerup',end); joy.addEventListener('pointercancel',end);
+  const ab=$('#bAct');
+  ab.addEventListener('pointerdown',e=>{ e.preventDefault(); e.stopPropagation(); ab.setPointerCapture(e.pointerId); if(G) G.act=true; ab.classList.add('on'); });
+  const up=()=>{ if(G) G.act=false; ab.classList.remove('on'); }; ab.addEventListener('pointerup',up); ab.addEventListener('pointercancel',up);
+  const rb=$('#bRun'); rb.addEventListener('pointerdown',e=>{ e.preventDefault(); e.stopPropagation(); if(G){ G.run=!G.run; rb.classList.toggle('on',G.run); } });
+  $('#bTake').onclick=()=>{ if(G && G.follow) takeControl(!G.follow.manual); };
+  // PC: Maus festhalten zum Umschauen, Linksklick = Aktion, Mausrad = Abstand
+  const cv=$('#gc');
+  cv.addEventListener('wheel',e=>{ if(G && G.follow){ e.preventDefault(); TP.dist=clamp(TP.dist*(e.deltaY>0?1.1:.9),2,8); } },{passive:false});
+  document.addEventListener('mousemove',e=>{ if(G && G.follow && document.pointerLockElement===cv){ TP.yaw-=e.movementX*.0032; TP.pitch=clamp(TP.pitch+e.movementY*.0025,-.15,.85); TP.lookT=1.5; } });
 }
 function updateCam(){
   const s = G.camS;
@@ -3177,7 +3324,8 @@ function updateWorker(u,dt){
   else if(u.kind==='worker' && u.ageSt!=='greis' && u.owner===0 && u.state==='idle' && !u.hold && !u.pin && !u.auto && !u.homeless){ if(u.lifeT==null) u.lifeT=10+G.rand()*14; u.lifeT-=dt*(badWeather()?2:1); if(u.lifeT<=0){ u.lifeT=null; idleLife(u); } }
   else if(u.homeless && u.kind==='worker' && u.state!=='idle' && u.state!=='move'){ u.state='idle'; u.path=null; }
   if(u.pfWait && performance.now() < G.pfDeadline){ const w=u.pfWait; u.pfWait=null; u.path=findPath(u.x,u.z,w.x,w.z); u.pi=0; }
-  if(!u.pfWait) switch(u.state){
+  if(u.manual) updateManual(u,dt);
+  else if(!u.pfWait) switch(u.state){
     case 'gohome': { const h=u.site; if(!h || h.dead){ u.state='idle'; u.site=null; break; }
       if(Math.hypot(h.x-u.x,h.z-u.z) < h.size*.5+1.2){ u.inside=h; u.inHut=true; u.hutT=(badWeather()?45:20)+G.rand()*30; u.site=null; u.path=null; u.state='idle'; u.ring.visible=false; break; }
       if(followPath(u,dt)) moveTo(u,h.x,h.z); break; }
@@ -3582,7 +3730,7 @@ function update(dt){
   G.chunkT=(G.chunkT||0)-dt; if(G.chunkT<=0){ G.chunkT=.25; updateChunks(); }
   G.tileT=(G.tileT||0)-dt; if(G.tileT<=0){ G.tileT=.12; updateTiles(); }
   G.cullT=(G.cullT||0)-dt; if(G.cullT<=0){ G.cullT=.2; cullFar(); }
-  TERRAIN_T.value = G.t; YEAR_U.value = yearPhase(); NZ_U.value = G.NZ; FADE_U.value.set(.3,.9);   // Bäume bleiben immer sichtbar (nur direkt vor der Linse durchsichtig)
+  TERRAIN_T.value = G.t; YEAR_U.value = yearPhase(); NZ_U.value = G.NZ; if(G.follow) FADE_U.value.set(1,2.4); else FADE_U.value.set(.3,.9);   // Bäume bleiben immer sichtbar (nur direkt vor der Linse durchsichtig)
   G.ambT=(G.ambT||0)-dt; if(G.ambT<=0){ G.ambT=.5; updateAmbient(); }
   FLAG_T.value = G.t;
   updateOverview();
@@ -3908,6 +4056,9 @@ function pcPanel(a){ if(a.startsWith('b-') && !G.buildMenu && !document.querySel
 function pcKey(e){
   if(!G || G.inMenu || e.target.closest('input,textarea,select')) return;
   const k=e.key.toLowerCase(), ctrl=e.ctrlKey||e.metaKey;
+  if(G.follow){ if(k==='escape'){ if(document.pointerLockElement) document.exitPointerLock(); else stopFollow(); return; }
+    if(k==='t' || k==='tab'){ e.preventDefault(); takeControl(!G.follow.manual); return; }
+    if(G.follow.manual && [' ','w','a','s','d','e','shift','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){ e.preventDefault(); PC.keys.add(k); } return; }
   if(/^[1-9]$/.test(k)){ e.preventDefault();
     if(ctrl){ PC.groups[k]=G.sel.filter(u=>u.owner===0 && !u.dead); EE.toast('Gruppe '+k+' gespeichert ('+PC.groups[k].length+')'); return; }
     const g=(PC.groups[k]||[]).filter(u=>!u.dead && !u.inside); if(!g.length) return; select(g,null);
@@ -3934,6 +4085,7 @@ function pcKey(e){
 }
 function pcUpdate(dt){
   if(!G || G.inMenu) return;
+  if(G.follow) return;   // in der Schulterperspektive steuert WASD die Figur
   const K=PC.keys, sp=G.camS.dist*1.1*dt; let dx=0, dz=0;
   if(K.has('w')||K.has('arrowup')) dz-=1; if(K.has('s')||K.has('arrowdown')) dz+=1; if(K.has('a')||K.has('arrowleft')) dx-=1; if(K.has('d')||K.has('arrowright')) dx+=1;
   // Bildschirmrand (nur Maus, nur wenn das Fenster den Mauszeiger hat)
@@ -3951,6 +4103,9 @@ function initPC(c){
 }
 function pDown(e){
   e.preventDefault(); $('#gc').setPointerCapture(e.pointerId);
+  if(G && G.follow){ // Third Person: Wischen = umschauen, zwei Finger = Abstand, PC: Klick = Maus fangen / Aktion
+    if(e.pointerType==='mouse' && G.follow.manual){ const cv=$('#gc'); if(document.pointerLockElement!==cv){ try{ cv.requestPointerLock(); }catch(_){} } else { G.mouseAct=true; } return; }
+    P.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t:performance.now()}); gesture={type:'look', d0:null}; return; }
   if(e.pointerType==='mouse'){ // PC: Maus wie in Empire Earth 2
     P.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t:performance.now()});
     gesture = e.button===2 ? {type:'rclick', mouse:true} : e.button===1 ? {type:'rotate', mouse:true} : {type:'tap', mouse:true, add:e.shiftKey};
@@ -3970,6 +4125,8 @@ function pMove(e){
   const p = P.get(e.pointerId); if(!p) return;
   const px=p.x, py=p.y; p.x=e.clientX; p.y=e.clientY;
   if(!gesture) return;
+  if(gesture.type==='look'){ if(P.size>=2){ const a=[...P.values()], d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y); if(gesture.d0) TP.dist=clamp(TP.dist*gesture.d0/Math.max(20,d),2,8); gesture.d0=d; return; }
+    TP.yaw -= (p.x-px)*.0065; TP.pitch=clamp(TP.pitch+(p.y-py)*.004,-.15,.85); TP.lookT=1.8; return; }
   if(gesture.type==='rotate'){ G.camReset=false; G.camS.yaw -= (p.x-px)*.008; return; }
   if(gesture.type==='rclick'){ if(Math.hypot(p.x-p.sx,p.y-p.sy)>6) gesture.type='rpan'; }
   if(gesture.type==='rpan'){ panBy(p.x-px, p.y-py); return; }
@@ -3994,7 +4151,9 @@ function pMove(e){
 function pUp(e){
   const p = P.get(e.pointerId); P.delete(e.pointerId);
   clearTimeout(longT);
+  if(G && G.follow && e.pointerType==='mouse'){ G.mouseAct=false; }
   if(!p || !gesture) return;
+  if(gesture.type==='look'){ if(P.size===0) gesture=null; return; }
   if(gesture.mouse){ if(gesture.type==='tap') pcSelectAt(p.x,p.y,gesture.add); else if(gesture.type==='rclick') pcCommandAt(p.x,p.y); else if(gesture.type==='box'){ boxSelect(gesture.x0,gesture.y0,p.x,p.y); hideBox(); } else if(gesture.type==='ghost'||gesture.type==='wall'){} gesture=null; return; }
   if(gesture.type==='tap' && P.size===0) tapAt(p.x,p.y);
   else if(gesture.type==='box' && P.size===0){ boxSelect(gesture.x0,gesture.y0,p.x,p.y); hideBox(); }
@@ -4679,5 +4838,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { tp:()=>TP, models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();

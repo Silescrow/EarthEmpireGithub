@@ -93,6 +93,15 @@ function sfx(name, vol){
     case 'gold': { // Erz und Gold: metallisch
       [1650,2470,3300].forEach((f,i)=>{ const g=gain(0,B); env(g,t,.001,.18/(i+1),.35); osc('sine',f*(1+Math.random()*.02),t,.4,g); });
       const ng=gain(0,B); env(ng,t,.001,.35,.05); noise(t,.07,filt('highpass',3000,1,ng)); break; }
+    case 'step': { // Schritt auf Gras/Erde
+      const ng=gain(0,B); env(ng,t,.004,.22,.09); noise(t,.11,filt('lowpass',520+Math.random()*260,.8,ng));
+      const g=gain(0,B); env(g,t,.002,.12,.06); osc('sine',70+Math.random()*20,t,.08,g); break; }
+    case 'swing': { // Hieb durch die Luft
+      const ng=gain(0,B); ng.gain.setValueAtTime(0.0001,t); ng.gain.linearRampToValueAtTime(.35,t+.06); ng.gain.exponentialRampToValueAtTime(0.0001,t+.2);
+      const f=filt('bandpass',900,1.2,ng); f.frequency.setValueAtTime(500,t); f.frequency.exponentialRampToValueAtTime(2200,t+.15); noise(t,.22,f); break; }
+    case 'hit': { // Treffer
+      const g=gain(0,B); env(g,t,.001,.7,.14); const o=osc('triangle',180,t,.16,g); o.frequency.exponentialRampToValueAtTime(70,t+.1);
+      const ng=gain(0,B); env(ng,t,.001,.5,.06); noise(t,.08,filt('bandpass',1800,1,ng)); break; }
     case 'berry': { // Rascheln
       const ng=gain(0,B); ng.gain.setValueAtTime(0.0001,t); ng.gain.linearRampToValueAtTime(.3,t+.05); ng.gain.exponentialRampToValueAtTime(0.0001,t+.3);
       noise(t,.32,filt('highpass',3200,.6,ng)); break; }
