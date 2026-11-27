@@ -374,12 +374,12 @@ function drawPanel(){
   if(G.place){ el.innerHTML=''; el.className='hidden'; return; }
   if(G.selB && G.selBs && G.selBs.length>1){
     const bs=G.selBs.filter(o=>!o.dead), back={}; for(const o of bs){ const r=refundOf(o); for(const k in r) back[k]=(back[k]||0)+r[k]; }
-    const pl=wallTowerPlan(G.selB), tot={}; for(const r in WT_COST) tot[r]=WT_COST[r]*pl.length;
+    const isRoad=G.selB.kind==='road', pl=isRoad?[]:wallTowerPlan(G.selB), tot={}; for(const r in WT_COST) tot[r]=WT_COST[r]*pl.length;
     const nW=bs.filter(o=>o.kind==='wall').length, nT=bs.filter(o=>o.kind==='tower').length, nG=bs.filter(o=>o.kind==='gate').length;
     const armed=G.multiDel && G.t-G.multiDel<3;
-    let h=`<div class="info"><b>${bs.length} Mauerteile</b><small>${nW} Palisade${nT?' · '+nT+' Türme':''}${nG?' · '+nG+' Tor'+(nG>1?'e':''):''}</small></div>`;
+    let h=isRoad ? `<div class="info"><b>Weg · ${bs.length} Stücke</b><small>ca. ${Math.round(bs.reduce((a,o)=>a+(o.seg.len||1),0))} m</small></div>` : `<div class="info"><b>${bs.length} Mauerteile</b><small>${nW} Palisade${nT?' · '+nT+' Türme':''}${nG?' · '+nG+' Tor'+(nG>1?'e':''):''}</small></div>`;
     if(pl.length) h+=`<button class="ab" data-a="wtowers"><span class="ai">${towerSVG()}</span>${pl.length} Türme einbauen<span class="ac">${costText(tot)}</span></button>`;
-    h+=`<button class="ab del${armed?' armed':''}" data-a="demolishAll"><span class="ai"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" stroke="#ff7a6a" stroke-width="2" fill="none" stroke-linejoin="round"/></svg></span>${armed?'Wirklich alle?':'Alle abreißen'}<span class="ac">${armed?'nochmal tippen':'+'+costText(back).replace(/"c (ok|miss)"/g,'"c ok"')}</span></button>`;
+    h+=`<button class="ab del${armed?' armed':''}" data-a="demolishAll"><span class="ai"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" stroke="#ff7a6a" stroke-width="2" fill="none" stroke-linejoin="round"/></svg></span>${armed?'Wirklich alle?':'Alle abreißen'}<span class="ac">${armed?'nochmal tippen':(Object.values(back).some(v=>v>0)?'+'+costText(back).replace(/"c (ok|miss)"/g,'"c ok"'):'ganze Strecke')}</span></button>`;
     el.innerHTML=h; el.className='';
     el.querySelectorAll('.ab').forEach(b=>b.onclick=()=>action(b.dataset.a));
     return;
@@ -431,7 +431,7 @@ function drawPanel(){
         h += `<button class="ab" data-a="buy-${r}"><span class="ai">${ICON[r]||''}</span>100 ${RES_DE[r]} kaufen<span class="ac">${bp} Gold</span></button>`; } }
     // Einzelne Bauteile abreißen (Palisadenstück, Turm, Tor, Gebäude) – zweimal tippen zur Sicherheit
     if(b.owner===0){ const armed=b.delArm && G.t-b.delArm<3;
-      h += `<button class="ab del${armed?' armed':''}" data-a="demolish"><span class="ai"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" stroke="#ff7a6a" stroke-width="2" fill="none" stroke-linejoin="round"/></svg></span>${armed?'Wirklich?':'Abreißen'}<span class="ac">${armed?'nochmal tippen':'+'+costText(refundOf(b)).replace(/"c (ok|miss)"/g,'"c ok"')}</span></button>`; }
+      h += `<button class="ab del${armed?' armed':''}" data-a="demolish"><span class="ai"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" stroke="#ff7a6a" stroke-width="2" fill="none" stroke-linejoin="round"/></svg></span>${armed?'Wirklich?':'Abreißen'}<span class="ac">${armed?'nochmal tippen':(Object.values(refundOf(b)).some(v=>v>0)?'+'+costText(refundOf(b)).replace(/"c (ok|miss)"/g,'"c ok"'):'nur dieses Stück')}</span></button>`; }
     el.innerHTML = h; el.className='';
   } else if(G.sel.length){
     const ws = G.sel.slice();
@@ -4428,6 +4428,8 @@ function pickAt(sx,sy){
   if(best) return best;
   bd = 30;
   for(const r of G.res){ if(!r.alive) continue; const s=toScreen(r.x, getH(r.x,r.z)+.6, r.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<bd){bd=d;best={r};} }
+  // Wegstücke antippen (nur wenn keine eigenen Leute ausgewählt sind – sonst ist der Tipp ein Laufbefehl)
+  if(!best && !G.sel.some(u=>u.owner===0)){ let rd=22; for(const b of G.builds){ if(b.kind!=='road' || b.owner!==0 || b.dead) continue; const s=toScreen(b.x, getH(b.x,b.z)+.05, b.z); if(!s.ok) continue; const d=Math.hypot(s.x-sx,s.y-sy); if(d<rd){ rd=d; best={b}; } } }
   return best;
 }
 function tapAt(sx,sy){
@@ -4742,21 +4744,21 @@ function gateParts(w){
 }
 function wallLine(b){ return G.builds.filter(o=>o.owner===b.owner && o.wallId===b.wallId && o.seg && !o.dead && (o.kind==='wall'||o.kind==='gate'||o.kind==='tower')); }
 // Alle zusammenhängenden Palisaden (auch mehrere gezogene Linien, die aneinander andocken) bekommen Türme
-const isWallPart = b => b && b.seg && (b.kind==='wall'||b.kind==='gate'||b.kind==='tower');
+const isWallPart = b => b && b.seg && (b.kind==='wall'||b.kind==='gate'||b.kind==='tower'||b.kind==='road');
 // Tipp auf Gebäude; Doppeltipp auf ein Mauerteil wählt die ganze zusammenhängende Mauer (wie Empire Earth II)
 let lastBT={t:0,b:null};
 function tapBuilding(b){
   const now=performance.now();
-  if(b.owner===0 && isWallPart(b) && lastBT.b && isWallPart(lastBT.b) && now-lastBT.t<420){ lastBT={t:0,b:null}; selectWallNet(b); return; }
+  if(b.owner===0 && isWallPart(b) && lastBT.b && isWallPart(lastBT.b) && (lastBT.b.kind==='road')===(b.kind==='road') && now-lastBT.t<420){ lastBT={t:0,b:null}; selectWallNet(b); return; }
   lastBT={t:now,b}; select([],b); EE.click();
 }
 function selectWallNet(b){
   const all=wallNet(b).flat().filter(o=>!o.dead);
   select([],b); G.selBs=all; for(const o of all) if(o.ring) o.ring.visible=true;
-  EE.click(); EE.toast(all.length+' Mauerteile ausgewählt'); drawPanel();
+  EE.click(); EE.toast(all.length+(b.kind==='road'?' Wegstücke':' Mauerteile')+' ausgewählt'); drawPanel();
 }
 function wallNet(b){
-  const own=G.builds.filter(o=>o.owner===b.owner && o.seg && !o.dead && (o.kind==='wall'||o.kind==='gate'||o.kind==='tower'));
+  const rd=b.kind==='road', own=G.builds.filter(o=>o.owner===b.owner && o.seg && !o.dead && (rd ? o.kind==='road' : (o.kind==='wall'||o.kind==='gate'||o.kind==='tower')));
   const byId={}; for(const o of own) (byId[o.wallId]||(byId[o.wallId]=[])).push(o);
   const ends=o=>{ const a=o.seg.ang||0, h=(o.seg.len||1)/2; return [[o.x+Math.cos(a)*h,o.z+Math.sin(a)*h],[o.x-Math.cos(a)*h,o.z-Math.sin(a)*h]]; };
   const net=new Set([b.wallId]), todo=[b.wallId];
