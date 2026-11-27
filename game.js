@@ -1348,7 +1348,7 @@ function initCtrlUI(){
 function startFollow(u){
   if(!u || u.dead) return; EE.click();
   G.follow=u; G.fcam=null; G.camReset=false; select([],null);
-  document.querySelector('#game').classList.add('fview');
+  document.querySelector('#game').classList.add('fview'); applyRes();
   // Third Person: du steuerst die Figur selbst (Bauer arbeitet nur, wenn du es tust; Soldat kämpft, wenn du zuschlägst)
   if(u.owner===0 && (u.kind==='worker' || isSoldier(u))){
     u.manual=true; u.state='manual'; u.path=null; u.target=null; u.site=null; u.auto=u.seek=false; if(u.pin) setPin(u,false);
@@ -1360,7 +1360,7 @@ function startFollow(u){
 }
 function stopFollow(quiet){
   const u=G.follow; if(!u) return; G.follow=null;
-  document.querySelector('#game').classList.remove('fview'); document.querySelector('#game').classList.remove('fctrl');
+  document.querySelector('#game').classList.remove('fview'); document.querySelector('#game').classList.remove('fctrl'); applyRes();
   if(u.manual){ u.manual=false; u.state='idle'; u.moving=u.working=false; u.hold=true; if(isSoldier(u)) u.post={x:u.x,z:u.z}; }
   if(!quiet) EE.click();
   if(u && !u.dead){ G.camS.x=u.x; G.camS.z=u.z; G.camS.dist=Math.max(G.camS.dist,14); }
@@ -2472,17 +2472,20 @@ function parseGLB(buf){
   return texP.then(()=>({geo, mat}));
 }
 // Grafik „Niedrig“: Gebäude in einfacher Fassung (models/niedrig/), ab „Mittel“ volle Qualität
-const MODEL_LOW = new Set(['aurochs','ox','tent2','hutskull','market','fishrack','bushes','blooms','lioness','lion2','cheetah','turtle','dog1','dog2','dog3','cat','shark1','shark2','sheep','wolf','lion','elephant','croc','antelope','bank','banner','barr1','barr2','barr3','barrikade','bigtc','bird','cavef','cavem','dolphin','fellgestell','fence','fire','fish','horse','house','leiter','palisade','rabbit','store','store2','store3','tc','tent','thron','tower','trog','warrior','werkzeuge']);   // Niedrig = einfache Fassung, sonst HD-Texturen (V1.78)
+const MODEL_LOW = new Set(['ore','aurochs','ox','tent2','hutskull','market','fishrack','bushes','blooms','lioness','lion2','cheetah','turtle','dog1','dog2','dog3','cat','shark1','shark2','sheep','wolf','lion','elephant','croc','antelope','bank','banner','barr1','barr2','barr3','barrikade','bigtc','bird','cavef','cavem','dolphin','fellgestell','fence','fire','fish','horse','house','leiter','palisade','rabbit','store','store2','store3','tc','tent','thron','tower','trog','warrior','werkzeuge']);   // Niedrig = einfache Fassung, sonst HD-Texturen (V1.78)
 let modelsLow = null;
 window.EE_MODEL_LIST=()=>{ const l=[]; for(const [k,f] of Object.entries(MODEL_FILES)){ l.push(f); if(MODEL_LOW.has(k)) l.push(f.replace('models/','models/niedrig/')); } return [...new Set(l)]; };   // für das Offline-Spielen
+// Auf „Mittel“ nehmen Tiere, Erz und Deko die schlanke Fassung (viele davon gleichzeitig im Bild), Gebäude bleiben voll
+const MID_LOW = new Set(['ore','sheep','wolf','lion','lion2','lioness','cheetah','turtle','elephant','croc','aurochs','ox','dog1','dog2','dog3','cat','shark1','shark2','horse','antelope','rabbit','bird','fish','dolphin','bushes','blooms','fishrack','fellgestell','werkzeuge','trog','leiter','bank','thron','banner']);
+const lowFor = (k, gfx) => MODEL_LOW.has(k) && (gfx===0 || (gfx===1 && MID_LOW.has(k)));
 function loadModels(gfx){
-  const low = gfx===0;
+  const low = gfx===0 ? 0 : gfx===1 ? 1 : 2;
   if(modelsReady && modelsLow===low) return modelsReady;
   const src = window.EE_MODELS || {}, again = modelsReady && modelsLow!==low;
   modelsLow = low;
   const list = Object.entries(MODEL_FILES).filter(([k])=> !again || MODEL_LOW.has(k));
   modelsReady = Promise.all(list.map(([k,f]) => {
-    const useLow = low && MODEL_LOW.has(k), url = useLow ? (src[k+'_low'] || src[k] || f.replace('models/','models/niedrig/')) : (src[k] || f);   // Einzeldatei ohne niedrige Fassung: volle nehmen
+    const useLow = lowFor(k, gfx), url = useLow ? (src[k+'_low'] || src[k] || f.replace('models/','models/niedrig/')) : (src[k] || f);   // Einzeldatei ohne niedrige Fassung: volle nehmen
     return fetch(url).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(parseGLB).then(m=>{ MODELS[k]=m; }).catch(()=>{});
   }));
   return modelsReady;
@@ -2748,10 +2751,10 @@ function batchRefill(B, cx, cz, R){
 function batchesUpdate(force){
   if(!G.batches) return;
   const s=G.camS, ci=Math.floor((s.x+G.NX/2)/TILE), cj=Math.floor((s.z+G.NZ/2)/TILE);
-  const fogR=G.scene.fog.far+8, key=ci+','+cj+','+Math.round(fogR/32)+','+Math.round(s.yaw*6)+','+(G.farView?1:0);
+  const fogR=G.scene.fog.far+8, key=ci+','+cj+','+Math.round(fogR/32)+','+Math.round(s.yaw*6)+','+(G.farView?1:0)+','+(G.follow?1:0);
   const moved = key!==G.batchKey; G.batchKey=key;
   for(const k in G.batches){ const B=G.batches[k]; if(!(moved||B.dirty||force)) continue;
-    const R = B.opt.decor ? Math.min(fogR*.6, TILE*[1.6,2.6,3.2][G.gfx]) : Math.min(fogR, TILE*6);
+    const R = B.opt.decor ? Math.min(fogR*(G.follow?.4:.6), TILE*[1.6,2.6,3.2][G.gfx]) : Math.min(fogR, TILE*6);   // Schulterperspektive: Gras/Blumen nur in der Nähe
     batchRefill(B, s.x, s.z, R);
     if(B.im) B.im.visible = !(G.farView && B.opt.decor); }
 }
@@ -2930,6 +2933,7 @@ function addRes(type,x,z){
   m.position.set(x, getH(x,z), z);
   if(!m.inst) G.scene.add(m);
   const r = {type, kind, amt, max:amt, x, z, mesh:m, alive:true, r:.6};
+  if(G.gfx<2 && m && m.traverse) m.traverse(o=>{ if(o.isMesh) o.castShadow=false; });   // Büsche, Steine, Erz: keine eigenen Schatten (spart den Schatten-Durchgang)
   G.grid[cellIdx(x,z)] = 1;
   G.res.push(r);
   if(G.resMod){ const k=resKey(x,z); if(k in G.resMod){ r.amt=G.resMod[k]; if(r.amt<=0) removeRes(r); } }
@@ -3642,7 +3646,10 @@ function update(dt){
   for(const u of G.units.slice()) updateWorker(u,dt);
   updatePopulation(dt);
   G.dtW=dt; updateArrows(dt); updateBlood(dt); updateDebris(dt); updateDolphins(dt); updateSharks(dt); updatePets(dt); updateFish(dt); if(G.alarmT) G.alarmT=Math.max(0,G.alarmT-dt);
-  for(const d of G.deer) updateDeer(d,dt);
+  // Tiere weit weg von der Kamera nur jedes 4. Bild (mit 4-facher Zeit) – spart viel Rechenzeit
+  { const cx=G.camS.x, cz=G.camS.z, R=G.camS.dist*2.5+50, f=(G.fr2=(G.fr2||0)+1);
+    for(let i=0;i<G.deer.length;i++){ const d=G.deer[i]; if(!d.alive || d.dead) continue;
+      if(Math.abs(d.x-cx)+Math.abs(d.z-cz)<R || d.prey || d.angry) updateDeer(d,dt); else if((f+i)%4===0) updateDeer(d,dt*4); } }
   for(const b of G.builds) updateBuilding(b,dt);
   for(let i=1;i<G.players.length;i++) updateAI(G.players[i],dt);
   if(G.waterU) G.waterU.value = G.t;
@@ -3658,7 +3665,7 @@ function update(dt){
     // Kosten-Farben aktuell halten: neu zeichnen, wenn sich ändert, was bezahlbar ist
     const p0=G.players[0], aff=[...Object.values(BUILD),...Object.values(UNIT),{cost:WORKER_COST}].map(d=>d.cost?(canPay(p0,d.cost)?1:0):'').join('');
     if(G.sel.length===1 || aff!==G.affSig || (!G.sel.length && !G.selB && (G.t>=30)!==!!G.tipGone)){ G.affSig=aff; G.tipGone=G.t>=30; drawPanel(); } }
-  G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=EE.S.gfx===0?.2:.1; drawMinimap(); }
+  G.miniT = (G.miniT||0)-dt; if(G.miniT<=0){ G.miniT=EE.S.gfx===0?.35:.2; drawMinimap(); }
   if(G.place && !G.place.line) updateGhost();
   updateDip(dt);
 }
@@ -3769,6 +3776,8 @@ async function applyGfx(g){
   EE.toast('Grafik: '+['Niedrig','Mittel','Hoch'][g]+(g===0?' (einfache Gebäude)':''));
 }
 let fpsN=0, fpsT=0, fpsLow=0, fpsHigh=0;
+// Auflösung: Grundwert je Grafikstufe × automatische Anpassung × (Schulterperspektive auf Niedrig/Mittel: 80 %, dort ist viel Laub im Bild)
+function applyRes(){ if(!G || !G.renderer) return; G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, [1,1.25,1.75][G.gfx])*(G.dynScale||1)*(G.follow && G.gfx<2 ? .8 : 1)); G.renderer.setSize(G.W, G.H, false); }
 // Automatische Auflösung: fällt die Bildrate unter ~24, rechnet das Spiel mit weniger Bildpunkten (bis 45 %), steigt sie wieder, wird es schärfer
 function dynRes(fps){
   if(!G || !G.renderer || G.inMenu || document.hidden) return;
@@ -3777,7 +3786,7 @@ function dynRes(fps){
   if(fpsLow>=2 && sc>.45){ sc=Math.max(.45, sc-.15); fpsLow=0; }
   else if(fpsHigh>=6 && sc<1){ sc=Math.min(1, sc+.1); fpsHigh=0; }
   else return;
-  G.dynScale=sc; G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, [1,1.25,1.75][G.gfx])*sc); G.renderer.setSize(G.W, G.H, false);
+  G.dynScale=sc; applyRes();
   if(sc<.75 && G.renderer.shadowMap.enabled && G.gfx<2){ G.renderer.shadowMap.enabled=false; G.noShadowDyn=true; G.scene.traverse(o=>{ if(o.material) (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); }); }
 }
 function fpsTick(now){ fpsN++; if(now-fpsT>=500){ dynRes(fpsN*1000/Math.max(1,now-fpsT)); const el=document.getElementById('fps'); if(el){ const on=!!(EE.S.fps|0); el.classList.toggle('hidden',!on); if(on) el.textContent=Math.round(fpsN*1000/(now-fpsT))+' FPS'; } fpsN=0; fpsT=now; } }
@@ -3851,8 +3860,11 @@ function drawMinimap(){
   const cv=$('#mini'); if(!cv) return; const x=cv.getContext('2d'), W=cv.width, H=cv.height, s=W/G.NX;
   x.drawImage(G.miniBase,0,0,W,H);
   const px=v=>(v+G.NX/2)*s, pz=v=>(v+G.NZ/2)*s;
+  // Rohstoff-Punkte (Gold, Metall, Öl) nur alle paar Sekunden neu in eine eigene Ebene zeichnen
   G.miniResT=(G.miniResT||0)-1;
-  for(const r of G.res){ if(!r.alive||r.deer||r.kind==='wood'||r.kind==='food'||r.kind==='stone') continue; x.fillStyle = r.kind==='gold'?'#ffd24a':r.kind==='metal'?'#c87a4a':r.kind==='oil'?'#111':'#d0d4d8'; x.fillRect(px(r.x)-1,pz(r.z)-1,2,2); }
+  if(!G.miniRes || G.miniResT<=0){ G.miniResT=15; const c=G.miniRes||(G.miniRes=document.createElement('canvas')); c.width=W; c.height=H; const y=c.getContext('2d'); y.clearRect(0,0,W,H);
+    for(const r of G.res){ if(!r.alive||r.deer||r.kind==='wood'||r.kind==='food'||r.kind==='stone') continue; y.fillStyle = r.kind==='gold'?'#ffd24a':r.kind==='metal'?'#c87a4a':r.kind==='oil'?'#111':'#d0d4d8'; y.fillRect(px(r.x)-1,pz(r.z)-1,2,2); } }
+  x.drawImage(G.miniRes,0,0);
   if(G.reg) drawRegionsMini(x, px, pz);
   for(const b of G.builds){ x.fillStyle='#'+COLORS[b.owner].toString(16).padStart(6,'0'); const z=Math.max(3,b.size*s); x.fillRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); x.strokeStyle='#000'; x.lineWidth=1; x.strokeRect(px(b.x)-z/2,pz(b.z)-z/2,z,z); }
   // Einheiten wie in Empire Earth 2: bewegen sich live, eigene größer mit dunklem Rand, Ausgewählte weiß
@@ -4746,5 +4758,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();
