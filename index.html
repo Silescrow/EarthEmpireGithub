@@ -97,14 +97,14 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 @media (orientation:landscape) and (min-width:560px){#dPlay .cols{grid-template-columns:minmax(0,1fr);gap:4px}#dPlay .cols>div:last-child{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:18px}#dPlay .row{margin:2px 0}#dPlay .acts{grid-column:1/-1;margin-top:6px;justify-content:center}#dPlay .acts .btn{max-width:260px}#dPlay .bonus{min-height:0;margin-top:3px;font-size:13px}#dPlay .nat{min-height:0;padding:2px 1px}#dPlay .nat svg{width:22px;height:26px}#dPlay h2{display:none}#dPlay .nat svg{width:27px;height:31px}#dPlay .nat span{font-size:10.5px}#dPlay .nat em{font-size:9.5px}#dPlay .seg button{min-height:32px}}
 .btn.off{filter:grayscale(.8);opacity:.6}
 .cpath{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;line-height:18px}.cpath i{font-style:normal;color:#e8b64a}#bonus{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;column-gap:10px}.cbon{font-size:12.5px}.cpath .pi{display:inline-flex;align-items:center;gap:3px;opacity:.55;color:#e9dcb8;font-size:12.5px}.cpath .pi.on{opacity:1;color:#f5c542;font-weight:700}.cpath .pi svg{width:15px;height:18px}.cpath .pi:last-child svg{width:18px;height:12px;border:1px solid #fff7e299}
-.nat{position:relative}.nat svg.nflag{position:absolute;top:3px;right:3px;width:12px!important;height:8px!important;border:1px solid #fff7e2cc;border-radius:2px;filter:none;box-shadow:0 1px 2px #000a}
+.nat{position:relative}.nat svg.nflag{position:absolute;top:3px;right:3px;width:19px!important;height:13px!important;border:1px solid #fff7e2cc;border-radius:2px;filter:none;box-shadow:0 1px 2px #000a}
 @media (orientation:portrait){#dPlay .row{grid-template-columns:5.4em minmax(0,1fr);margin:6px 0;font-size:14px}#dPlay .seg button{min-height:34px;padding:3px 2px;font-size:13px}#dPlay h2{margin-bottom:6px}#dPlay .nat span{font-size:10px}#dPlay .nat em{font-size:9px}}
 .bonus small{display:block;font-size:12px;color:#d9c79a;opacity:.85;margin-top:2px}
 .nat{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 1px;min-height:44px;border:1.5px solid #e8b64a50;border-radius:9px;background:#0b1130;color:#fff7e2;cursor:pointer;font:700 13px "Barlow Semi Condensed",sans-serif}
 .nat svg{width:26px;height:31px;filter:drop-shadow(0 1px 2px #000a)}
 .nat span{font-size:11px;line-height:1.05;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;color:#fff7e2}
 .nat em{font-style:normal;font-size:9.5px;line-height:1.05;color:#cbb88a;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-.eprow{position:relative}.epbtn{min-height:34px;padding:4px 14px;border:1.5px solid var(--gold2);border-radius:8px;background:var(--gold);color:#2b1a02;font:700 14px "Barlow Semi Condensed",sans-serif;cursor:pointer}.epbtn span{font-size:11px;margin-left:4px}
+.eprow{position:relative;display:flex;align-items:center;gap:6px}.epbis{color:#ffe9b0;font-weight:400;font-size:13px}.eppop.right{left:auto;right:0}.epbtn{min-height:34px;padding:4px 14px;border:1.5px solid var(--gold2);border-radius:8px;background:var(--gold);color:#2b1a02;font:700 14px "Barlow Semi Condensed",sans-serif;cursor:pointer}.epbtn span{font-size:11px;margin-left:4px}
 .eppop{position:absolute;left:0;bottom:calc(100% + 6px);z-index:5;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;width:min(520px,86vw);padding:8px;border:2px solid var(--gold);border-radius:12px;background:#0b1130;box-shadow:0 8px 24px #000c}.eppop.hidden{display:none}
 .eppop button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 2px;border:1.5px solid #e8b64a80;border-radius:8px;background:#0b1130;color:#fff7e2;font:600 12px "Barlow Semi Condensed",sans-serif;line-height:1.1;cursor:pointer}.eppop button b{font-size:10px;color:#e8b64a}.eppop button.on{background:var(--gold);color:#2b1a02}.eppop button.on b{color:#2b1a02}.eppop button.off{opacity:.42;filter:grayscale(1)}.eppop button small{font-size:9px;font-weight:400}
 .nat.on{border-color:var(--gold2);background:#3a2a08;box-shadow:0 0 0 2px var(--gold) inset}
@@ -208,7 +208,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .ab{position:relative;width:74px;min-height:62px;border-radius:10px;border:1.5px solid #e8b64a;background:linear-gradient(180deg,#24306a,#111a40);color:#fff7e2;
   font:700 12.5px "Barlow Semi Condensed",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;padding:3px}
 .ab:active{transform:translateY(2px)}
-.ab.lock{opacity:.55}
+.ab.lock{opacity:.55}.ab.done{opacity:.7;border-color:#62e06a99!important}.ab.run{border-color:#f5c542!important;box-shadow:0 0 0 1px #f5c542 inset}.ab.tool.on{background:#3a2a08!important;border-color:#f5c542!important}.ab .td{display:block;font-size:9.5px;line-height:1.1;color:#cbb88a;font-weight:400;max-width:86px;white-space:normal}
 .ab .ai{width:24px;height:24px;display:grid;place-items:center;font-size:18px}
 .ab .ai svg{width:24px;height:24px}
 .ab .ac{display:flex;gap:4px;font-size:11.5px;color:#ffe9b0}
@@ -365,7 +365,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.98</div>
+    <div class="ver2">Version 1.99</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -386,14 +386,14 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="corner2">
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V1.98</div>
+  <div class="ver">Siles Empire · V1.99</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
     <div class="cols">
       <div><div class="nats" id="nats"></div><div class="bonus" id="bonus"></div></div>
       <div>
-        <div class="row"><label>Startepoche</label><div class="eprow"><button class="epbtn" id="epBtn">Steinzeit <span>▾</span></button><div class="eppop hidden" id="epPop"></div></div></div>
+        <div class="row"><label>Epochen</label><div class="eprow"><button class="epbtn" id="epBtn">Steinzeit <span>▾</span></button><b class="epbis">bis</b><button class="epbtn" id="epEnd">Steinzeit <span>▾</span></button><div class="eppop hidden" id="epPop"></div></div></div>
         <div class="row"><label>Weltkarte</label><div class="seg" data-k="map"><button>Klein</button><button>Mittel</button><button>Groß</button><button>Riesig</button></div></div>
         <div class="row"><label>Gegner</label><div class="step"><button id="aiMinus" aria-label="weniger">−</button><b id="aiN">3</b><button id="aiPlus" aria-label="mehr">+</button><button id="aiAll" class="all">Alle</button></div></div>
         <div class="row"><label>Schwierigkeit</label><div class="seg" data-k="diff"><button>Leicht</button><button>Mittel</button><button>Schwer</button></div></div>
@@ -416,7 +416,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.98"></script>
+<script src="audio.js?v=1.99"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -595,11 +595,17 @@ const drawCiv=()=>{$$('.nat').forEach((b,i)=>b.classList.toggle('on',i===S.civ))
 S.epoch=0;
 // Startepoche: alle 10 Epochen sichtbar, nur die fertigen sind wählbar (bisher nur die Steinzeit)
 const EPOCHS=['Steinzeit','Antike','Mittelalter','Neuzeit','Industriezeit','Erster Weltkrieg','Zweiter Weltkrieg','Kalter Krieg','Moderne','Zukunft'], EPOCH_READY=1;
-$('#epPop').innerHTML=EPOCHS.map((n,i)=>`<button data-e="${i}" class="${i<EPOCH_READY?'':'off'}${i===(S.epoch|0)?' on':''}"><b>${i+1}</b>${n}${i<EPOCH_READY?'':'<small>bald</small>'}</button>`).join('');
-$('#epBtn').addEventListener('click',e=>{ e.stopPropagation(); $('#epPop').classList.toggle('hidden'); click(); });
+// Start- und Endepoche wie in Empire Earth 2: wer nur die Osmanen spielen will, wählt z. B. „Mittelalter bis Mittelalter“ und bleibt dort
+if(S.epochEnd==null || S.epochEnd>=EPOCH_READY) S.epochEnd=EPOCH_READY-1; let epMode='start';
+const drawEp=()=>{ const lo=epMode==='end'?(S.epoch|0):0, cur=epMode==='end'?S.epochEnd:(S.epoch|0);
+  $('#epPop').innerHTML=EPOCHS.map((n,i)=>`<button data-e="${i}" class="${i<EPOCH_READY&&i>=lo?'':'off'}${i===cur?' on':''}"><b>${i+1}</b>${n}${i<EPOCH_READY?'':'<small>bald</small>'}</button>`).join('');
+  $('#epBtn').firstChild.textContent=EPOCHS[S.epoch|0]+' '; $('#epEnd').firstChild.textContent=(S.epochEnd===EPOCHS.length-1?'Ende':EPOCHS[S.epochEnd])+' '; };
+const openEp=(m,ev)=>{ ev.stopPropagation(); const was=!$('#epPop').classList.contains('hidden')&&epMode===m; epMode=m; drawEp(); $('#epPop').classList.toggle('hidden',was); $('#epPop').classList.toggle('right',m==='end'); click(); };
+$('#epBtn').addEventListener('click',e=>openEp('start',e)); $('#epEnd').addEventListener('click',e=>openEp('end',e)); drawEp();
 $('#epPop').addEventListener('click',e=>{ e.stopPropagation(); const b=e.target.closest('button'); if(!b) return; const i=+b.dataset.e;
   if(i>=EPOCH_READY){ toast(EPOCHS[i]+' kommt später – erst wird die Steinzeit fertig'); vib(15); return; }
-  S.epoch=i; $('#epBtn').firstChild.textContent=EPOCHS[i]+' '; $$('#epPop button').forEach((x,k)=>x.classList.toggle('on',k===i)); $('#epPop').classList.add('hidden'); drawNats(); drawCiv(); click(); });
+  if(epMode==='end'){ if(i<(S.epoch|0)) return; S.epochEnd=i; } else { S.epoch=i; if(S.epochEnd<i) S.epochEnd=i; }
+  save(); drawEp(); $('#epPop').classList.add('hidden'); drawNats(); drawCiv(); click(); });
 document.addEventListener('click',()=>$('#epPop').classList.add('hidden'));
 $('#nats').addEventListener('click',e=>{const b=e.target.closest('.nat');if(!b)return;S.civ=+b.dataset.i;save();drawCiv();click();vib(10)});
 drawCiv();
@@ -655,7 +661,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{if((S.epoch|0)>0){ toast('Diese Epoche kommt bald – starte in der Steinzeit'); vib(20); return; }fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'1.98',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'1.99',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -680,10 +686,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.98"></script>
-<script src="game.js?v=1.98"></script>
-<script src="silescrow.js?v=1.98"></script>
-<script src="online.js?v=1.98"></script>
+<script src="three.min.js?v=1.99"></script>
+<script src="game.js?v=1.99"></script>
+<script src="silescrow.js?v=1.99"></script>
+<script src="online.js?v=1.99"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,
