@@ -1750,7 +1750,7 @@ const TERRAIN_T = {value:0};
 /* ---------- JAHRESZEITEN: 15 Minuten je Jahreszeit (1 Jahr = 60 Minuten), Start im Frühling (Nordhalbkugel).
    Südhalbkugel umgekehrt, in den Tropen Regen- und Trockenzeit. ---------- */
 // Baumkronen nah an der Kamera durchsichtig – beim Selbststeuern nur ganz nah (sonst verschwindet der Baum, den man fällt)
-const FADE_U = {value:new T.Vector2(4.5,11)};
+const FADE_U = {value:new T.Vector2(.3,.9)};
 const SEASON_LEN = 900, YEAR_LEN = 4*SEASON_LEN, YEAR_U = {value:0}, NZ_U = {value:1}, SNOW_U = {value:0};   // SNOW_U: liegengebliebener Schnee nach Schneefall (taut bei Wärme)
 const yearPhase = () => (((G && G.t) || 0) / YEAR_LEN) % 1;
 const SEASONS = [['Frühling','🌸'],['Sommer','☀️'],['Herbst','🍂'],['Winter','❄️']];
@@ -3647,7 +3647,7 @@ function update(dt){
   G.chunkT=(G.chunkT||0)-dt; if(G.chunkT<=0){ G.chunkT=.25; updateChunks(); }
   G.tileT=(G.tileT||0)-dt; if(G.tileT<=0){ G.tileT=.12; updateTiles(); }
   G.cullT=(G.cullT||0)-dt; if(G.cullT<=0){ G.cullT=.2; cullFar(); }
-  TERRAIN_T.value = G.t; YEAR_U.value = yearPhase(); NZ_U.value = G.NZ; if(G.follow) FADE_U.value.set(.6,1.6); else FADE_U.value.set(4.5,11);
+  TERRAIN_T.value = G.t; YEAR_U.value = yearPhase(); NZ_U.value = G.NZ; FADE_U.value.set(.3,.9);   // Bäume bleiben immer sichtbar (nur direkt vor der Linse durchsichtig)
   G.ambT=(G.ambT||0)-dt; if(G.ambT<=0){ G.ambT=.5; updateAmbient(); }
   FLAG_T.value = G.t;
   updateOverview();
