@@ -3185,7 +3185,9 @@ function placeCluster(type, cx, cz, count, spread, minB){
 /* ===== Nachwachsender Wald (V2.25): gefällter Baum → Stumpf → nach 1–2 min ein Setzling → wächst in ~3 min zum vollen Baum.
    Nur wo vorher Wald war: nie in der Nähe von Häusern (7 m), Mauern (5 m) oder Wegen (2 m) – in Dorf und Burg wächst kein Wald. Dichter Wald wächst schneller. ===== */
 let STUMP_GEO=null, STUMP_MAT=null;
+function nearBuilt(x,z){ return G.builds.some(b=>!b.dead && Math.hypot(b.x-x,b.z-z)<(b.kind==='road'?2:b.seg?5:b.size*.5+7)); }
 function treeFelled(r){
+  if(nearBuilt(r.x,r.z)) return;   // im Dorf: kein Stumpf, nichts wächst nach
   if(!STUMP_GEO){ STUMP_GEO=new T.CylinderGeometry(.16,.22,.28,9); STUMP_MAT=new T.MeshLambertMaterial({color:0x6e4a2a}); }
   const st=new T.Mesh(STUMP_GEO, STUMP_MAT); st.position.set(r.x, getH(r.x,r.z)+.1, r.z); st.receiveShadow=true; G.scene.add(st);
   let near=0; for(const o of G.res){ if(o.alive && o.type==='tree' && Math.abs(o.x-r.x)<6 && Math.abs(o.z-r.z)<6) near++; }
@@ -3193,9 +3195,11 @@ function treeFelled(r){
 }
 function updateRegrow(dt){
   G.rgT=(G.rgT||0)-dt; if(G.rgT>0) return; G.rgT=1;
-  if(G.regrow) for(let i=G.regrow.length-1;i>=0;i--){ const e=G.regrow[i]; if(G.t<e.t) continue;
+  if(G.regrow) for(let i=G.regrow.length-1;i>=0;i--){ const e=G.regrow[i];
     const k=cellIdx(e.x,e.z);
-    if(k<0 || G.grid[k]===1 || (G.road && G.road[k]) || G.builds.some(b=>!b.dead && Math.hypot(b.x-e.x,b.z-e.z)<(b.kind==='road'?2:b.seg?5:b.size*.5+7))){ G.scene.remove(e.st); G.regrow.splice(i,1); continue; }   // bebaut: kein Wald mehr
+    // sobald in der Nähe gebaut wird: Stumpf sofort weg, hier wächst kein Wald mehr
+    if(k<0 || G.grid[k]===1 || (G.road && G.road[k]) || nearBuilt(e.x,e.z)){ G.scene.remove(e.st); G.regrow.splice(i,1); continue; }
+    if(G.t<e.t) continue;
     if(G.units.some(u=>!u.dead && Math.abs(u.x-e.x)<.7 && Math.abs(u.z-e.z)<.7)){ e.t=G.t+5; continue; }
     G.scene.remove(e.st); G.regrow.splice(i,1);
     if(G.resMod){ const q=resKey(e.x,e.z); delete G.resMod[q]; }
