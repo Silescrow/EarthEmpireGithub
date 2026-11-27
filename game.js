@@ -30,7 +30,7 @@ const CIV_COLOR = { 'Türkei':0xd0182c, 'Italien':0x7a1030, 'Griechenland':0x2a6
 // Ländernamen im Satz: die Türkei, der Irak, die USA, Deutschland (k: 0 wer/was, 1 wem, 2 wen)
 const CIV_ART = { f:['die','der','die'], m:['der','dem','den'], p:['die','den','die'] };
 // Name in der aktuellen Epoche (Steinzeit: Çatalhöyük, Bandkeramiker …; ab Neuzeit das heutige Land)
-function eraOf(c){ c=c&&c.civ||c; const e=(G&&G.era)|0, l=c[6]; const t=(l&&l[Math.min(e,l.length-1)]||c[0]+'|'+(c[4]||'')).split('|'); return [t[0], t[1]||'']; }
+function eraOf(c){ c=c&&c.civ||c; const e0=(G&&G.era)|0, e=e0<=2?e0:e0===3?2:3, l=c[6]; const t=(l&&l[Math.min(e,l.length-1)]||c[0]+'|'+(c[4]||'')).split('|'); return [t[0], t[1]||'']; }
 function NM(c){ return eraOf(c)[0]; }
 function cn(c,k){ const [n,g]=eraOf(c), a=CIV_ART[g]; return (a?a[k|0]+' ':'')+n; }
 function CN(c,k){ const t=cn(c,k); return t[0].toUpperCase()+t.slice(1); }

@@ -96,6 +96,8 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 @media (orientation:landscape){.nats{grid-template-columns:repeat(10,minmax(0,1fr));gap:3px}}
 @media (orientation:landscape) and (min-width:560px){#dPlay .cols{grid-template-columns:minmax(0,1fr);gap:4px}#dPlay .cols>div:last-child{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:18px}#dPlay .row{margin:2px 0}#dPlay .acts{grid-column:1/-1;margin-top:6px;justify-content:center}#dPlay .acts .btn{max-width:260px}#dPlay .bonus{min-height:0;margin-top:3px;font-size:13px}#dPlay .nat{min-height:0;padding:2px 1px}#dPlay .nat svg{width:22px;height:26px}#dPlay h2{display:none}#dPlay .nat svg{width:27px;height:31px}#dPlay .nat span{font-size:10.5px}#dPlay .nat em{font-size:9.5px}#dPlay .seg button{min-height:32px}}
 .btn.off{filter:grayscale(.8);opacity:.6}
+.cpath{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;line-height:18px}.cpath i{font-style:normal;color:#e8b64a}#bonus{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;column-gap:10px}.cbon{font-size:12.5px}.cpath .pi{display:inline-flex;align-items:center;gap:3px;opacity:.55;color:#e9dcb8;font-size:12.5px}.cpath .pi.on{opacity:1;color:#f5c542;font-weight:700}.cpath .pi svg{width:15px;height:18px}.cpath .pi:last-child svg{width:18px;height:12px;border:1px solid #fff7e299}
+.nat{position:relative}.nat svg.nflag{position:absolute;top:3px;right:3px;width:12px!important;height:8px!important;border:1px solid #fff7e2cc;border-radius:2px;filter:none;box-shadow:0 1px 2px #000a}
 @media (orientation:portrait){#dPlay .row{grid-template-columns:5.4em minmax(0,1fr);margin:6px 0;font-size:14px}#dPlay .seg button{min-height:34px;padding:3px 2px;font-size:13px}#dPlay h2{margin-bottom:6px}#dPlay .nat span{font-size:10px}#dPlay .nat em{font-size:9px}}
 .bonus small{display:block;font-size:12px;color:#d9c79a;opacity:.85;margin-top:2px}
 .nat{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 1px;min-height:44px;border:1.5px solid #e8b64a50;border-radius:9px;background:#0b1130;color:#fff7e2;cursor:pointer;font:700 13px "Barlow Semi Condensed",sans-serif}
@@ -363,7 +365,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.97</div>
+    <div class="ver2">Version 1.98</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -384,7 +386,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="corner2">
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V1.97</div>
+  <div class="ver">Siles Empire · V1.98</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
@@ -414,7 +416,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.97"></script>
+<script src="audio.js?v=1.98"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -559,7 +561,8 @@ const STONE_SYM={"Türkei": "<path d=\"M8 13q-2-6 4-6M22 13q2-6-4-6\" stroke=\"#
 const furBanner=(c,i)=>'<path d="'+FUR+'" fill="#ab8150" stroke="#4f3214" stroke-width="1"/><path d="M5 9q4 3 9 1t11 2M6 22q5-2 10 0t9-1" stroke="#7a5428" stroke-width=".5" fill="none" opacity=".45"/><g filter="url(#furPaint)" opacity=".92">'+(STONE_SYM[c[0]]||'')+'</g><path d="M0.5 2.5H29.5" stroke="#3d260e" stroke-width="2.4" stroke-linecap="round"/><path d="M5 2.5v2M15 2.5v2M25 2.5v2" stroke="#2a1808" stroke-width=".9"/>';
 // Platzhalter-Banner für frühe Epochen, solange noch kein eigenes gezeichnet ist: Stoff mit dem alten Stammeszeichen (keine moderne Flagge)
 const clothBanner=c=>B(R('#e3d2a6'),'<g transform="translate(0 1)">'+(STONE_SYM[c[0]]||'')+'</g>');
-const eraName=(c,e)=>{ const a=c[6]&&c[6][Math.min(e|0,c[6].length-1)]||c[0]; return a.split('|')[0]; };
+const eraIdx=e=>(e|0)<=2?(e|0):(e|0)===3?2:3;   // Neuzeit noch mit dem alten Reich (Osmanen …), ab Industriezeit das heutige Land
+const eraName=(c,e)=>{ const a=c[6]&&c[6][eraIdx(e)]||c[0]; return a.split('|')[0]; };
 const civBy=n=>CIVS.find(c=>c[0]===(OLD_CIV[n]||n));
 [B(R('#c8102e'),'<circle cx="13" cy="14" r="6" fill="#fff"/><circle cx="14.8" cy="14" r="4.9" fill="#c8102e"/><path d="M21.5 14l-4 1.3 2.5-3.4v4.2l-2.5-3.4z" fill="#fff"/>'),
  B(R('#8b0d12'),'<text x="15" y="17" font-size="7" font-family="Georgia,serif" font-weight="700" fill="#f5c542" text-anchor="middle">SPQR</text><path d="M8 21h14" stroke="#f5c542" stroke-width="1"/>'),
@@ -581,9 +584,14 @@ const civBy=n=>CIVS.find(c=>c[0]===(OLD_CIV[n]||n));
  B(R('#c9a46a'),'<ellipse cx="15" cy="14" rx="5.5" ry="9" fill="#f2f2f2" stroke="#222"/><path d="M15 5v18" stroke="#222" stroke-width="1.6"/><ellipse cx="12.5" cy="11" rx="1.3" ry="2" fill="#222"/><ellipse cx="17.5" cy="17" rx="1.3" ry="2" fill="#222"/>')].forEach((b,i)=>CIVS[i][5]=b);
 if(S.civ==null||S.civ>=CIVS.length)S.civ=0;
 if(!document.getElementById('furDefs')) document.body.insertAdjacentHTML('beforeend','<svg id="furDefs" width="0" height="0" style="position:absolute"><filter id="furPaint" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.1" xChannelSelector="R" yChannelSelector="G" result="d"/></filter></svg>');
-const drawNats=()=>{ const e=S.epoch|0; $('#nats').innerHTML=CIVS.map((c,i)=>`<button class="nat" data-i="${i}" aria-label="${c[0]}"><svg viewBox="0 0 30 36">${e===0?furBanner(c,i):(e<3?(c[5]||clothBanner(c)):c[2]).replace(/cp/g,'cp'+i)}</svg><span>${eraName(c,e)}</span><em>${e>=3?'':'→ '+c[0]}</em></button>`).join(''); };
+const drawNats=()=>{ const e=S.epoch|0; $('#nats').innerHTML=CIVS.map((c,i)=>`<button class="nat" data-i="${i}" aria-label="${c[0]}"><svg viewBox="0 0 30 36">${e===0?furBanner(c,i):(e<4?(c[5]||clothBanner(c)):c[2]).replace(/cp/g,'cp'+i)}</svg><span>${eraName(c,e)}</span><em>${e>=4?'':'→ '+c[0]}</em>${`<svg class="nflag" viewBox="0 0 30 27" preserveAspectRatio="none">${flagBody(c).replace(/cp/g,'cq'+i)}</svg>`}</button>`).join(''); };
 drawNats();
-const drawCiv=()=>{$$('.nat').forEach((b,i)=>b.classList.toggle('on',i===S.civ));const c=CIVS[S.civ];$('#bonus').innerHTML='<b>'+eraName(c,S.epoch)+'</b>'+((S.epoch|0)>=3?'':' · heute '+c[0])+' · '+c[1]; const st=$('#bStart'); if(st){ st.textContent=(S.epoch|0)>0?'Epoche kommt bald':'Schlacht starten'; st.classList.toggle('off',(S.epoch|0)>0); } };
+// Infozeile: Weg des Landes durch die Epochen (Fellbanner → altes Reich → heutige Flagge), aktuelle Stufe hervorgehoben
+const pathIcon=(svg,vb,on,name)=>`<span class="pi${on?' on':''}"><svg viewBox="${vb}">${svg}</svg>${name}</span>`;
+const drawCiv=()=>{$$('.nat').forEach((b,i)=>b.classList.toggle('on',i===S.civ));const c=CIVS[S.civ], e=S.epoch|0, k=e===0?0:e<4?1:2;
+  const old=(c[5]||clothBanner(c)).replace(/cp/g,'cz');
+  const path=pathIcon(furBanner(c,'z'),'0 0 30 36',k===0,eraName(c,0))+'<i>›</i>'+pathIcon(old,'0 0 30 36',k===1,eraName(c,2))+'<i>›</i>'+pathIcon(flagBody(c).replace(/cp/g,'cy'),'0 0 30 27',k===2,c[0]);
+  $('#bonus').innerHTML='<span class="cpath">'+path+'</span><span class="cbon">'+c[1]+'</span>'; const st=$('#bStart'); if(st){ st.textContent=e>0?'Epoche kommt bald':'Schlacht starten'; st.classList.toggle('off',e>0); } };
 S.epoch=0;
 // Startepoche: alle 10 Epochen sichtbar, nur die fertigen sind wählbar (bisher nur die Steinzeit)
 const EPOCHS=['Steinzeit','Antike','Mittelalter','Neuzeit','Industriezeit','Erster Weltkrieg','Zweiter Weltkrieg','Kalter Krieg','Moderne','Zukunft'], EPOCH_READY=1;
@@ -647,7 +655,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{if((S.epoch|0)>0){ toast('Diese Epoche kommt bald – starte in der Steinzeit'); vib(20); return; }fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'1.97',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'1.98',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -672,10 +680,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.97"></script>
-<script src="game.js?v=1.97"></script>
-<script src="silescrow.js?v=1.97"></script>
-<script src="online.js?v=1.97"></script>
+<script src="three.min.js?v=1.98"></script>
+<script src="game.js?v=1.98"></script>
+<script src="silescrow.js?v=1.98"></script>
+<script src="online.js?v=1.98"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,
