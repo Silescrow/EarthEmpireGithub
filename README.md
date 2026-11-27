@@ -1,6 +1,6 @@
 # SILES EMPIRE – zum Spielen
 
-Hier liegt nur die spielbare Version von Siles Empire (früher Earth Empire) (aktuell V1.83).
+Hier liegt nur die spielbare Version von Siles Empire (früher Earth Empire) (aktuell V1.84).
 
 **Online spielen:** https://silescrow.github.io/SilesEmpireGithub/
 
