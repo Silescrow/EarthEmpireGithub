@@ -29,9 +29,12 @@ const CIV_COLOR = { 'Türkei':0xd0182c, 'Italien':0x7a1030, 'Griechenland':0x2a6
   'Irland':0xa5d6a7, 'Niederlande':0xe65100, 'Polen':0xf5f5f5, 'USA':0x3c3b6e, 'Australien':0xffcc80, 'Brasilien':0x00c853 };
 // Ländernamen im Satz: die Türkei, der Irak, die USA, Deutschland (k: 0 wer/was, 1 wem, 2 wen)
 const CIV_ART = { f:['die','der','die'], m:['der','dem','den'], p:['die','den','die'] };
-function cn(c,k){ c=c&&c.civ||c; const a=CIV_ART[c[4]]; return (a?a[k|0]+' ':'')+c[0]; }
+// Name in der aktuellen Epoche (Steinzeit: Çatalhöyük, Bandkeramiker …; ab Neuzeit das heutige Land)
+function eraOf(c){ c=c&&c.civ||c; const e=(G&&G.era)|0, l=c[6]; const t=(l&&l[Math.min(e,l.length-1)]||c[0]+'|'+(c[4]||'')).split('|'); return [t[0], t[1]||'']; }
+function NM(c){ return eraOf(c)[0]; }
+function cn(c,k){ const [n,g]=eraOf(c), a=CIV_ART[g]; return (a?a[k|0]+' ':'')+n; }
 function CN(c,k){ const t=cn(c,k); return t[0].toUpperCase()+t.slice(1); }
-function cv(c,sg,pl){ c=c&&c.civ||c; return c[4]==='p'?pl:sg; }
+function cv(c,sg,pl){ return eraOf(c)[1]==='p'?pl:sg; }
 const BASE_COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61,0x4a148c,0x00bfa5,0xffab91,0x795548,0xcddc39,0x5c6bc0,0xec407a,0x26c6da,0xbf360c,0x9e9d24,0x546e7a,0xffe082];
 const COLORS = [0x2f7bff,0xe23b3b,0xf2c230,0x3fbf5a,0x9b59ff,0xff8a1f,0x1fd1d1,0xff5fb0,0x8a5a2b,0xffffff,0x2b2b2b,0x7dff4a,0x1f4fa8,0xa8203a,0xc9a227,0x2e8b57,0x6a3d9a,0xff6f61];
 const COLNAMES = ['Blau','Rot','Gelb','Grün','Lila','Orange','Türkis','Pink','Braun','Weiß','Schwarz','Hellgrün','Dunkelblau','Weinrot','Ocker','Waldgrün','Violett','Koralle'];
@@ -80,7 +83,7 @@ async function start(sv){
   }
   const others = sv ? sv.civs.slice(1).map(byName) : chosen.slice(1);
   const gfx = S.gfx|0;
-  G = { NX, NZ, HS, foes, civ, gfx, seed:sv?sv.seed:(Math.random()*1e9)|0, map:mapI, t:0, resMod:sv?sv.res:null, units:[], builds:[], res:[], deer:[],
+  G = { NX, NZ, HS, foes, civ, gfx, era:0, seed:sv?sv.seed:(Math.random()*1e9)|0, map:mapI, t:0, resMod:sv?sv.res:null, units:[], builds:[], res:[], deer:[],
         players:[], sel:[], selB:null, place:null, running:true, raf:0, msgT:0 };
   G.rand = rng(G.seed);
   [civ, ...others.slice(0,foes)].forEach((c,i)=>G.players.push({id:i, civ:c, res:{...START_RES}, pop:0, popCap:0, tc:null, color:COLORS[i]}));
@@ -233,7 +236,7 @@ function buildUI(){
     <div class="rs" id="r-stone">${ICON.stone}<span class="rv"><b>0</b><small>Stein</small></span></div>
     <div class="rs" id="r-gold">${ICON.gold}<span class="rv"><b>0</b><small>Gold</small></span></div>
     <div class="rs" id="r-pop">${ICON.pop}<span class="rv"><b>0/0</b><small>Leute</small></span></div>
-    <div class="age"><div><span>${G.civ[0]}</span> · Steinzeit</div><div class="wxi" id="wx"></div></div>
+    <div class="age"><div><span>${NM(G.civ)}</span> · Steinzeit</div><div class="wxi" id="wx"></div></div>
     <button class="hb" id="bPause" aria-label="Menü"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
   </div>
   <canvas id="mini" width="150" height="150"></canvas>
@@ -334,7 +337,7 @@ function drawPanel(){
   }
   if(G.selB){
     const b = G.selB, d = BUILD[b.kind];
-    let h = `<div class="info"><b>${b.wallT?'Mauerturm':d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):G.players[b.owner].civ[0]}</small></div>`;
+    let h = `<div class="info"><b>${b.wallT?'Mauerturm':d.name}</b><small>${b.owner===0?(b.built<1?'Wird gebaut … '+Math.floor(b.built*100)+' %':'Leben '+Math.ceil(b.hp)+'/'+d.hp):NM(G.players[b.owner])}</small></div>`;
     if(b.owner===0 && homeCap(b)) h += `<div class="info"><small>${residentsTxt(b)}</small></div>`;
     if(b.owner===0 && b.built>=1 && d.drop){ const R=b.recv||{}, keys=d.drop.filter(k=>k in RES_DE);
       const chip=(o)=>keys.map(k=>`<span class="c">${ICON[k]||''}${Math.floor(o[k]||0)}</span>`).join('');
@@ -402,6 +405,7 @@ function drawPanel(){
       h += `<button class="ab tool" data-a="bmenu"><span class="ai">${hammerSVG()}</span>Bauen</button>`;
     }
     if(ws[0].owner===0 && ws.some(u=>u.kind==='worker') && G.buildMenu){
+      h += `<button class="pclose" data-a="bback" aria-label="Baumenü schließen">✕</button>`;
       h += `<button class="ab tool back" data-a="bback"><span class="ai"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="#e8b64a" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Zurück</button>`;
       h += `<button class="ab" data-a="b-tc"><span class="ai">${buildPic('tc',hutSVG())}</span>Stadtzentrum<span class="ac">${costText(BUILD.tc.cost)}</span></button>`;
       h += `<button class="ab" data-a="b-house"><span class="ai">${buildPic('house',hutSVG())}</span>Hütte<span class="ac">${costText(BUILD.house.cost)}</span></button>`;
@@ -418,7 +422,7 @@ function drawPanel(){
     if(G.t<30){ el.innerHTML = `<div class="tipmini">☝ Ziehen: auswählen · ✌ Zwei Finger: bewegen & zoomen</div>`; el.className='tiphint'; }
     else { el.innerHTML=''; el.className='hidden'; }
   }
-  el.querySelectorAll('.ab').forEach(b=>b.onclick=()=>action(b.dataset.a));
+  el.querySelectorAll('.ab,.pclose').forEach(b=>b.onclick=()=>action(b.dataset.a));
   el.querySelectorAll('.sx').forEach(b=>b.onclick=()=>{ EE.click(); select([],null); });
   if(G.sel.length){ const ws=G.sel.slice(); el.querySelectorAll('.pic').forEach(b=>b.onclick=()=>{ EE.click(); const u=ws[+b.dataset.u]; if(u){ select([u],null); } }); el.querySelectorAll('.gpic').forEach(b=>b.onclick=()=>{ EE.click(); const us=ws.filter(u=>u.kind===b.dataset.g); if(us.length && us.length<ws.length) select(us,null); }); }
 }
@@ -1071,7 +1075,7 @@ const hostile = (a,b) => { if(a===b) return false; const o=a===0?b:b===0?a:-1; i
 function setDip(i, st, quiet){
   const d=G.dip[i], p=G.players[i];
   d.state=st;
-  if(!quiet){ EE.toast(p.civ[0]+': '+(st==='ally'?'Wir sind jetzt Verbündete!':st==='neutral'?'Frieden – wir lassen uns in Ruhe.':'Krieg!')); EE.sfx(st==='enemy'?'error':'done', .8); }
+  if(!quiet){ EE.toast(NM(p)+': '+(st==='ally'?'Wir sind jetzt Verbündete!':st==='neutral'?'Frieden – wir lassen uns in Ruhe.':'Krieg!')); EE.sfx(st==='enemy'?'error':'done', .8); }
   if(G.dipOpen) renderDip();
 }
 function propose(i, st){
@@ -1119,12 +1123,12 @@ function genOf(i){ const d=G.dip[i]; if(d.gen==null) d.gen = ((Math.sin((G.seed|
 function askTribute(i, res, amt){
   const me=G.players[0], p=G.players[i], d=G.dip[i], gen=genOf(i); EE.click();
   if(d.state==='enemy'){ EE.toast(CN(p)+' '+cv(p,'lacht','lachen')+' nur – ihr seid im Krieg'); EE.sfx('error',.6); return; }
-  if(d.askT && G.t-d.askT<60){ EE.toast(p.civ[0]+': „Ihr habt doch gerade erst gefragt!“'); EE.sfx('error',.6); return; }
+  if(d.askT && G.t-d.askT<60){ EE.toast(NM(p)+': „Ihr habt doch gerade erst gefragt!“'); EE.sfx('error',.6); return; }
   d.askT=G.t;
   const keep = 150 + (1-gen)*350, spare = Math.max(0, Math.floor(p.res[res]-keep));
   const willing = (d.state==='ally' ? .25 : -.2) + gen*.7 + d.mood/250;
   if(gen<.3 && G.rand() > willing){ d.mood=Math.max(-100,d.mood-3); EE.toast(CN(p)+' '+cv(p,'ist geizig und gibt','sind geizig und geben')+' nichts'); EE.sfx('error',.6); }
-  else if(spare<=0){ EE.toast(p.civ[0]+': „Wir haben selbst kaum '+RES_DE[res]+'.“'); EE.sfx('error',.6); }
+  else if(spare<=0){ EE.toast(NM(p)+': „Wir haben selbst kaum '+RES_DE[res]+'.“'); EE.sfx('error',.6); }
   else if(G.rand() > willing){ d.mood=Math.max(-100,d.mood-4); EE.toast(CN(p)+' '+cv(p,'lehnt','lehnen')+' ab'); EE.sfx('error',.6); }
   else { const give=Math.min(amt, spare, Math.round(amt*(gen>.66?1:gen<.3?.4:.75))); p.res[res]-=give; me.res[res]+=give; d.mood=Math.max(-100,d.mood-(give>=amt?6:3));
     EE.toast(give>=amt ? CN(p)+' '+cv(p,'schickt','schicken')+' dir '+give+' '+RES_DE[res] : CN(p)+' '+cv(p,'kann','können')+' nur '+give+' '+RES_DE[res]+' entbehren'); EE.sfx('confirm'); }
@@ -1162,7 +1166,7 @@ function renderDip(){
   const U=G.dipUI, me=G.players[0];
   $$('#dip .dtab').forEach(b=>b.classList.toggle('on', b.dataset.t===U.tab));
   const col=i=>'#'+COLORS[i].toString(16).padStart(6,'0');
-  const civBtns = (onlyPeace)=> G.players.slice(1).map(p=>`<button class="dciv${U.who===p.id?' on':''}${onlyPeace&&G.dip[p.id].state==='enemy'?' off':''}" data-w="${p.id}"><i style="background:${col(p.id)}"></i>${p.civ[0]}</button>`).join('');
+  const civBtns = (onlyPeace)=> G.players.slice(1).map(p=>`<button class="dciv${U.who===p.id?' on':''}${onlyPeace&&G.dip[p.id].state==='enemy'?' off':''}" data-w="${p.id}"><i style="background:${col(p.id)}"></i>${NM(p)}</button>`).join('');
   const resBtns = (k)=> RES.map(r=>`<button class="dres${U[k]===r?' on':''}" data-${k}="${r}">${ICON[r]}<span>${RES_DE[r]}</span></button>`).join('');
   const amtBtns = [100,500,1000,5000].map(a=>`<button class="damt${U.amt===a?' on':''}" data-amt="${a}">${a}</button>`).join('');
   let h='';
@@ -1173,7 +1177,7 @@ function renderDip(){
     else { U.bribe=null; h += `<p class="dnote">Lehnen sie ab, hilft Gold: Neutrale billig, Kriegsgegner teuer, ⚔ unversöhnlich = nie.</p>`; }
     h += `<div class="drows${G.players.length>7?' two':''}">`;
     for(const p of G.players.slice(1)){ const d=G.dip[p.id];
-      h += `<div class="drow"><i style="background:${col(p.id)}"></i><div class="dn"><b>${p.civ[0]}${d.hard&&d.state==='enemy'?' <em class="hard" title="unversöhnlich">⚔</em>':''}</b><small>${d.hard&&d.state==='enemy'?'unversöhnlich':moodTxt(d.mood)}</small><span class="mood"><s style="width:${(d.mood+100)/2}%"></s></span></div>
+      h += `<div class="drow"><i style="background:${col(p.id)}"></i><div class="dn"><b>${NM(p)}${d.hard&&d.state==='enemy'?' <em class="hard" title="unversöhnlich">⚔</em>':''}</b><small>${d.hard&&d.state==='enemy'?'unversöhnlich':moodTxt(d.mood)}</small><span class="mood"><s style="width:${(d.mood+100)/2}%"></s></span></div>
         <div class="dst">${['ally','neutral','enemy'].map(s=>`<button class="${s}${d.state===s?' on':''}" data-p="${p.id}" data-s="${s}">${DIP_DE[s]}</button>`).join('')}</div></div>`; }
     h += `</div>`;
   } else if(U.tab==='trade'){
@@ -1182,14 +1186,14 @@ function renderDip(){
       <div class="dlab">Du gibst</div><div class="dline">${resBtns('give')}</div>
       <div class="dlab">Du bekommst</div><div class="dline">${resBtns('get')}</div>
       <div class="dlab">Menge</div><div class="dline">${amtBtns}</div>
-      <div class="deal">${d.state==='enemy'?'Mit Feinden wird nicht gehandelt – schließe erst Frieden.':U.give===U.get?'Wähle zwei verschiedene Rohstoffe.':`${U.amt} ${RES_DE[U.give]} → <b>${q} ${RES_DE[U.get]}</b> <small>(${p.civ[0]} haben ${Math.floor(p.res[U.get])})</small>`}
+      <div class="deal">${d.state==='enemy'?'Mit Feinden wird nicht gehandelt – schließe erst Frieden.':U.give===U.get?'Wähle zwei verschiedene Rohstoffe.':`${U.amt} ${RES_DE[U.give]} → <b>${q} ${RES_DE[U.get]}</b> <small>(${CN(p)} ${cv(p,"hat","haben")} ${Math.floor(p.res[U.get])})</small>`}
       <button class="btn main small" id="dTrade"${d.state==='enemy'||U.give===U.get?' disabled':''}>Handeln</button></div>`;
   } else {
     const p=G.players[U.who];
     h += `<div class="dlab">Land</div><div class="dline">${civBtns(false)}</div>
       <div class="dlab">Rohstoff</div><div class="dline">${resBtns('give')}</div>
       <div class="dlab">Menge</div><div class="dline">${amtBtns}</div>
-      <div class="deal">Du hast ${Math.floor(me.res[U.give])} ${RES_DE[U.give]} · ${p.civ[0]}: ${moodTxt(G.dip[U.who].mood)}, ${GEN_DE(genOf(U.who))}
+      <div class="deal">Du hast ${Math.floor(me.res[U.give])} ${RES_DE[U.give]} · ${NM(p)}: ${moodTxt(G.dip[U.who].mood)}, ${GEN_DE(genOf(U.who))}
       <button class="btn small" id="dAsk">Bitten</button><button class="btn small" id="dDemand">Fordern</button><button class="btn main small" id="dSend">Schenken</button></div>`;
   }
   el.innerHTML=h;
@@ -1243,7 +1247,7 @@ function allyRequests(p, soldiers, tc, threat){
   if(p.jointT<=0 && !p.joint && soldiers.length>=5){ p.jointT=400+G.rand()*300;
     const foes=G.players.filter(o=>o.id!==0 && o.id!==p.id && G.dip[o.id].state==='enemy' && o.tc && !o.tc.dead); if(!foes.length) return;
     const X=foes.sort((a,b)=>Math.hypot(a.tc.x-tc.x,a.tc.z-tc.z)-Math.hypot(b.tc.x-tc.x,b.tc.z-tc.z))[0];
-    showAsk(p.id, `${p.civ[0]}: „Wir greifen ${cn(X,2)} an – bist du dabei?“`, '⚔ Ja, Krieger mitschicken',
+    showAsk(p.id, `${NM(p)}: „Wir greifen ${cn(X,2)} an – bist du dabei?“`, '⚔ Ja, Krieger mitschicken',
       ()=>{ p.joint={vs:X.id}; p.waveT=0; const n=sendMyArmy(X.tc); d.mood=Math.min(100,d.mood+12); EE.toast(n? n+' Krieger ziehen mit '+cn(p,1)+' gegen '+cn(X,2) : CN(p)+' '+cv(p,'greift','greifen')+' allein an – du hast keine Krieger'); },
       ()=>{ d.mood=Math.max(-100,d.mood-6); EE.toast(CN(p)+' '+cv(p,'greift','greifen')+' ohne dich an'); p.joint={vs:X.id}; p.waveT=0; });
   }
@@ -2885,6 +2889,7 @@ function hideCanvas(W,H,seed){
   for(let i=0;i<900;i++){ x.fillStyle=`rgba(${rnd()<.5?'70,45,20':'235,210,170'},${.05+rnd()*.08})`; const r=1+rnd()*5; x.beginPath(); x.ellipse(rnd()*W,rnd()*H,r*2,r,rnd()*3,0,6.3); x.fill(); }
   const vg=x.createRadialGradient(W/2,H/2,Math.min(W,H)*.25,W/2,H/2,Math.max(W,H)*.65); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(40,22,8,.55)'); x.fillStyle=vg; x.fillRect(0,0,W,H);
   x.restore();
+  x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1])); x.closePath();   // Umriss neu (sonst wird der letzte Fellfleck als Ring nachgezogen)
   x.strokeStyle='rgba(60,36,14,.9)'; x.lineWidth=3; x.stroke();
   // Lederschnüre am Mast
   x.fillStyle='#3a2410'; for(let i=0;i<4;i++){ x.fillRect(2,14+i*(H-28)/3,10,4); }
@@ -2899,17 +2904,10 @@ function civFlagTex(civ, color){
     const hex='#'+color.toString(16).padStart(6,'0');
     // Farbstreifen oben und unten wie aufgemalt
     x.globalAlpha=.85; x.fillStyle=hex; x.fillRect(16,14,W-34,9); x.fillRect(16,H-24,W-34,9); x.globalAlpha=1;
-    // Stammeszeichen: das Wappenbild ohne Hintergrund, als Silhouette in der Volksfarbe aufgemalt
-    const body=civ[2].replace(/cp/g,'cpz').replace(/clip-path="url\(#cpz\)"/,'');
-    const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 36" width="120" height="144">'+body+'</svg>';
+    // Stammeszeichen der Steinzeit-Kultur (Stierkopf, Speerspitze, Steinkreis …) mit Ocker und Kohle aufs Fell gemalt – keine moderne Flagge
+    const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 5 22 23" width="176" height="184"><filter id="p"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="0.9" xChannelSelector="R" yChannelSelector="G"/></filter><g filter="url(#p)">'+(EE.stoneSym?EE.stoneSym(civ):'')+'</g></svg>';
     const img=new Image(); img.onload=()=>{
-      const e=document.createElement('canvas'); e.width=120; e.height=144; const ex=e.getContext('2d'); ex.drawImage(img,0,0,120,144);
-      const d=ex.getImageData(0,0,120,144), p=d.data; const bg=[p[(70*120+6)*4],p[(70*120+6)*4+1],p[(70*120+6)*4+2]];
-      for(let i=0;i<p.length;i+=4){ const diff=Math.abs(p[i]-bg[0])+Math.abs(p[i+1]-bg[1])+Math.abs(p[i+2]-bg[2]); const y=((i/4)/120)|0, xx=(i/4)%120;
-        const edge = xx<10||xx>110||y<6||y>100;   // Wappenrand weglassen
-        p[i+3] = (!edge && diff>90) ? 255 : 0; p[i]=p[i+1]=p[i+2]=255; }
-      ex.putImageData(d,0,0); ex.globalCompositeOperation='source-in'; ex.fillStyle=hex; ex.fillRect(0,0,120,144);
-      x.save(); x.globalAlpha=.92; x.shadowColor='rgba(30,15,5,.6)'; x.shadowBlur=3; x.drawImage(e, W/2-60+6, H/2-80, 120, 144); x.restore();
+      x.save(); x.globalAlpha=.9; x.shadowColor='rgba(30,15,5,.5)'; x.shadowBlur=2; x.drawImage(img, W/2-66+6, H/2-69, 132, 138); x.restore();
       t.needsUpdate=true; };
     img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
     return t;
@@ -3967,7 +3965,8 @@ function buildMinimapBase(){
 function openBigMap(){
   EE.click(); let ov=$('#bigmap');
   if(!ov){ ov=document.createElement('div'); ov.id='bigmap';
-    ov.innerHTML='<div class="bm-head"><b>Weltkarte</b><button class="bm-x" aria-label="Schließen">✕</button></div><canvas></canvas><div class="bm-leg"></div><small class="bm-tip">Tippe auf die Karte, um dorthin zu springen</small>';
+    ov.innerHTML='<div class="bm-win"><button class="bm-x" aria-label="Schließen">✕</button><div class="bm-head">Weltkarte</div><div class="bm-body"><canvas></canvas><div class="bm-leg"></div></div><small class="bm-tip">Tippe auf die Karte, um dorthin zu springen</small></div>';
+    ov.addEventListener('pointerup', e=>{ if(e.target===ov){ EE.click(); ov.classList.add('hidden'); } });   // daneben tippen schließt
     document.body.appendChild(ov);
     ov.querySelector('.bm-x').onclick=()=>{ EE.click(); ov.classList.add('hidden'); };
     ov.querySelector('canvas').addEventListener('pointerup', e=>{ const c=e.currentTarget, r=c.getBoundingClientRect(); G.camS.x=(e.clientX-r.left)/r.width*G.NX-G.NX/2; G.camS.z=(e.clientY-r.top)/r.height*G.NZ-G.NZ/2; if(G.farView) G.camS.dist=Math.min(G.camS.dist,60); ov.classList.add('hidden'); });
@@ -3980,13 +3979,20 @@ function openBigMap(){
   x.font='bold '+Math.round(W/90)+'px system-ui'; x.textAlign='center';
   for(const b of G.builds){ if(b.kind!=='tc' || b.built<1) continue; const col='#'+COLORS[b.owner].toString(16).padStart(6,'0');
     x.fillStyle=col; x.strokeStyle='#000'; x.lineWidth=2; x.beginPath(); x.arc(px(b.x),pz(b.z),Math.max(4,W/260),0,7); x.fill(); x.stroke();
-    if(b===G.players[b.owner].tc){ x.lineWidth=3; x.strokeStyle='rgba(0,0,0,.75)'; x.strokeText(G.players[b.owner].civ[0], px(b.x), pz(b.z)-W/110); x.fillStyle='#fff'; x.fillText(G.players[b.owner].civ[0], px(b.x), pz(b.z)-W/110); } }
+    if(b===G.players[b.owner].tc){ x.lineWidth=3; x.strokeStyle='rgba(0,0,0,.75)'; x.strokeText(NM(G.players[b.owner]), px(b.x), pz(b.z)-W/110); x.fillStyle='#fff'; x.fillText(NM(G.players[b.owner]), px(b.x), pz(b.z)-W/110); } }
   // Sichtbereich der Kamera
   const pts=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([a,b2])=>groundAtNDC(a,b2)).filter(Boolean);
   if(pts.length===4){ x.strokeStyle='#fff'; x.lineWidth=2; x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(px(p.x),pz(p.z)):x.moveTo(px(p.x),pz(p.z))); x.closePath(); x.stroke(); }
   // Legende: jedes Volk mit Farbe und Zahl der Gebiete
   const cnt={}; if(G.reg) for(const o of G.reg.owner.values()) cnt[o]=(cnt[o]||0)+1;
-  ov.querySelector('.bm-leg').innerHTML = G.players.map((p,i)=>`<span><i style="background:#${COLORS[i].toString(16).padStart(6,'0')}"></i>${p.civ[0]}${i===0?' (du)':''} · ${cnt[i]||0} ${(cnt[i]||0)===1?'Gebiet':'Gebiete'}</span>`).join('');
+  ov.querySelector('.bm-leg').innerHTML = G.players.map((p,i)=>`<span><i style="background:#${COLORS[i].toString(16).padStart(6,'0')}"></i>${NM(p)}${i===0?' (du)':''} · ${cnt[i]||0} ${(cnt[i]||0)===1?'Gebiet':'Gebiete'}</span>`).join('');
+  // Fenster genau um die Karte zuschneiden: Karte so groß wie möglich, Rahmen liegt eng an
+  { const leg=ov.querySelector('.bm-leg'), body=ov.querySelector('.bm-body');
+    const availW=innerWidth-28-24, availH=innerHeight-28-22, fixH=ov.querySelector('.bm-head').offsetHeight+ov.querySelector('.bm-tip').offsetHeight+5*2+16;
+    const n=G.players.length, rowH=15, colW=142; let cw=availW, ch=0, cols=1;
+    for(;cw>160;cw-=8){ ch=Math.floor(cw*H/W); if(ch+fixH>availH) continue;          // Legende rechts neben der Karte, in so vielen Spalten wie nötig
+      cols=Math.ceil(n*rowH/Math.max(rowH,ch)); if(cw+10+cols*colW<=availW) break; }
+    c.style.width=cw+'px'; c.style.height=ch+'px'; leg.style.height=ch+'px'; leg.style.width=(cols*colW)+'px'; leg.style.columnCount=cols; }
 }
 function drawMinimap(){
   const cv=$('#mini'); if(!cv) return; const x=cv.getContext('2d'), W=cv.width, H=cv.height, s=W/G.NX;
@@ -4016,7 +4022,7 @@ function buildOverview(){
     x.fillStyle='rgba(10,15,34,.85)'; x.beginPath(); x.roundRect(2,2,252,68,14); x.fill();
     x.fillStyle=col; x.fillRect(10,12,16,48);
     x.strokeStyle=col; x.lineWidth=4; x.beginPath(); x.roundRect(2,2,252,68,14); x.stroke();
-    x.fillStyle='#fff7e2'; x.font='bold 30px Georgia, serif'; x.textBaseline='middle'; x.fillText(p.civ[0]+(i===0?' (Du)':''),36,37);
+    x.fillStyle='#fff7e2'; x.font='bold 30px Georgia, serif'; x.textBaseline='middle'; x.fillText(NM(p)+(i===0?' (Du)':''),36,37);
     const t=new T.CanvasTexture(c); t.colorSpace=T.SRGBColorSpace;
     const sp=new T.Sprite(new T.SpriteMaterial({map:t, depthTest:false, transparent:true}));
     sp.renderOrder=10; sp.visible=false; G.scene.add(sp); G.banners.push({sp,p});
