@@ -902,7 +902,7 @@ const FISH = [];
 function addFish(x,z,gx,gz){
   if(FISH.some(f=>Math.hypot(f.x-x,f.z-z)<14)) return null;
   const g=new T.Group(); g.position.set(x, WATER_Y-.45, z);
-  const n=G.gfx===0?4:7;
+  const n=G.gfx===0?2:G.gfx>=3?9:7;
   for(let i=0;i<n;i++){ const o=makeSwimmer('fish', .45+G.rand()*.25, false); if(!o) break; o.userData.a=i/n*6.28+G.rand()*.5; o.userData.r=.6+G.rand()*.9; o.userData.s=(.5+G.rand()*.4)*(G.rand()<.5?1:-1); o.userData.y=-G.rand()*.35; g.add(o); }
   G.scene.add(g);
   const r={type:'fish', kind:'food', amt:220, max:220, x, z, gx, gz, mesh:g, alive:true, r:.6, fish:true, jumpT:3+G.rand()*6};
@@ -1342,7 +1342,7 @@ function showOffer(i, st){
 function initRenderer(){
   const c = $('#gc');
   const r = new T.WebGLRenderer({canvas:c, antialias:G.gfx>=1, powerPreference:'high-performance'});
-  r.setPixelRatio(Math.min(window.devicePixelRatio||1, [1,1.25,1.75][G.gfx])*(G.dynScale||1));
+  r.setPixelRatio(gfxPR(G.gfx));
   r.shadowMap.enabled = G.gfx>=1;
   r.shadowMap.type = T.PCFSoftShadowMap; r.shadowMap.autoUpdate = false;
   r.outputColorSpace = T.SRGBColorSpace;
@@ -1356,7 +1356,7 @@ function initRenderer(){
   G.hemi = new T.HemisphereLight(0xdff2ff, 0x5a6b3a, 1.1); sc.add(G.hemi);
   const sun = new T.DirectionalLight(0xfff1d6, 2.1);
   sun.castShadow = G.gfx>=1;
-  const sz = G.gfx>=2 ? 2048 : 1024;
+  const sz = G.gfx>=3 ? 4096 : G.gfx>=2 ? 2048 : 1024;
   sun.shadow.mapSize.set(sz,sz);
   const sc2 = sun.shadow.camera; sc2.left=-40; sc2.right=40; sc2.top=40; sc2.bottom=-40; sc2.near=1; sc2.far=140;
   sun.shadow.bias = -.0006; sun.shadow.normalBias = .03;
@@ -1737,14 +1737,14 @@ function genChunk(ci,cj){
     const forest = fbm(x*.03,z*.03,H_SEED+40);
     const r = R();
     if(ds>.5){ if(r<.02) placeCluster('tree',x,z,3,1.5); else if(r<.05) placeCluster('stone',x,z,2,1); }
-    else if(bd>24 && forest>.6 && cold<.85 && r<.2 && getH(x,z)<WATER_Y+snowLineAt(x,z)-7) placeCluster('tree',x,z,G.gfx===0?3+(R()*4|0):5+(R()*6|0),(3+R()*3)*2.1);
-    else if(mt>.2 && cold<.85 && r<.16 && getH(x,z)>WATER_Y+3.5 && getH(x,z)<WATER_Y+snowLineAt(x,z)-7) placeCluster('tree',x,z,G.gfx===0?2+(R()*3|0):4+(R()*4|0),5);   // Bergwald
+    else if(bd>24 && forest>.6 && cold<.85 && r<.2 && getH(x,z)<WATER_Y+snowLineAt(x,z)-7) placeCluster('tree',x,z,G.gfx===0&&!G.online?3+(R()*4|0):5+(R()*6|0),(3+R()*3)*2.1);
+    else if(mt>.2 && cold<.85 && r<.16 && getH(x,z)>WATER_Y+3.5 && getH(x,z)<WATER_Y+snowLineAt(x,z)-7) placeCluster('tree',x,z,G.gfx===0&&!G.online?2+(R()*3|0):4+(R()*4|0),5);   // Bergwald
     else if(bd>18 && r<.008 && cold<.85 && getH(x,z)<WATER_Y+snowLineAt(x,z)-7) placeCluster('tree',x,z,1,3);
     else if(r<.05) placeCluster('bush',x,z,3,1.6);
     else if(r<.075 && mt>.4) placeCluster('stone',x,z,3,1.5);
     else if(r<.085) placeCluster('gold',x,z,2,1.2);
-    else if(r<.13 && cold<.9) spawnDeer(x,z);
-    else if(r<.1307 && bd>45){ const al=Math.abs(lat), jg=jungleAt(lon,lat), africa=lon>-20&&lon<55&&lat<20;
+    else if(r<.13 && cold<.9){ if(!(G.gfx===0 && !G.online && R()<.5)) spawnDeer(x,z); }   // Niedrig: halb so viele Tiere
+    else if(r<.1307 && bd>45 && !(G.gfx===0 && !G.online && R()<.5)){ const al=Math.abs(lat), jg=jungleAt(lon,lat), africa=lon>-20&&lon<55&&lat<20;
       if(al>35 && al<70 && cold<.9 && ds<.4 && (lon<-50 || lon>-15) && R()<.55) spawnPack(x,z,'wolf',3+(R()*4|0));                 // Wölfe: Nordamerika, Europa, Asien
       else if(africa && lat>-30 && ds<.5 && jg<.5) spawnPack(x,z,'lion',3+(R()*4|0));                                   // Löwen: afrikanische Savanne
       else if(africa && R()<.5) spawnPack(x,z,'elephant',2+(R()*3|0));
@@ -2902,7 +2902,7 @@ function batchFill(im, list){ const M=im.instanceMatrix.array, C=im.instanceColo
   for(const c of list){ M.set(c.m.subarray(0,c.n*16), o*16); C.set(c.c.subarray(0,c.n*3), o*3); o+=c.n; }
   im.count=o; im.instanceMatrix.needsUpdate=true; im.instanceColor.needsUpdate=true; }
 function batchRefill(B, cx, cz, R){
-  let n=0, nl=0; const list=[], far=[], shl=[]; let sn=0; const LR=[45,65,95][G.gfx];
+  let n=0, nl=0; const list=[], far=[], shl=[]; let sn=0; const LR=[45,65,95,130][G.gfx];
   G.cam.updateMatrixWorld(); _fm.multiplyMatrices(G.cam.projectionMatrix, G.cam.matrixWorldInverse); _fr.setFromProjectionMatrix(_fm);
   for(const c of B.chunks.values()){ const dx=c.cx-cx, dz=c.cz-cz, rr=R+TILE*.75, d2=dx*dx+dz*dz; if(d2>=rr*rr) continue;
     _sp.center.set(c.cx, getH(c.cx,c.cz)+4, c.cz); _sp.radius=TILE*.75+8;
@@ -2935,7 +2935,7 @@ function batchesUpdate(force){
   const fogR=G.scene.fog.far+8, key=ci+','+cj+','+Math.round(fogR/32)+','+Math.round(s.yaw*6)+','+(G.farView?1:0)+','+(G.follow?1:0);
   const moved = key!==G.batchKey; G.batchKey=key;
   for(const k in G.batches){ const B=G.batches[k]; if(!(moved||B.dirty||force)) continue;
-    const R = B.opt.decor ? Math.min(fogR*(G.follow?.4:.6), TILE*[1.6,2.6,3.2][G.gfx]) : Math.min(fogR, TILE*6);   // Schulterperspektive: Gras/Blumen nur in der Nähe
+    const R = B.opt.decor ? Math.min(fogR*(G.follow?.4:.6), TILE*[1.6,2.6,3.2,4.4][G.gfx]) : Math.min(fogR, TILE*6);   // Schulterperspektive: Gras/Blumen nur in der Nähe
     batchRefill(B, s.x, s.z, R);
     if(B.im) B.im.visible = !(G.farView && B.opt.decor); }
 }
@@ -3263,7 +3263,7 @@ function decorAssets(){
 }
 function addDecorChunk(x0,z0,CH,R){
   decorAssets();
-  const nT=[110,300,480][G.gfx], nS=[6,16,24][G.gfx], nP=[12,30,45][G.gfx];
+  const nT=[110,300,480,720][G.gfx], nS=[6,16,24,36][G.gfx], nP=[12,30,45,64][G.gfx];
   const F=flora();
   const BT=batch('d:tuft',TUFT_GEO,TUFT_MAT,{decor:true}), BF=batch('d:fl',FLOWER_GEO,FLOWER_MAT,{decor:true}), BS=batch('d:shrub',F.geo.bush[0],F.mat,{decor:true,shadow:true,depth:F.depth}), BP=batch('d:peb',PEBBLE_GEO,PEBBLE_MAT,{decor:true});
   const ck=chunkKeyOf(x0+CH/2, z0+CH/2);
@@ -3921,7 +3921,7 @@ function wxPick(){
   w.T = c.jg>.4 ? (wet?35+R()*45:40+R()*60) : (wet?60+R()*80:80+R()*100);
 }
 function wxParticles(){
-  const w=G.wx, N=[500,1100,1600][G.gfx];
+  const w=G.wx, N=[500,1100,1600,2200][G.gfx];
   const rp=new Float32Array(N*6), sp=new Float32Array(N*3);
   const rg=new T.BufferGeometry(); rg.setAttribute('position',new T.BufferAttribute(rp,3));
   w.rain=new T.LineSegments(rg, new T.LineBasicMaterial({color:0xb8c6d6, transparent:true, opacity:.55, depthWrite:false}));
@@ -3973,23 +3973,28 @@ function updateWeather(dt){
 // Grafik im laufenden Spiel umstellen
 async function applyGfx(g){
   const r=G.renderer; G.gfx=g;
-  r.setPixelRatio(Math.min(window.devicePixelRatio||1, [1,1.25,1.75][g])*(G.dynScale||1)); r.setSize(G.W, G.H, false);
+  r.setPixelRatio(gfxPR(g)); r.setSize(G.W, G.H, false);
   const sh = g>=1;
   if(r.shadowMap.enabled!==sh){ r.shadowMap.enabled=sh; G.scene.traverse(o=>{ if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); } }); }
-  const sz = g>=2 ? 2048 : 1024; if(G.sun.shadow.mapSize.x!==sz){ G.sun.shadow.mapSize.set(sz,sz); if(G.sun.shadow.map){ G.sun.shadow.map.dispose(); G.sun.shadow.map=null; } }
+  const sz = g>=3 ? 4096 : g>=2 ? 2048 : 1024; if(G.sun.shadow.mapSize.x!==sz){ G.sun.shadow.mapSize.set(sz,sz); if(G.sun.shadow.map){ G.sun.shadow.map.dispose(); G.sun.shadow.map=null; } }
   // Gebäude-Modelle (niedrig / volle Qualität) austauschen
   const old={}; for(const k of MODEL_LOW) if(MODELS[k]) old[k]=MODELS[k];
   await loadModels(g);
   const swap={}; for(const k in old) if(MODELS[k] && MODELS[k]!==old[k]) swap[k]=[old[k],MODELS[k]];
   const w=m=>{ const bb=m.geo.boundingBox; return Math.max(bb.max.x-bb.min.x, bb.max.z-bb.min.z); };
   for(const b of G.builds) b.mesh.traverse(o=>{ if(!o.isMesh) return; for(const k in swap){ const [a,n]=swap[k]; if(o.geometry===a.geo){ o.geometry=n.geo; o.material=Array.isArray(o.material)?o.material:n.mat; if(!o.material.transparent) o.material=n.mat; o.scale.multiplyScalar(w(a)/w(n)); } } });
-  EE.toast('Grafik: '+['Niedrig','Mittel','Hoch'][g]+(g===0?' (einfache Gebäude)':''));
+  EE.toast('Grafik: '+['Niedrig (480p)','Mittel (720p)','Hoch (1080p)','Ultra (1440p)'][g]+(g===0?' · einfache Gebäude, weniger Tiere':''));
 }
 let fpsN=0, fpsT=0, fpsLow=0, fpsHigh=0;
 // Auflösung: Grundwert je Grafikstufe × automatische Anpassung × (Schulterperspektive auf Niedrig/Mittel: 80 %, dort ist viel Laub im Bild)
-function applyRes(){ if(!G || !G.renderer) return; G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, [1,1.25,1.75][G.gfx])*(G.dynScale||1)*(G.follow && G.gfx<2 ? .8 : 1)); G.renderer.setSize(G.W, G.H, false); }
+// Feste Auflösung je Grafikstufe (bezogen auf die Bildhöhe): Niedrig 480p, Mittel 720p, Hoch 1080p, Ultra 1440p (auf Handys bis zur vollen Bildschirmschärfe, darüber leicht hochgerechnet)
+const RES_H = [480, 720, 1080, 1440];
+function gfxPR(g){ const dpr=window.devicePixelRatio||1, h=Math.max(240, Math.min(G.H||innerHeight, G.W||innerWidth));
+  return Math.max(.5, Math.min(g>=3 ? Math.max(dpr,1)*1.25 : Math.max(dpr,1), RES_H[g]/h)); }
+function applyRes(){ if(!G || !G.renderer) return; G.renderer.setPixelRatio(gfxPR(G.gfx)); G.renderer.setSize(G.W, G.H, false); }
 // Automatische Auflösung: fällt die Bildrate unter ~24, rechnet das Spiel mit weniger Bildpunkten (bis 45 %), steigt sie wieder, wird es schärfer
-function dynRes(fps){
+function dynRes(fps){ return; }   // Auflösung bleibt fest je Stufe (kein automatisches Unscharf-Rechnen mehr)
+function dynResOld(fps){
   if(!G || !G.renderer || G.inMenu || document.hidden) return;
   if(fps<24){ fpsLow++; fpsHigh=0; } else if(fps>48){ fpsHigh++; fpsLow=0; } else { fpsLow=0; fpsHigh=0; }
   let sc=G.dynScale||1;
@@ -4887,7 +4892,7 @@ function makeBird(){
 }
 function updateBirds(dt){
   if(!MODELS.bird || !G.cam) return;
-  if(!G.birds){ G.birds=[]; const NF=G.gfx===0?2:3; for(let f=0;f<NF;f++) G.birds.push({x:0,z:0,t:0,new:true,members:[]}); }
+  if(!G.birds){ G.birds=[]; const NF=G.gfx===0?1:G.gfx>=3?4:3; for(let f=0;f<NF;f++) G.birds.push({x:0,z:0,t:0,new:true,members:[]}); }
   const s=G.camS, show=!G.farView;
   for(const F of G.birds){
     if(F.new || Math.hypot(F.x-s.x,F.z-s.z)>110){ F.new=false; const a=G.rand()*6.28, r=25+G.rand()*45; F.x=s.x+Math.cos(a)*r; F.z=s.z+Math.sin(a)*r; F.dir=G.rand()*6.28; F.turn=(G.rand()-.5)*.35; F.sp=7+G.rand()*4; F.h=7+G.rand()*4;
