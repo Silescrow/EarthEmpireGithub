@@ -310,6 +310,12 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 #dip .dcard.many .dlab{margin:5px 0 2px}
 #dip .dcard.many .dres,#dip .dcard.many .damt{padding:4px 8px;font-size:12px}
 #dip .dcard.many .deal{margin-top:7px;padding:6px 8px}
+#dip .dflag{width:22px;height:27px;flex:none;filter:drop-shadow(0 1px 2px #000a)}
+#dip .drows.two .dflag,#dip .drows.three .dflag{width:17px;height:21px}
+#dip .dsub{display:flex;align-items:center;gap:6px;min-width:0}
+#dip .dsub .mood{flex:none;width:46px;margin-top:0}
+#dip .dn em.later{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-style:normal;font-weight:400;font-size:11px;line-height:1.1;color:#c9b78a;opacity:.9;white-space:nowrap}
+#dip .dn b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #dip .dn em.hard{font-style:normal;color:#ff7a7a;font-size:.9em}
 #dip .dbribe{display:flex;align-items:center;gap:8px;margin:0 0 7px;padding:7px 9px;border-radius:10px;background:linear-gradient(90deg,#3a2a08,#1a1430);border:1.5px solid var(--gold);font-size:13.5px;color:#ffe9b0;animation:bribeIn .3s ease}
 #dip .dbribe>i{width:8px;height:26px;border-radius:3px;flex:none}
@@ -320,6 +326,26 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 #dip .dbribe .btn{width:auto;margin:0}
 @keyframes bribeIn{from{transform:scale(.96);opacity:0}to{transform:none;opacity:1}}
 #dip .drow{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:9px;background:#ffffff0d}
+/* ===== Diplomatie im Steinzeit-Stil (V2.16): Steinrahmen, Felsplatten als Zeilen, Fellbanner, Zustand farbig ===== */
+#dip .dtab span{margin-right:5px;font-size:1.05em}
+#dip .dst button span{margin-right:3px}
+#game.ep1 #dip{background:radial-gradient(ellipse at 50% 40%,#0000 30%,#000b 100%),#05070fa0;backdrop-filter:blur(2px)}
+#game.ep1 #dip .dcard{border:26px solid transparent;border-image:var(--ep-frame) 64 fill / 26px stretch;background:none;padding:0 4px;box-shadow:0 18px 40px #000c;border-radius:0}
+#game.ep1 #dip .dhead{margin:-4px 0 6px}
+#game.ep1 #dip .dtab{border:1.5px solid #9c8462;background:linear-gradient(rgba(28,22,16,.35),rgba(10,8,6,.7)),var(--ep-in) center/cover;color:#f0d9a8;text-shadow:0 1px 2px #000;box-shadow:inset 0 1px 0 #ffffff22,0 2px 5px #0008}
+#game.ep1 #dip .dtab.on{background:linear-gradient(#e9c98e,#b8894a);color:#2a1a08;text-shadow:none;border-color:#f3e2c2;box-shadow:0 0 10px #e8b64a66}
+#game.ep1 #dip .dnote{color:#e8d3a8;font-style:italic;text-shadow:0 1px 2px #000}
+#game.ep1 #dip .drow{position:relative;background:linear-gradient(90deg,rgba(18,14,10,.55),rgba(10,8,6,.78)),var(--ep-in) center/cover;border:1.5px solid #6e5a40;box-shadow:inset 0 1px 0 #ffffff14,0 2px 6px #0009}
+#game.ep1 #dip .drow.st-ally{border-color:#5fbf6a;box-shadow:inset 3px 0 0 #5fbf6a,0 0 10px #5fbf6a33}
+#game.ep1 #dip .drow.st-enemy{border-color:#8a3a2e;box-shadow:inset 3px 0 0 #c8463a,0 2px 6px #0009}
+#game.ep1 #dip .dn b{color:#f3e2c2;text-shadow:0 1px 2px #000}
+#game.ep1 #dip .dst{background:#0007;border-radius:9px;padding:2px;box-shadow:inset 0 1px 3px #000c}
+#game.ep1 #dip .dst button{border:none;background:transparent;color:#cdb895;border-radius:7px}
+#game.ep1 #dip .dst button.ally.on{background:linear-gradient(#5fbf6a,#2f7f3a);color:#fff;box-shadow:0 0 8px #5fbf6a88}
+#game.ep1 #dip .dst button.neutral.on{background:linear-gradient(#d8b05a,#8f6a22);color:#fff;box-shadow:0 0 8px #e8b64a77}
+#game.ep1 #dip .dst button.enemy.on{background:linear-gradient(#d0503f,#86231c);color:#fff;box-shadow:0 0 8px #ff5a4a77}
+#game.ep1 #dip .mood{background:#000a;height:5px;box-shadow:inset 0 1px 2px #000}
+#game.ep1 #dip .dx{border-color:#d9b98a}
 #dip .drow>i,#dip .dciv i,#offer i{width:12px;height:30px;border-radius:3px;flex:none;display:inline-block}
 #dip .dn{flex:1;min-width:0;display:flex;flex-direction:column}
 #dip .dn b{font:800 14px "Cinzel",Georgia,serif;color:var(--gold2)}
@@ -380,7 +406,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 2.15</div>
+    <div class="ver2">Version 2.16</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -401,7 +427,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="corner2">
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V2.15</div>
+  <div class="ver">Siles Empire · V2.16</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide"><button class="winx" data-close aria-label="Schließen">✕</button>
     <h2>Freies Spiel</h2>
@@ -410,7 +436,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
       <div>
         <div class="row"><label>Epochen</label><div class="eprow"><button class="epbtn" id="epBtn">Steinzeit <span>▾</span></button><b class="epbis">bis</b><button class="epbtn" id="epEnd">Steinzeit <span>▾</span></button><div class="eppop hidden" id="epPop"></div></div></div>
         <div class="row"><label>Weltkarte</label><div class="seg" data-k="map"><button>Klein</button><button>Mittel</button><button>Groß</button><button>Riesig</button></div></div>
-        <div class="row"><label>Gegner</label><div class="step"><button id="aiMinus" aria-label="weniger">−</button><b id="aiN">3</b><button id="aiPlus" aria-label="mehr">+</button><button id="aiAll" class="all">Alle</button></div></div>
+        <div class="row"><label>Gegner</label><div class="step"><button id="aiMinus" aria-label="weniger">−</button><b id="aiN">3</b><button id="aiPlus" aria-label="mehr">+</button><button id="aiAll" class="all">Max</button></div></div>
         <div class="row"><label>Schwierigkeit</label><div class="seg" data-k="diff"><button>Leicht</button><button>Mittel</button><button>Schwer</button></div></div>
         <div class="acts"><button class="btn small" data-close>Zurück</button><button class="btn main small" id="bStart">Schlacht starten</button></div>
       </div>
@@ -431,7 +457,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=2.15"></script>
+<script src="audio.js?v=2.16"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -576,6 +602,7 @@ const STONE_SYM={"Türkei": "<path d=\"M8 13q-2-6 4-6M22 13q2-6-4-6\" stroke=\"#
 const furBanner=(c,i)=>'<path d="'+FUR+'" fill="#ab8150" stroke="#4f3214" stroke-width="1"/><path d="M5 9q4 3 9 1t11 2M6 22q5-2 10 0t9-1" stroke="#7a5428" stroke-width=".5" fill="none" opacity=".45"/><g filter="url(#furPaint)" opacity=".92">'+(STONE_SYM[c[0]]||'')+'</g><path d="M0.5 2.5H29.5" stroke="#3d260e" stroke-width="2.4" stroke-linecap="round"/><path d="M5 2.5v2M15 2.5v2M25 2.5v2" stroke="#2a1808" stroke-width=".9"/>';
 // Platzhalter-Banner für frühe Epochen, solange noch kein eigenes gezeichnet ist: Stoff mit dem alten Stammeszeichen (keine moderne Flagge)
 const clothBanner=c=>B(R('#e3d2a6'),'<g transform="translate(0 1)">'+(STONE_SYM[c[0]]||'')+'</g>');
+window.EE_FLAG=(c,e,id)=>{ const s=e===0?furBanner(c,id):(e<4?(c[5]||clothBanner(c)):c[2]); return String(s).replace(/cp/g,'cp'+id); };   // kleine Flagge fürs Spiel (Diplomatie)
 const eraIdx=e=>(e|0)<=2?(e|0):(e|0)===3?2:3;   // Neuzeit noch mit dem alten Reich (Osmanen …), ab Industriezeit das heutige Land
 const eraName=(c,e)=>{ const a=c[6]&&c[6][eraIdx(e)]||c[0]; return a.split('|')[0]; };
 const civBy=n=>CIVS.find(c=>c[0]===(OLD_CIV[n]||n));
@@ -626,11 +653,12 @@ $('#nats').addEventListener('click',e=>{const b=e.target.closest('.nat');if(!b)r
 drawCiv();
 
 // Gegner-Anzahl (1–29 KI-Länder)
-const drawAI=()=>{ $('#aiN').textContent=S.ai>=29?'Alle (29)':S.ai; $('#aiAll').classList.toggle('on',S.ai>=29); };
+const AI_MAX=14;   // höchstens 15 Völker auf einer Karte (du + 14 KI) – die Hälfte der 30 – sonst wird es auf dem Handy ruckelig
+const drawAI=()=>{ $('#aiN').textContent=S.ai>=AI_MAX?'Max ('+AI_MAX+')':S.ai; $('#aiAll').classList.toggle('on',S.ai>=AI_MAX); };
 $('#aiMinus').addEventListener('click',()=>{ S.ai=Math.max(1,(S.ai||3)-1); save(); drawAI(); click(); });
-$('#aiPlus').addEventListener('click',()=>{ S.ai=Math.min(29,(S.ai||3)+1); save(); drawAI(); click(); });
-$('#aiAll').addEventListener('click',()=>{ S.ai=29; save(); drawAI(); click(); });
-if(!S.ai) S.ai=3; if(S.map>3) S.map=1; drawAI();
+$('#aiPlus').addEventListener('click',()=>{ S.ai=Math.min(AI_MAX,(S.ai||3)+1); save(); drawAI(); click(); });
+$('#aiAll').addEventListener('click',()=>{ S.ai=AI_MAX; save(); drawAI(); click(); });
+if(!S.ai) S.ai=3; if(S.ai>AI_MAX) S.ai=AI_MAX; if(S.map>3) S.map=1; drawAI();
 
 // Update: neue Version auf GitHub? Dann unten klein mit Balken automatisch herunterladen und neu starten
 const CUR_VER=(document.querySelector('.ver2')||{}).textContent.replace(/[^0-9.]/g,'');
@@ -676,7 +704,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{if((S.epoch|0)>0){ toast('Diese Epoche kommt bald – starte in der Steinzeit'); vib(20); return; }fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'2.15',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'2.16',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -701,10 +729,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=2.15"></script>
-<script src="game.js?v=2.15"></script>
-<script src="silescrow.js?v=2.15"></script>
-<script src="online.js?v=2.15"></script>
+<script src="three.min.js?v=2.16"></script>
+<script src="game.js?v=2.16"></script>
+<script src="silescrow.js?v=2.16"></script>
+<script src="online.js?v=2.16"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,

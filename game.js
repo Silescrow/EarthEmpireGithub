@@ -120,7 +120,7 @@ async function start(sv){
   const NX = [3840,5760,8320,12800][mapI] || 5760, HS = NX<=6000?8:16, NZ = Math.round(NX*(LAT0-LAT1)/360/TILE)*TILE;
   const byName = n => EE.civBy(n);
   const civ = sv ? byName(sv.civs[0]) : (EE.CIVS[S.civ] || EE.CIVS[0]);
-  const foes = sv ? sv.civs.length-1 : clamp(S.ai||3, 1, 29);
+  const foes = sv ? sv.civs.length-1 : clamp(S.ai||3, 1, 14);
   // Gegner möglichst weit weg wählen (bei wenigen Gegnern nie Nachbarn)
   const dist = (a,b)=>{ const p=CIV_POS[a[0]]||[0,0], q=CIV_POS[b[0]]||[0,0]; let dl=Math.abs(p[0]-q[0]); return Math.hypot(dl, (p[1]-q[1])*1.3); };
   const chosen=[civ], pool=EE.CIVS.filter(c=>c!==civ);
@@ -302,7 +302,7 @@ function buildUI(){
   <div id="placebar" class="hidden"><span id="pCost"></span><span id="pTxt">Gebäude mit dem Finger platzieren</span><button class="pb gate hidden" id="pGate">+ Tore</button><button class="pb no" id="pNo">✕</button><button class="pb ok" id="pOk">✓</button></div>
   <div id="fps" class="hidden"></div>
   <div id="offer" class="hidden"></div>
-  <div id="dip" class="hidden"><div class="dcard"><div class="dhead"><button class="dtab" data-t="rel">Beziehungen</button><button class="dtab" data-t="trade">Handel</button><button class="dtab" data-t="trib">Tribut</button><button class="dtab" data-t="war">Krieg</button><button class="dx winx" id="dClose" aria-label="Schließen">✕</button></div><div id="dipBody"></div></div></div>
+  <div id="dip" class="hidden"><div class="dcard"><div class="dhead"><button class="dtab" data-t="rel"><span>🤝</span>Beziehungen</button><button class="dtab" data-t="trade"><span>⚖️</span>Handel</button><button class="dtab" data-t="trib"><span>🎁</span>Tribut</button><button class="dtab" data-t="war"><span>⚔️</span>Krieg</button><button class="dx winx" id="dClose" aria-label="Schließen">✕</button></div><div id="dipBody"></div></div></div>
   <div id="rotate"><div>Bitte das Handy quer halten</div></div>
   <div id="pause" class="hidden"><div class="pcard"><button class="winx" id="pX" aria-label="Schließen">✕</button><h2>Pause</h2>
     <button class="btn main small" id="pWeiter">Weiter</button>
@@ -1147,7 +1147,7 @@ function action(a){
    DIPLOMATIE & HANDEL (wie in Empire Earth 2): Bündnis, Neutral, Krieg, Tribut, Rohstoffhandel
    Neutrale und verbündete Völker greifen nicht an.
    ============================================================ */
-const DIP_DE = {ally:'Verbündet', neutral:'Neutral', enemy:'Krieg'};
+const DIP_DE = {ally:'Verbündet', neutral:'Neutral', enemy:'Krieg'}, DIP_IC = {ally:'🤝', neutral:'🕊️', enemy:'⚔️'};
 const RES_VAL = {food:1, wood:1, stone:1.3, gold:2};
 const dipSVG = () => '<svg viewBox="0 0 24 24"><path d="M2 11l4-4 4 2 3-2 4 1 5 4-3 3-2-1-4 4q-1 1-2 0l-6-5z" fill="#e8b64a"/><path d="M9 13l2 2M11 11l3 3M13 10l3 3" stroke="#7a4a12" stroke-width="1.3" stroke-linecap="round"/></svg>';
 function initDip(){
@@ -1245,6 +1245,11 @@ function doTrade(i, give, get, amt){
 function openDip(tab){ G.dipOpen=true; G.dipUI.tab=tab||G.dipUI.tab; G.paused=true; $('#dip').classList.remove('hidden'); renderDip(); }
 function closeDip(){ G.dipOpen=false; G.paused=false; $('#dip').classList.add('hidden'); EE.click(); }
 function moodTxt(m){ return m>=50?'freundlich':m>=15?'wohlgesonnen':m>-15?'zurückhaltend':m>-50?'misstrauisch':'feindselig'; }
+// Kleine Flagge wie bei der Volksauswahl (Steinzeit: Fellbanner, Antike–Neuzeit: altes Reich, danach heutige Flagge)
+function dipFlag(p){ if(!window.EE_FLAG) return ''; const e=(G.era|0);
+  return `<svg class="dflag" viewBox="0 0 30 36">${window.EE_FLAG(p.civ, e, 'd'+p.id)}</svg>`; }
+// damit man sich merkt, wer wer ist: „→ Türkei“ (das heutige Land)
+function laterName(p){ return (G.era|0)>=4 ? '' : `<em class="later">später ${p.civ[0]}</em>`; }
 function renderDip(){
   const el=$('#dipBody'); if(!el || !G.dipOpen) return;
   const U=G.dipUI, me=G.players[0];
@@ -1261,8 +1266,8 @@ function renderDip(){
     else { U.bribe=null; h += `<p class="dnote">Lehnen sie ab, hilft Gold: Neutrale billig, Kriegsgegner teuer, ⚔ unversöhnlich = nie.</p>`; }
     h += `<div class="drows${G.players.length>17?' three':G.players.length>7?' two':''}">`;
     for(const p of G.players.slice(1)){ const d=G.dip[p.id];
-      h += `<div class="drow"><i style="background:${col(p.id)}"></i><div class="dn"><b>${NM(p)}${d.hard&&d.state==='enemy'?' <em class="hard" title="unversöhnlich">⚔</em>':''}</b><small>${d.hard&&d.state==='enemy'?'unversöhnlich':moodTxt(d.mood)}</small><span class="mood"><s style="width:${(d.mood+100)/2}%"></s></span></div>
-        <div class="dst">${['ally','neutral','enemy'].map(s=>`<button class="${s}${d.state===s?' on':''}" data-p="${p.id}" data-s="${s}">${DIP_DE[s]}</button>`).join('')}</div></div>`; }
+      h += `<div class="drow st-${d.state}"><i style="background:${col(p.id)}"></i>${dipFlag(p)}<div class="dn"><b>${NM(p)}${d.hard&&d.state==='enemy'?' <em class="hard" title="unversöhnlich">⚔</em>':''}</b><span class="dsub">${laterName(p)}<span class="mood" title="${d.hard&&d.state==='enemy'?'unversöhnlich':moodTxt(d.mood)}"><s style="width:${(d.mood+100)/2}%"></s></span></span></div>
+        <div class="dst">${['ally','neutral','enemy'].map(s=>`<button class="${s}${d.state===s?' on':''}" data-p="${p.id}" data-s="${s}"><span>${DIP_IC[s]}</span>${DIP_DE[s]}</button>`).join('')}</div></div>`; }
     h += `</div>`;
   } else if(U.tab==='trade'){
     const q = tradeQuote(U.who,U.give,U.get,U.amt), p=G.players[U.who], d=G.dip[U.who];
@@ -3174,7 +3179,7 @@ function addRes(type,x,z){
   if(!m.inst) G.scene.add(m);
   const r = {type, kind, amt, max:amt, x, z, mesh:m, alive:true, r:.6};
   if(G.gfx<2 && m && m.traverse) m.traverse(o=>{ if(o.isMesh) o.castShadow=false; });   // Büsche, Steine, Erz: keine eigenen Schatten (spart den Schatten-Durchgang)
-  G.grid[cellIdx(x,z)] = 1;
+  { const k=cellIdx(x,z); if(k>=0 && !G.grid[k]) G.grid[k] = 2; }   // 2 = Baum/Stein: weich – Leute zwängen sich notfalls vorbei (V2.16)
   G.res.push(r);
   if(G.resMod){ const k=resKey(x,z); if(k in G.resMod){ r.amt=G.resMod[k]; if(r.amt<=0) removeRes(r); } }
   return r;
@@ -3367,14 +3372,14 @@ function nearestFree(i,j){
   }
   return -1;
 }
-function findPath(x0,z0,x1,z1){
+function findPath(x0,z0,x1,z1,relax){
   const NX=G.NX, NZ=G.NZ, PW=G.pfW;
   // Ziel zu weit weg: Zwischenziel in Richtung des Ziels (der Rest wird später neu berechnet)
   const dd=Math.hypot(x1-x0,z1-z0), maxR=PW/2-30;
   if(dd>maxR){ const k=maxR/dd; x1=x0+(x1-x0)*k; z1=z0+(z1-z0)*k; }
   let s = cellIdx(x0,z0), t = cellIdx(x1,z1);
   if(s<0||t<0) return null;
-  if(G.grid[s]) s = nearestFree(s%NX, (s/NX)|0);
+  if(G.grid[s]===1) s = nearestFree(s%NX, (s/NX)|0);
   if(G.grid[t]) t = nearestFree(t%NX, (t/NX)|0);
   if(s<0||t<0) return null;
   if(s===t) return [[x1,z1]];
@@ -3395,10 +3400,12 @@ function findPath(x0,z0,x1,z1){
     for(let dj=-1;dj<=1;dj++) for(let di=-1;di<=1;di++){
       if(!di&&!dj) continue;
       const a=ki+di, b=kj+dj; if(a<ox||b<oz||a>=ox+PW||b>=oz+PW||a>=NX||b>=NZ) continue;
-      if(G.grid[b*NX+a]) continue;
-      if(di&&dj && (G.grid[kj*NX+a]||G.grid[b*NX+ki])) continue;
+      // relax: eingeklemmt zwischen Bäumen/Steinen – Hindernisse sind teuer statt verboten, so findet der Bauer heraus
+      // 1 = fest (Gebäude, Mauer, Wasser, Steilhang), 2 = weich (Baum, Busch, Stein): wird lieber umgangen, ist aber passierbar
+      const blk=G.grid[b*NX+a]; if(blk===1) continue;
+      if(!relax && di&&dj && (G.grid[kj*NX+a]===1||G.grid[b*NX+ki]===1)) continue;
       const nl=L(a,b); if(closed[nl]===st) continue;
-      const ng = g[lk] + (di&&dj?1.414:1)*(G.road[b*NX+a]?.62:1);
+      const ng = g[lk] + (di&&dj?1.414:1)*(G.road[b*NX+a]?.62:1)*(blk?4:1);
       if(seen[nl]!==st || ng<g[nl]){ seen[nl]=st; g[nl]=ng; from[nl]=lk; const hh=hfun(a,b); hp(nl, ng+hh); if(hh<bestH){bestH=hh;best=nl;} }
     }
   }
@@ -3408,12 +3415,16 @@ function findPath(x0,z0,x1,z1){
   const out=[]; let cx=x0, cz=z0, i=0;
   while(i<pts.length){
     let j=Math.min(pts.length-1, i+40);
-    while(j>i && !lineFree(cx,cz,pts[j][0],pts[j][1])) j--;
+    while(j>i && !relax && !lineFree(cx,cz,pts[j][0],pts[j][1])) j--;
+    if(relax) j=i;
     out.push(pts[j]); cx=pts[j][0]; cz=pts[j][1]; i=j+1;
   }
   if(found>=0 && !G.grid[cellIdx(x1,z1)]) { if(out.length) out[out.length-1]=[x1,z1]; }
   return out;
 }
+// Weg endet kaum näher am Ziel als der Start (Bauer sitzt in einer Lücke fest)
+function pathStuck(u,x,z){ const p=u.path; if(!p||!p.length) return true; const e=p[p.length-1], d0=Math.hypot(x-u.x,z-u.z), d1=Math.hypot(x-e[0],z-e[1]);
+  return d0>3 && d1>d0-1 && Math.hypot(e[0]-u.x,e[1]-u.z)<2.5; }
 function lineFree(x0,z0,x1,z1){
   const d=Math.hypot(x1-x0,z1-z0), n=Math.ceil(d*4); if(d<1e-4) return true;
   const nx=-(z1-z0)/d*.32, nz=(x1-x0)/d*.32;                 // Körperbreite: links und rechts mitprüfen
@@ -3428,7 +3439,10 @@ function lineFree(x0,z0,x1,z1){
 // Wegsuche mit Zeitbudget pro Bild: viele Befehle auf einmal lassen das Spiel nicht mehr ruckeln
 function moveTo(u,x,z){
   u.pathEnd=false;
-  if(!G.pfDeadline || performance.now() < G.pfDeadline){ u.pfWait=null; u.path = findPath(u.x,u.z,x,z); u.pi=0; return !!u.path; }
+  if(!G.pfDeadline || performance.now() < G.pfDeadline){ u.pfWait=null; u.path = findPath(u.x,u.z,x,z); u.pi=0;
+    // kein Weg / kein Fortschritt: eingeklemmt – Notweg durch die Lücken
+    if((!u.path || !u.path.length || pathStuck(u,x,z)) && Math.hypot(x-u.x,z-u.z)>1.5){ const p2=findPath(u.x,u.z,x,z,true); if(p2 && p2.length){ u.path=p2; u.pi=0; } }
+    return !!u.path; }
   u.pfWait={x,z}; u.path=null; u.pi=0; return true;
 }
 function cmdMove(u,x,z,used){ [x,z]=freeSpot(x,z,used); u.state='move'; u.target=null; u.site=null; u.goal={x,z,tries:0}; moveTo(u,x,z); }
@@ -3518,7 +3532,13 @@ function updateWorker(u,dt){
   // aus: eigene Bauern ohne Auftrag bleiben ganz still stehen (kein Herumlaufen, kein Hüttenbesuch)
   else if(false && u.kind==='worker' && u.ageSt!=='greis' && u.owner===0 && u.state==='idle' && !u.hold && !u.pin && !u.auto && !u.homeless){ if(u.lifeT==null) u.lifeT=10+G.rand()*14; u.lifeT-=dt*(badWeather()?2:1); if(u.lifeT<=0){ u.lifeT=null; idleLife(u); } }
   else if(u.homeless && u.kind==='worker' && u.state!=='idle' && u.state!=='move'){ u.state='idle'; u.path=null; }
-  if(u.pfWait && performance.now() < G.pfDeadline){ const w=u.pfWait; u.pfWait=null; u.path=findPath(u.x,u.z,w.x,w.z); u.pi=0; }
+  if(u.pfWait && performance.now() < G.pfDeadline){ const w=u.pfWait; u.pfWait=null; moveTo(u,w.x,w.z); }
+  // Wächter: hat der Bauer einen Auftrag, kommt aber 4 s nicht vom Fleck, sucht er einen Notweg heraus
+  if(!u.inside && (u.state==='move'||u.state==='gather'||u.state==='build'||u.state==='hunt'||u.state==='drop'||u.state==='gohome'||u.state==='haul')){
+    u.wT=(u.wT||0)+dt; if(u.wT>4){ const moved=u.wx==null || Math.hypot(u.x-u.wx,u.z-u.wz)>.6; u.wx=u.x; u.wz=u.z; u.wT=0;
+      if(!moved){ const g=u.site||u.target||u.goal; const tx=g?(g.fish?g.gx:g.x):null, tz=g?(g.fish?g.gz:g.z):null;
+        if(tx!=null && Math.hypot(tx-u.x,tz-u.z)>2.5){ const p=findPath(u.x,u.z,tx,tz,true); if(p && p.length){ u.path=p; u.pi=0; u.pathEnd=false; } } } } }
+  else { u.wT=0; u.wx=null; }
   if(!u.manual && (!u.path || u.pi>=u.path.length) && !u.inside){ const ck=cellIdx(u.x,u.z);
     if(ck>=0 && G.grid[ck] && !(G.gateAt && G.gateAt[ck])){ const [fx,fz]=freeSpot(u.x,u.z), dd=Math.hypot(fx-u.x,fz-u.z), st=Math.min(dd,u.speed*dt*1.2); if(dd>1e-3){ u.x+=(fx-u.x)/dd*st; u.z+=(fz-u.z)/dd*st; u.face=Math.atan2(fx-u.x,fz-u.z); u.moving=true; } } }
   if(u.manual) updateManual(u,dt);
