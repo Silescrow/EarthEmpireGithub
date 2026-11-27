@@ -222,7 +222,7 @@ function applySave(sv){
     made.push(b); b.hp = s.hp; b.slow = !!s.s; if(s.r) b.recv=s.r; if(s.q) b.queue = s.q.slice(); if(s.rk && TECH[s.rk]){ b.rk=s.rk; b.rp=s.rp||0; }
   }
   WALL_ID = Math.max(WALL_ID, maxW+1);
-  for(const s of sv.units){ G.nextSex = s.sx; const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.au) u.auto=true; if(s.sk) u.seek=true; if(s.lt) u.lastType=s.lt; if(s.g){ u.grow=s.g[1]; setStage(u,s.g[0]); } if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; if(s.i!=null && s.i>=0 && made[s.i]){ u.inside=made[s.i]; u.slot=s.sl|0; if(s.ht){ u.inHut=true; u.hutT=s.ht; } } if(s.ag!=null){ u.age=s.ag; if(s.dz!=null) u.dieAt=s.dz; if(u.kind==='worker'){ if(u.age>AGE_VOLD) setAgeStage(u,'greis'); else if(u.age>AGE_OLD) setAgeStage(u,'alt'); } } if(s.hd) u.hold=true; if(s.ps) u.post={x:s.ps[0],z:s.ps[1]}; if(s.pn) setPin(u,true); }
+  for(const s of sv.units){ G.nextSex = s.sx; const u = spawnWorker(s.o, s.x, s.z, s.k); u.hp = s.hp; if(s.au && s.o!==0) u.auto=true;   /* eigene Bauern laden ohne Automatik */ if(s.sk) u.seek=true; if(s.lt) u.lastType=s.lt; if(s.g){ u.grow=s.g[1]; setStage(u,s.g[0]); } if(s.c) u.carry = {type:s.c[0], amt:s.c[1]}; if(s.i!=null && s.i>=0 && made[s.i]){ u.inside=made[s.i]; u.slot=s.sl|0; if(s.ht){ u.inHut=true; u.hutT=s.ht; } } if(s.ag!=null){ u.age=s.ag; if(s.dz!=null) u.dieAt=s.dz; if(u.kind==='worker'){ if(u.age>AGE_VOLD) setAgeStage(u,'greis'); else if(u.age>AGE_OLD) setAgeStage(u,'alt'); } } if(s.hd) u.hold=true; if(s.ps) u.post={x:s.ps[0],z:s.ps[1]}; if(s.pn) setPin(u,true); }
   G.t = sv.t||0;
   if(sv.cam) G.loadCam = sv.cam;
   G.quiet = false;
@@ -447,11 +447,11 @@ function drawPanel(){
     if(ws.length===1 && !G.buildMenu && !ws[0].dead){
       h += `<button class="ab tool" data-a="follow"><span class="ai"><svg viewBox="0 0 24 24"><path d="M3 8.5h3l1.6-2.5h8.8L18 8.5h3v10H3z" fill="none" stroke="#e8b64a" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="#e8b64a" stroke-width="2"/></svg></span>Folgen</button>`;
     }
-    if(ws[0].owner===0 && !G.buildMenu){ const allPin=ws.every(u=>u.pin);
-      h += `<button class="ab tool${allPin?' on':''}" data-a="pin"><span class="ai"><svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 3H7l3-3z" fill="#e23b3b" stroke="#7a1010" stroke-width="1.2" stroke-linejoin="round"/><path d="M12 12v9" stroke="#cfd6dc" stroke-width="2" stroke-linecap="round"/></svg></span>${allPin?'Bleibt hier ✓':'Hier bleiben'}</button>`;
-    }
+    // „Hier bleiben“ entfernt: wie in Empire Earth 2 bleiben Einheiten ohnehin dort, wo man sie hinschickt
     if(ws[0].owner===0 && ws.some(u=>isSoldier(u)) && !G.buildMenu){ const f=FORMS.find(x=>x[0]===(G.form||'block'));
-      h += `<button class="ab tool" data-a="form"><span class="ai"><svg viewBox="0 0 24 24">${{block:'<g fill="#e8b64a"><rect x="5" y="5" width="4" height="4"/><rect x="10" y="5" width="4" height="4"/><rect x="15" y="5" width="4" height="4"/><rect x="5" y="10" width="4" height="4"/><rect x="10" y="10" width="4" height="4"/><rect x="15" y="10" width="4" height="4"/><rect x="5" y="15" width="4" height="4"/><rect x="10" y="15" width="4" height="4"/><rect x="15" y="15" width="4" height="4"/></g>',linie:'<g fill="#e8b64a"><rect x="2" y="9" width="3.5" height="3.5"/><rect x="6.5" y="9" width="3.5" height="3.5"/><rect x="11" y="9" width="3.5" height="3.5"/><rect x="15.5" y="9" width="3.5" height="3.5"/><rect x="20" y="9" width="2" height="3.5"/><rect x="4" y="14" width="3.5" height="3.5"/><rect x="9" y="14" width="3.5" height="3.5"/><rect x="14" y="14" width="3.5" height="3.5"/></g>',keil:'<g fill="#e8b64a"><rect x="10" y="3" width="4" height="4"/><rect x="7" y="9" width="4" height="4"/><rect x="13" y="9" width="4" height="4"/><rect x="4" y="15" width="4" height="4"/><rect x="10" y="15" width="4" height="4"/><rect x="16" y="15" width="4" height="4"/></g>',kreis:'<g fill="#e8b64a"><circle cx="12" cy="4" r="2"/><circle cx="19" cy="8" r="2"/><circle cx="19" cy="16" r="2"/><circle cx="12" cy="20" r="2"/><circle cx="5" cy="16" r="2"/><circle cx="5" cy="8" r="2"/></g>'}[f[0]]}</svg></span>Formation: ${f[1]}</button>`;
+      if(G.formMenu){ h += `<button class="pclose" data-a="form" aria-label="Formationen schließen">✕</button>`;
+        for(const [k,n] of FORMS) h += `<button class="ab tool${k===(G.form||'block')?' on':''}" data-a="fs-${k}"><span class="ai"><svg viewBox="0 0 24 24">${FORM_SVG[k]}</svg></span>${n}</button>`; }
+      else h += `<button class="ab tool" data-a="form"><span class="ai"><svg viewBox="0 0 24 24">${FORM_SVG[f[0]]}</svg></span>Formation: ${f[1]}</button>`;
     }
     if(ws[0].owner===0 && ws.some(u=>isSoldier(u)) && !G.buildMenu){
       h += `<button class="ab tool" data-a="seek"><span class="ai"><svg viewBox="0 0 24 24"><path d="M4 4l11 11M20 4L9 15" stroke="#e8b64a" stroke-width="2.2" stroke-linecap="round"/><path d="M13 17l4 4M11 17l-4 4M15 15l2-2M9 15l-2-2" stroke="#ff7a6a" stroke-width="2.2" stroke-linecap="round"/></svg></span>Gegner suchen</button>`;
@@ -1073,7 +1073,8 @@ function action(a){
   if(a==='pin'){ const ws=G.sel.filter(u=>u.owner===0 && !u.dead), on=!ws.every(u=>u.pin);
     for(const u of ws){ if(on){ u.auto=u.seek=false; u.state='idle'; u.path=null; u.target=null; u.site=null; } else { u.hold=false; u.post=null; } setPin(u,on); }
     EE.toast(on?'📌 Bleibt hier stehen':'📌 Aufgehoben'); EE.sfx('click'); drawPanelSoon(); return; }
-  if(a==='form'){ const i=FORMS.findIndex(x=>x[0]===(G.form||'block')); G.form=FORMS[(i+1)%FORMS.length][0];
+  if(a==='form'){ G.formMenu=!G.formMenu; EE.click(); drawPanel(); return; }   // Formations-Auswahl auf- und zuklappen
+  if(a.startsWith('fs-')){ G.form=a.slice(3); G.formMenu=false;
     const ss=G.sel.filter(u=>isSoldier(u) && u.owner===0 && !u.dead && !u.inside);
     if(ss.length>1){ const cx=ss.reduce((a,u)=>a+u.x,0)/ss.length, cz=ss.reduce((a,u)=>a+u.z,0)/ss.length; formationMove(ss, cx, cz); }
     EE.toast('Formation: '+FORMS.find(x=>x[0]===G.form)[1]); EE.sfx('click'); drawPanelSoon(); return; }
@@ -3450,7 +3451,8 @@ function updateWorker(u,dt){
   if(u.inside){ u.x=u.inside.x; u.z=u.inside.z; u.mesh.position.set(u.x,-100,u.z); u.ring.visible=false; if(u.inHut){ u.hutT-=dt; if(u.hutT<=0 || u.inside.dead){ exitHut(u); return; } } else if(u.inside.dead){ u.inside=null; } return; }
   if(u.kind==='worker' && updateAge(u,dt)) return;
   if(u.kind==='kid') updateKid(u,dt);
-  else if(u.kind==='worker' && u.ageSt!=='greis' && u.owner===0 && u.state==='idle' && !u.hold && !u.pin && !u.auto && !u.homeless){ if(u.lifeT==null) u.lifeT=10+G.rand()*14; u.lifeT-=dt*(badWeather()?2:1); if(u.lifeT<=0){ u.lifeT=null; idleLife(u); } }
+  // aus: eigene Bauern ohne Auftrag bleiben ganz still stehen (kein Herumlaufen, kein Hüttenbesuch)
+  else if(false && u.kind==='worker' && u.ageSt!=='greis' && u.owner===0 && u.state==='idle' && !u.hold && !u.pin && !u.auto && !u.homeless){ if(u.lifeT==null) u.lifeT=10+G.rand()*14; u.lifeT-=dt*(badWeather()?2:1); if(u.lifeT<=0){ u.lifeT=null; idleLife(u); } }
   else if(u.homeless && u.kind==='worker' && u.state!=='idle' && u.state!=='move'){ u.state='idle'; u.path=null; }
   if(u.pfWait && performance.now() < G.pfDeadline){ const w=u.pfWait; u.pfWait=null; u.path=findPath(u.x,u.z,w.x,w.z); u.pi=0; }
   if(!u.manual && (!u.path || u.pi>=u.path.length) && !u.inside){ const ck=cellIdx(u.x,u.z);
@@ -4379,6 +4381,7 @@ function tapAt(sx,sy){
 // Formationen wie in Empire Earth 2: Block, Linie, Keil, Kreis – Nahkämpfer vorne, Bogenschützen dahinter.
 // Wer hingeschickt wird, bleibt dort (Soldaten kehren nach einem Kampf an ihren Platz zurück).
 const FORMS = [['block','Block'],['linie','Linie'],['keil','Keil'],['kreis','Kreis']];
+const FORM_SVG = {block:'<g fill="#e8b64a"><rect x="5" y="5" width="4" height="4"/><rect x="10" y="5" width="4" height="4"/><rect x="15" y="5" width="4" height="4"/><rect x="5" y="10" width="4" height="4"/><rect x="10" y="10" width="4" height="4"/><rect x="15" y="10" width="4" height="4"/><rect x="5" y="15" width="4" height="4"/><rect x="10" y="15" width="4" height="4"/><rect x="15" y="15" width="4" height="4"/></g>',linie:'<g fill="#e8b64a"><rect x="2" y="9" width="3.5" height="3.5"/><rect x="6.5" y="9" width="3.5" height="3.5"/><rect x="11" y="9" width="3.5" height="3.5"/><rect x="15.5" y="9" width="3.5" height="3.5"/><rect x="20" y="9" width="2" height="3.5"/><rect x="4" y="14" width="3.5" height="3.5"/><rect x="9" y="14" width="3.5" height="3.5"/><rect x="14" y="14" width="3.5" height="3.5"/></g>',keil:'<g fill="#e8b64a"><rect x="10" y="3" width="4" height="4"/><rect x="7" y="9" width="4" height="4"/><rect x="13" y="9" width="4" height="4"/><rect x="4" y="15" width="4" height="4"/><rect x="10" y="15" width="4" height="4"/><rect x="16" y="15" width="4" height="4"/></g>',kreis:'<g fill="#e8b64a"><circle cx="12" cy="4" r="2"/><circle cx="19" cy="8" r="2"/><circle cx="19" cy="16" r="2"/><circle cx="12" cy="20" r="2"/><circle cx="5" cy="16" r="2"/><circle cx="5" cy="8" r="2"/></g>'};
 function formationSlots(n, form){
   const P=[], sp=1.05;
   if(form==='kreis'){ const R=Math.max(1.4, n*sp/6.283); for(let i=0;i<n;i++){ const a=i/n*6.283; P.push([Math.cos(a)*R, Math.sin(a)*R]); } return P; }
