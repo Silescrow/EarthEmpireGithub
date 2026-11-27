@@ -8,7 +8,7 @@
 'use strict';
 let AC=null, master, musicBus, sfxBus, ambBus, reverb, noiseBuf;
 let mode=null, started=false;
-// Musik als MP3: Hauptmenü „Crowns upon the Horizon“, im Spiel „Before the Written Word“.
+// Musik als MP3: Hauptmenü „A Thousand Years of Stone“ (V2.19), im Spiel 5 ruhige Lieder und Kriegsmusik.
 // Nur noch diese beiden Lieder – die alte, selbst erzeugte Musik ist entfernt.
 // Im Spiel wechseln sich ruhige Lieder ab („The First Hearth“, „Paths beneath the Stone“ …),
 // bei Kämpfen blendet „Valley of the War Horns“ ein (V2.18).
