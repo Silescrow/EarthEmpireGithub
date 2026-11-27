@@ -3183,7 +3183,7 @@ function placeCluster(type, cx, cz, count, spread, minB){
   }
 }
 /* ===== Nachwachsender Wald (V2.25): gefällter Baum → Stumpf → nach 1–2 min ein Setzling → wächst in ~3 min zum vollen Baum.
-   Nur wo vorher Wald war und nichts gebaut wurde (kein Gebäude, Weg, Mauer). Dichter Wald wächst schneller. ===== */
+   Nur wo vorher Wald war: nie in der Nähe von Häusern (7 m), Mauern (5 m) oder Wegen (2 m) – in Dorf und Burg wächst kein Wald. Dichter Wald wächst schneller. ===== */
 let STUMP_GEO=null, STUMP_MAT=null;
 function treeFelled(r){
   if(!STUMP_GEO){ STUMP_GEO=new T.CylinderGeometry(.16,.22,.28,9); STUMP_MAT=new T.MeshLambertMaterial({color:0x6e4a2a}); }
@@ -3195,7 +3195,7 @@ function updateRegrow(dt){
   G.rgT=(G.rgT||0)-dt; if(G.rgT>0) return; G.rgT=1;
   if(G.regrow) for(let i=G.regrow.length-1;i>=0;i--){ const e=G.regrow[i]; if(G.t<e.t) continue;
     const k=cellIdx(e.x,e.z);
-    if(k<0 || G.grid[k]===1 || (G.road && G.road[k]) || G.builds.some(b=>!b.dead && Math.hypot(b.x-e.x,b.z-e.z)<b.size*.5+.8)){ G.scene.remove(e.st); G.regrow.splice(i,1); continue; }   // bebaut: kein Wald mehr
+    if(k<0 || G.grid[k]===1 || (G.road && G.road[k]) || G.builds.some(b=>!b.dead && Math.hypot(b.x-e.x,b.z-e.z)<(b.kind==='road'?2:b.seg?5:b.size*.5+7))){ G.scene.remove(e.st); G.regrow.splice(i,1); continue; }   // bebaut: kein Wald mehr
     if(G.units.some(u=>!u.dead && Math.abs(u.x-e.x)<.7 && Math.abs(u.z-e.z)<.7)){ e.t=G.t+5; continue; }
     G.scene.remove(e.st); G.regrow.splice(i,1);
     if(G.resMod){ const q=resKey(e.x,e.z); delete G.resMod[q]; }
