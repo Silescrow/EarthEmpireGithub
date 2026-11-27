@@ -1154,7 +1154,7 @@ const RES_VAL = {food:1, wood:1, stone:1.3, gold:2};
 const dipSVG = () => '<svg viewBox="0 0 24 24"><path d="M2 11l4-4 4 2 3-2 4 1 5 4-3 3-2-1-4 4q-1 1-2 0l-6-5z" fill="#e8b64a"/><path d="M9 13l2 2M11 11l3 3M13 10l3 3" stroke="#7a4a12" stroke-width="1.3" stroke-linecap="round"/></svg>';
 function initDip(){
   G.dip = {};
-  for(let i=1;i<G.players.length;i++) G.dip[i] = {state:'enemy', mood:Math.round((G.rand()-.5)*40), ask:120+G.rand()*200, hard:G.rand()<.3};   // hard = unversöhnlich: im Krieg kein Bündnis, auch nicht für Gold
+  for(let i=1;i<G.players.length;i++) G.dip[i] = {state:'enemy', mood:Math.round((G.rand()-.5)*40), ask:120+G.rand()*200, hard:G.rand()<.3, greed:.6+G.rand()*1.2};   // greed: jedes Volk verhandelt anders (gierig oder genügsam)   // hard = unversöhnlich: im Krieg kein Bündnis, auch nicht für Gold
   G.dipUI = {tab:'rel', who:1, give:'wood', get:'gold', amt:100};
 }
 const hostile = (a,b) => { if(a===b) return false; const o=a===0?b:b===0?a:-1; if(o<0) return true; return G.dip[o].state==='enemy'; };
@@ -1183,7 +1183,9 @@ function dipNeed(from, to){ return from==='enemy' ? (to==='ally' ? 60 : 5) : (to
 function bribeCost(i, st){
   const d=G.dip[i], war = d.state==='enemy';
   const gap = Math.max(0, dipNeed(d.state, st) + 10 - d.mood);
-  const c = war ? 150 + gap*6 : 40 + gap*2;
+  // reiche Völker lassen sich schwer kaufen, arme sind billig; dazu der eigene Charakter (greed)
+  const rich = 1 + Math.min(2, (G.players[i].res.gold||0)/800);
+  const c = (war ? 150 + gap*6 : 40 + gap*2) * (d.greed||1) * rich;
   return Math.ceil(c/RES_VAL.gold/10)*10;
 }
 function payBribe(){
@@ -1321,7 +1323,13 @@ function updateDip(dt){
     d.mood = clamp(d.mood,-100,100);
     d.ask -= dt;
     if(d.ask<=0){ d.ask = 150+G.rand()*200;
-      if(!G.offer && d.state!=='ally' && d.mood>(d.state==='enemy'?5:30)) showOffer(+k, d.state==='enemy'?'neutral':'ally'); }
+      const p=G.players[k], me=G.players[0], st=d.state==='enemy'?'neutral':'ally';
+      if(G.offer || d.state==='ally' || (d.hard && d.state==='enemy')) continue;
+      if(d.mood>(d.state==='enemy'?5:30)) showOffer(+k, st);
+      // reiches Volk will Freundschaft und legt Gold drauf
+      else if(p.res.gold>600 && G.rand()<.5){ const g=Math.round(p.res.gold*(.08+G.rand()*.12)/10)*10; showOffer(+k, st, g); }
+      // armes Volk will Freundschaft gegen Gold von dir
+      else if(p.res.gold<120 && me.res.gold>300 && G.rand()<.35){ const g=Math.round(Math.min(me.res.gold*.2, 80+120*(d.greed||1))/10)*10; showOffer(+k, st, -g); } }
   }
 }
 /* ---------- Kriegsplan mit Verbündeten ----------
@@ -1399,11 +1407,16 @@ function allyRequests(p, soldiers, tc, threat){
       ()=>{ d.mood=Math.max(-100,d.mood-6); EE.toast(CN(p)+' '+cv(p,'greift','greifen')+' ohne dich an'); p.joint={vs:X.id}; p.waveT=0; });
   }
 }
-function showOffer(i, st){
-  const p=G.players[i]; G.offer={i,st};
-  const el=$('#offer'); el.innerHTML=`<span><i style="background:#${COLORS[i].toString(16).padStart(6,'0')}"></i>${CN(p)} ${cv(p,'bietet','bieten')} ${st==='ally'?'ein Bündnis':'Frieden'} an</span><button class="pb no" id="oNo">✕</button><button class="pb ok" id="oYes">✓</button>`;
+function showOffer(i, st, gold){
+  const p=G.players[i]; G.offer={i,st}; gold=gold|0;
+  const el=$('#offer'); el.innerHTML=`<span><i style="background:#${COLORS[i].toString(16).padStart(6,'0')}"></i>${CN(p)} ${cv(p,'bietet','bieten')} ${st==='ally'?'ein Bündnis':'Frieden'} an${gold>0?` <b class="og">+${gold} Gold für dich</b>`:gold<0?` <b class="og ask">– ${cv(p,'will','wollen')} ${-gold} Gold</b>`:''}</span><button class="pb no" id="oNo">✕</button><button class="pb ok" id="oYes">✓</button>`;
   el.classList.remove('hidden'); EE.sfx('fanfare',.5);
-  const done=(yes)=>{ el.classList.add('hidden'); G.offer=null; if(yes){ setDip(i,st); G.dip[i].mood=Math.min(100,G.dip[i].mood+10); } else { G.dip[i].mood-=8; EE.click(); } };
+  const done=(yes)=>{ el.classList.add('hidden'); G.offer=null;
+    if(yes){ const me=G.players[0];
+      if(gold<0 && me.res.gold < -gold){ EE.sfx('error'); EE.toast('Nicht genug Gold für dieses Angebot'); G.dip[i].mood-=4; return; }
+      if(gold){ me.res.gold+=gold; p.res.gold=Math.max(0,p.res.gold-gold); updateHUD(); }
+      setDip(i,st); G.dip[i].mood=Math.min(100,G.dip[i].mood+10); }
+    else { G.dip[i].mood-=8; EE.click(); } };
   $('#oYes').onclick=()=>done(true); $('#oNo').onclick=()=>done(false);
   clearTimeout(G.offerT); G.offerT=setTimeout(()=>{ if(G && G.offer) done(false); }, 25000);
 }
@@ -5143,5 +5156,5 @@ function startOnline(cfg, me){
   start({online:true, map:cfg.map, seed:cfg.seed, civs:slots.map(s=>s.civ), slots, me});
   setTimeout(()=>EE.toast('Online-Spiel gestartet – du spielst die '+slots[0].civ), 1500);
 }
-window.EEGame = { spawnU:(o,x,z,k)=>spawnWorker(o,x,z,k), fmove:(us,x,z)=>formationMove(us,x,z), blocked:(x,z)=>!freeCell(x,z), gather:(u,r)=>cmdGather(u,r), models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
+window.EEGame = { spawnU:(o,x,z,k)=>spawnWorker(o,x,z,k), fmove:(us,x,z)=>formationMove(us,x,z), blocked:(x,z)=>!freeCell(x,z), gather:(u,r)=>cmdGather(u,r), models:()=>MODELS, gift, spawnA:(k,x,z)=>spawnDeer(x,z,k), panel:()=>drawPanel(), addB:(k,o,x,z)=>{ const b=addBuilding(k,o,x,z,false); finishBuilding(b); return b; }, icon:(o,k)=>iconMarker(o,k), quit:()=>toMenu(), online:()=>!!(G&&G.online), start:()=>start(), startOnline, load:loadGame, hasSave:()=>!!readSave(), save:saveGame, stop, resume, running:()=>!!G, dbg:()=>G, dev:{finish:(b)=>finishBuilding(b), tapB:(b)=>tapBuilding(b), act:(a)=>action(a), wall:{start:(k)=>startWall(k), upd:()=>updateWallGhost(), ok:()=>confirmWall()}, dip:{open:(t)=>openDip(t), propose:(i,s)=>propose(i,s), offer:(i,s,g)=>showOffer(i,s,g)}, chunks:(n)=>{ for(let i=0;i<(n||40);i++){ G.chunkT=0; updateChunks(); } }, build:(k,o,x,z,d)=>addBuilding(k,o,x,z,d), unit:(o,x,z,k)=>spawnWorker(o,x,z,k), attack:(u,t)=>cmdAttack(u,t), tiles:()=>{ updateCam(); updateTiles(true); updateChunks(); }, tap:(x,y)=>tapAt(x,y), addRes:(t,x,z)=>addRes(t,x,z), spawnDeer:(x,z,k)=>spawnDeer(x,z,k), reg:{regionAt, regNeighbors, regOwner, terrCheck, regPoly}, kill:(b)=>destroyBuilding(b), bowT:BOW_T, sea:()=>({DOLPH,FISH,SCHOOL}), hb:(v)=>{HEADBAND_Y=v;},  place:(k,x,z)=>{ startPlace(k); G.place.x=x; G.place.z=z; updateGhost(); }}, tick:(n)=>{for(let i=0;i<n;i++){ G.pfDeadline=performance.now()+4; update(.05); }}, scr:(x,y,z)=>toScreen(x,y,z), h:(x,z)=>getH(x,z) };
 })();

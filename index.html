@@ -323,6 +323,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 #dip .dn em.later{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-style:normal;font-weight:400;font-size:11px;line-height:1.1;color:#c9b78a;opacity:.9;white-space:nowrap}
 #dip .dn b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #dip .dn em.hard{font-style:normal;color:#ff7a7a;font-size:.9em}
+#offer b.og{display:block;color:#7dff9a;font-size:.92em;white-space:nowrap}#offer b.og.ask{color:#ffcf6a}
 #dip .dbribe{display:flex;align-items:center;gap:8px;margin:0 0 7px;padding:7px 9px;border-radius:10px;background:linear-gradient(90deg,#3a2a08,#1a1430);border:1.5px solid var(--gold);font-size:13.5px;color:#ffe9b0;animation:bribeIn .3s ease}
 #dip .dbribe>i{width:8px;height:26px;border-radius:3px;flex:none}
 #dip .dbribe span{flex:1}
@@ -412,7 +413,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 2.23</div>
+    <div class="ver2">Version 2.24</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -433,7 +434,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="corner2">
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V2.23</div>
+  <div class="ver">Siles Empire · V2.24</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide"><button class="winx" data-close aria-label="Schließen">✕</button>
     <h2>Freies Spiel</h2>
@@ -463,7 +464,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=2.23"></script>
+<script src="audio.js?v=2.24"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -710,7 +711,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{if((S.epoch|0)>0){ toast('Diese Epoche kommt bald – starte in der Steinzeit'); vib(20); return; }fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'2.23',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'2.24',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -735,10 +736,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=2.23"></script>
-<script src="game.js?v=2.23"></script>
-<script src="silescrow.js?v=2.23"></script>
-<script src="online.js?v=2.23"></script>
+<script src="three.min.js?v=2.24"></script>
+<script src="game.js?v=2.24"></script>
+<script src="silescrow.js?v=2.24"></script>
+<script src="online.js?v=2.24"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,
