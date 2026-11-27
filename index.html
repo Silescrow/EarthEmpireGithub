@@ -102,7 +102,9 @@ input[type=range]{width:100%;accent-color:var(--gold);height:30px}
 .nat svg{width:26px;height:31px;filter:drop-shadow(0 1px 2px #000a)}
 .nat span{font-size:11px;line-height:1.05;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;color:#fff7e2}
 .nat em{font-style:normal;font-size:9.5px;line-height:1.05;color:#cbb88a;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-.seg.ep button.soon{opacity:.75;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}.seg.ep button small{font-size:9.5px;font-weight:400}
+.eprow{position:relative}.epbtn{min-height:34px;padding:4px 14px;border:1.5px solid var(--gold2);border-radius:8px;background:var(--gold);color:#2b1a02;font:700 14px "Barlow Semi Condensed",sans-serif;cursor:pointer}.epbtn span{font-size:11px;margin-left:4px}
+.eppop{position:absolute;left:0;bottom:calc(100% + 6px);z-index:5;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;width:min(520px,86vw);padding:8px;border:2px solid var(--gold);border-radius:12px;background:#0b1130;box-shadow:0 8px 24px #000c}.eppop.hidden{display:none}
+.eppop button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 2px;border:1.5px solid #e8b64a80;border-radius:8px;background:#0b1130;color:#fff7e2;font:600 12px "Barlow Semi Condensed",sans-serif;line-height:1.1;cursor:pointer}.eppop button b{font-size:10px;color:#e8b64a}.eppop button.on{background:var(--gold);color:#2b1a02}.eppop button.on b{color:#2b1a02}.eppop button.off{opacity:.42;filter:grayscale(1)}.eppop button small{font-size:9px;font-weight:400}
 .nat.on{border-color:var(--gold2);background:#3a2a08;box-shadow:0 0 0 2px var(--gold) inset}
 .bonus{margin-top:6px;min-height:2.6em;font-size:14px;color:#ffe9b0;text-align:center}
 .bonus b{color:var(--gold)}
@@ -361,7 +363,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="stage" id="stage">
     <div class="bar"><div class="fill" id="fill"></div><div class="btxt" id="btxt">Lade … 0 %</div></div>
     <div class="tip" id="tip"></div>
-    <div class="ver2">Version 1.96</div>
+    <div class="ver2">Version 1.97</div>
     <div class="snd" id="soundHint">Tippe für Ton und Vollbild</div>
   </div>
 </section>
@@ -382,14 +384,14 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
   <div class="corner2">
     <button class="ico" id="bSound" aria-label="Ton an/aus"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="ver">Siles Empire · V1.96</div>
+  <div class="ver">Siles Empire · V1.97</div>
 
   <div class="dlg hidden" id="dPlay"><div class="card wide">
     <h2>Freies Spiel</h2>
     <div class="cols">
       <div><div class="nats" id="nats"></div><div class="bonus" id="bonus"></div></div>
       <div>
-        <div class="row"><label>Startepoche</label><div class="seg ep" id="epSeg"><button class="on">Steinzeit</button><button class="soon">Antike<small>Vorschau</small></button><button class="soon">Mittelalter<small>Vorschau</small></button><button class="soon">Neuzeit<small>Vorschau</small></button></div></div>
+        <div class="row"><label>Startepoche</label><div class="eprow"><button class="epbtn" id="epBtn">Steinzeit <span>▾</span></button><div class="eppop hidden" id="epPop"></div></div></div>
         <div class="row"><label>Weltkarte</label><div class="seg" data-k="map"><button>Klein</button><button>Mittel</button><button>Groß</button><button>Riesig</button></div></div>
         <div class="row"><label>Gegner</label><div class="step"><button id="aiMinus" aria-label="weniger">−</button><b id="aiN">3</b><button id="aiPlus" aria-label="mehr">+</button><button id="aiAll" class="all">Alle</button></div></div>
         <div class="row"><label>Schwierigkeit</label><div class="seg" data-k="diff"><button>Leicht</button><button>Mittel</button><button>Schwer</button></div></div>
@@ -412,7 +414,7 @@ img.th{width:100%;height:100%;object-fit:contain;display:block;pointer-events:no
 </section>
 
 <div id="updBar" class="hidden"><span id="updTxt"></span><div class="ub"><div id="updFill"></div></div></div>
-<script src="audio.js?v=1.96"></script>
+<script src="audio.js?v=1.97"></script>
 <script>
 {
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -582,7 +584,15 @@ if(!document.getElementById('furDefs')) document.body.insertAdjacentHTML('before
 const drawNats=()=>{ const e=S.epoch|0; $('#nats').innerHTML=CIVS.map((c,i)=>`<button class="nat" data-i="${i}" aria-label="${c[0]}"><svg viewBox="0 0 30 36">${e===0?furBanner(c,i):(e<3?(c[5]||clothBanner(c)):c[2]).replace(/cp/g,'cp'+i)}</svg><span>${eraName(c,e)}</span><em>${e>=3?'':'→ '+c[0]}</em></button>`).join(''); };
 drawNats();
 const drawCiv=()=>{$$('.nat').forEach((b,i)=>b.classList.toggle('on',i===S.civ));const c=CIVS[S.civ];$('#bonus').innerHTML='<b>'+eraName(c,S.epoch)+'</b>'+((S.epoch|0)>=3?'':' · heute '+c[0])+' · '+c[1]; const st=$('#bStart'); if(st){ st.textContent=(S.epoch|0)>0?'Epoche kommt bald':'Schlacht starten'; st.classList.toggle('off',(S.epoch|0)>0); } };
-S.epoch=0; $('#epSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.epoch=[...$$('#epSeg button')].indexOf(b); $$('#epSeg button').forEach((x,i)=>x.classList.toggle('on',i===S.epoch)); drawNats(); drawCiv(); click(); vib(8); if(S.epoch>0) toast('Vorschau – diese Epoche ist noch nicht spielbar'); });
+S.epoch=0;
+// Startepoche: alle 10 Epochen sichtbar, nur die fertigen sind wählbar (bisher nur die Steinzeit)
+const EPOCHS=['Steinzeit','Antike','Mittelalter','Neuzeit','Industriezeit','Erster Weltkrieg','Zweiter Weltkrieg','Kalter Krieg','Moderne','Zukunft'], EPOCH_READY=1;
+$('#epPop').innerHTML=EPOCHS.map((n,i)=>`<button data-e="${i}" class="${i<EPOCH_READY?'':'off'}${i===(S.epoch|0)?' on':''}"><b>${i+1}</b>${n}${i<EPOCH_READY?'':'<small>bald</small>'}</button>`).join('');
+$('#epBtn').addEventListener('click',e=>{ e.stopPropagation(); $('#epPop').classList.toggle('hidden'); click(); });
+$('#epPop').addEventListener('click',e=>{ e.stopPropagation(); const b=e.target.closest('button'); if(!b) return; const i=+b.dataset.e;
+  if(i>=EPOCH_READY){ toast(EPOCHS[i]+' kommt später – erst wird die Steinzeit fertig'); vib(15); return; }
+  S.epoch=i; $('#epBtn').firstChild.textContent=EPOCHS[i]+' '; $$('#epPop button').forEach((x,k)=>x.classList.toggle('on',k===i)); $('#epPop').classList.add('hidden'); drawNats(); drawCiv(); click(); });
+document.addEventListener('click',()=>$('#epPop').classList.add('hidden'));
 $('#nats').addEventListener('click',e=>{const b=e.target.closest('.nat');if(!b)return;S.civ=+b.dataset.i;save();drawCiv();click();vib(10)});
 drawCiv();
 
@@ -637,7 +647,7 @@ checkUpdate(); setInterval(checkUpdate, 120000); document.addEventListener('visi
 
 $('#bStart').addEventListener('click',()=>{if((S.epoch|0)>0){ toast('Diese Epoche kommt bald – starte in der Steinzeit'); vib(20); return; }fanfare();vib(40);closeAll();
   if(window.EEGame)window.EEGame.start();else toast('Spiel wird noch geladen …')});
-window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'1.96',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
+window.EE={civBy,eraName,stoneSym:c=>STONE_SYM[c[0]]||'',VER:'1.97',S,CIVS,click,vib,toast,save,fanfare,applyVol,sfx:(n,v)=>{ if(audioOn) EEAudio.sfx(n,v); },music:m=>{ if(audioOn) EEAudio.play(m); },ambient:o=>{ if(audioOn) EEAudio.ambient(o); },showMenu:(running)=>{if(updState==='ready'){ setTimeout(installUpdate,50); }let has=running; try{ has=has||!!localStorage.getItem('ee_save_v1'); }catch(e){} $('#menu').classList.remove('hidden'); $('#bResume').classList.toggle('hidden',!has); $('[data-open=dPlay]').textContent=has?'Neu starten':'Spielen'; $('[data-open=dPlay]').classList.toggle('main',!has);},hideMenu:()=>{$('#menu').classList.add('hidden')}};
 $('#bQuit').addEventListener('click',()=>{click();
   try{ if(window.EEGame) EEGame.save(); }catch(e){}
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
@@ -662,10 +672,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 }
 </script>
-<script src="three.min.js?v=1.96"></script>
-<script src="game.js?v=1.96"></script>
-<script src="silescrow.js?v=1.96"></script>
-<script src="online.js?v=1.96"></script>
+<script src="three.min.js?v=1.97"></script>
+<script src="game.js?v=1.97"></script>
+<script src="silescrow.js?v=1.97"></script>
+<script src="online.js?v=1.97"></script>
 <script>
 // Silescrow ID: gleiches Konto-, Cloud-, Freunde- und Admin-System wie in allen Silescrow-Spielen
 SC.init({ id:'earth-empire', name:'Siles Empire', version:EE.VER, pflicht:true,
